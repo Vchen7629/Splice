@@ -1,0 +1,19 @@
+[project]
+name = "scene-detector"
+version = "0.1.0"
+description = "service that takes in raw videos, splits it into scenes, and sends it downstream for parallel processing"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "nats-py>=2.14.0",
+    "pydantic-settings>=2.13.1",
+    "scenedetect[opencv-headless]>=0.6.7.1",
+    "structlog>=25.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyrefly>=0.57.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.7",
+]
