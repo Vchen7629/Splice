@@ -11,7 +11,7 @@ async def scene_video_chunks(
 ) -> None:
     """
     Publishes video split by scene ready message to nats jetstream
-    
+
     Args:
         js: the jetstream context with connection info for publishing
         msgs: the actual data we are publishing to the broker
@@ -29,8 +29,18 @@ async def scene_video_chunks(
             )
             logger.debug("pub msg to nats jetstream successfully")
         except TimeoutError as e:
-            logger.error("timed out publishing chunk msg", job_id=msg.job_id, chunk_idex=msg.chunk_index, err=str(e))
+            logger.error(
+                "timed out publishing chunk msg",
+                job_id=msg.job_id,
+                chunk_idex=msg.chunk_index,
+                err=str(e),
+            )
             raise
         except APIError as e:
-            logger.error("jetstream error publishing chunk message", job_id=msg.job_id, chunk_idex=msg.chunk_index, err=str(e))
+            logger.error(
+                "jetstream error publishing chunk message",
+                job_id=msg.job_id,
+                chunk_idex=msg.chunk_index,
+                err=str(e),
+            )
             raise
