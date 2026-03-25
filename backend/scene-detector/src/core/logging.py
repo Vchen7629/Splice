@@ -14,7 +14,7 @@ def configure_logging() -> None:
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
-    if settings.log_format == "json":
+    if settings.LOG_FORMAT == "json":
         processors.append(structlog.processors.JSONRenderer())
     else:
         processors.append(structlog.dev.ConsoleRenderer())
