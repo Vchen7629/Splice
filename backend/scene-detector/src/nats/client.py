@@ -18,7 +18,7 @@ async def connect() -> tuple[NATS, JetStreamContext]:
         error_cb=_on_error,
     )
 
-    jetstream_client: JetStreamContext = await nats_client.jetstream()
+    jetstream_client: JetStreamContext = nats_client.jetstream()
 
     return nats_client, jetstream_client
 
