@@ -37,13 +37,3 @@ async def process_job(metadata: SceneSplitMessage, js: JetStreamContext) -> None
     ]
 
     await scene_video_chunks(js, chunk_messages)
-
-
-if __name__ == "__main__":
-    import asyncio
-    import os
-
-    storage_path = os.path.join(os.path.dirname(__file__), "ForBiggerBlazes.mp4")
-    asyncio.run(
-        process_job(SceneSplitMessage(job_id="2", storage_path=storage_path), js=None)
-    )
