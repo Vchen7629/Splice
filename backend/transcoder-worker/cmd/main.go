@@ -60,8 +60,11 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	consCtx.Stop() // stop recieving new msgs from jetstream
-	nc.Drain()     // cleanup in flight and close
+	consCtx.Stop()   // stop recieving new msgs from jetstream
+	err = nc.Drain() // cleanup in flight and close
+	if err != nil {
+		logger.Error("error flushing remaining msgs", "err", err)
+	}
 }
 
 func loadConfig() (*Config, error) {

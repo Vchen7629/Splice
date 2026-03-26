@@ -45,14 +45,22 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 		var payload service.VideoChunkMessage
 		if err := json.Unmarshal(msg.Data(), &payload); err != nil {
 			logger.Error("failed to unmarshal msg from jetstream", "err", err)
-			msg.Nak()
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("error naking msg", "err", err)
+				return
+			}
 			return
 		}
 
 		outputPath, err := service.TranscodeVideo(payload, outputDir, logger)
 		if err != nil {
 			logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			msg.Nak()
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("error naking msg", "err", err)
+				return
+			}
 			return
 		}
 
@@ -63,12 +71,23 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 		})
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			msg.Nak()
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("error naking msg", "err", err)
+				return
+			}
 			return
 		}
 
-		msg.Ack()
+		err = msg.Ack()
+		if err != nil {
+			logger.Error("error acking msg", "err", err)
+			return
+		}
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return consCtx, nil
 }
