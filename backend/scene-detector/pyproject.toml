@@ -32,6 +32,9 @@ implicit-any = "error"
 [tool.pytest.ini_options]
 testpaths = ["test"]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning:testcontainers",
+]
 
 [tool.ruff]
 exclude = [".venv"]
