@@ -17,8 +17,9 @@ async def test_processes_published_message(js_context: AsyncGenerator[JetStreamC
     payload = json.dumps({"job_id": "1", "storage_path": "/fake/video.mp4"}).encode()                                                                        
     received = []                                                                                                                                            
                                                                                                                                                             
-    async def fake_process_job(metadata, js):
+    async def fake_process_job(metadata):
         received.append(metadata)
+        return []
 
     with patch("src.nats.subscriber.process_job", side_effect=fake_process_job):                                                                             
         task = asyncio.create_task(raw_videos(js))
