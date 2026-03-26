@@ -1,6 +1,7 @@
 from ..core.logging import logger
 from ..core.settings import settings
 from ..processing.job import process_job
+from .messages import SceneSplitMessage
 from nats.js.client import JetStreamContext
 
 
@@ -13,7 +14,9 @@ async def raw_videos(js: JetStreamContext) -> None:
     )
     async for msg in sub.messages:
         try:
-            await process_job(msg.data.decode(), js)
+            await process_job(
+                SceneSplitMessage.model_validate_json(msg.data.decode()), js
+            )
             await msg.ack()
         except Exception as e:
             logger.error("video split error", err=str(e))
