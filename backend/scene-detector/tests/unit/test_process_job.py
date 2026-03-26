@@ -26,7 +26,9 @@ async def test_catches_video_open_failure() -> None:
 async def test_catches_video_not_found() -> None:
     """OSError raised when video path does not exist"""
     with pytest.raises(OSError):
-        await process_job(SceneSplitMessage(job_id="1", storage_path="/nonexistent/video.mp4"))
+        await process_job(
+            SceneSplitMessage(job_id="1", storage_path="/nonexistent/video.mp4")
+        )
 
 
 @pytest.mark.asyncio

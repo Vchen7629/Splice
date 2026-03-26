@@ -21,13 +21,16 @@ async def test_connect_raises_on_nats_failure(exc: Any) -> None:
         with pytest.raises(type(exc)):
             await nats_connect()
 
+
 @pytest.mark.asyncio
 async def test_connect_returns_nats_and_jetstream() -> None:
     mock_js = MagicMock(spec=JetStreamContext)
     mock_ns = MagicMock(spec=NATS)
     mock_ns.jetstream.return_value = mock_js
 
-    with patch("src.nats.connection.nats.connect", new_callable=AsyncMock, return_value=mock_ns):
+    with patch(
+        "src.nats.connection.nats.connect", new_callable=AsyncMock, return_value=mock_ns
+    ):
         nc, js = await nats_connect()
 
     assert nc is mock_ns

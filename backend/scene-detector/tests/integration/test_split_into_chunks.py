@@ -4,6 +4,7 @@ import tempfile
 
 VIDEO_PATH = os.path.join(os.path.dirname(__file__), "../videos/ForBiggerBlazes.mp4")
 
+
 def test_splits_video_and_returns_existing_paths() -> None:
     with tempfile.TemporaryDirectory() as output_dir:
         chunk_paths = split_into_chunks(VIDEO_PATH, output_dir)
