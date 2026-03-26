@@ -21,6 +21,9 @@ func PublishChunkComplete(js jetstream.JetStream) func(service.ChunkCompleteMess
 		}
 
 		_, err = js.Publish(context.Background(), pubSubject, data)
-		return err
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 }
