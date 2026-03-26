@@ -1,0 +1,27 @@
+from .nats.subscriber import raw_videos
+from .nats.connection import nats_connect
+from .core.logging import logger
+from .core.settings import settings
+import nats.js.errors as js_errors
+import asyncio
+
+
+async def start_service() -> None:
+    """Start the python scene-detection service"""
+    nc, js = await nats_connect()
+
+    try:
+        await js.find_stream_name_by_subject(settings.VIDEO_CHUNKS_SUBJECT)
+    except js_errors.NotFoundError:
+        raise RuntimeError(
+            f"No stream found for video chunks `{settings.VIDEO_CHUNKS_SUBJECT}"
+        )
+    try:
+        await raw_videos(js)
+    finally:
+        await nc.drain()
+
+
+if __name__ == "__main__":
+    logger.debug("starting service")
+    asyncio.run(start_service())
