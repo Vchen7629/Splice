@@ -43,7 +43,9 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
 		var payload service.VideoChunkMessage
-		if err := json.Unmarshal(msg.Data(), &payload); err != nil {
+
+		err := json.Unmarshal(msg.Data(), &payload)
+		if err != nil {
 			logger.Error("failed to unmarshal msg from jetstream", "err", err)
 			err := msg.Nak()
 			if err != nil {

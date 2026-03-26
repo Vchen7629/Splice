@@ -48,7 +48,7 @@ func TestPublishesCorrectPayload(t *testing.T) {
 	}
 }
 
-func TestNoStream_ReturnsError(t *testing.T) {
+func TestNoStreamReturnsError(t *testing.T) {
 	ctx := context.Background()
 
 	container, err := natstc.Run(ctx, "nats:2.10-alpine")
