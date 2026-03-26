@@ -26,10 +26,16 @@ async def test_full_flow_publishes_chunks_downstream(
 
     fake_chunks = [
         VideoChunkMessage(
-            job_id="1", chunk_index=0, storage_path="/fake/chunk-001.mp4"
+            job_id="1",
+            chunk_index=0,
+            storage_path="/fake/chunk-001.mp4",
+            target_resolution="480p",
         ),
         VideoChunkMessage(
-            job_id="1", chunk_index=1, storage_path="/fake/chunk-002.mp4"
+            job_id="1",
+            chunk_index=1,
+            storage_path="/fake/chunk-002.mp4",
+            target_resolution="480p",
         ),
     ]
 
@@ -42,7 +48,11 @@ async def test_full_flow_publishes_chunks_downstream(
     ):
         task = asyncio.create_task(start_service())
         payload = json.dumps(
-            {"job_id": "1", "storage_path": "/fake/video.mp4"}
+            {
+                "job_id": "1",
+                "storage_path": "/fake/video.mp4",
+                "target_resolution": "480p",
+            }
         ).encode()
         await nc.publish(settings.SCENE_SPLIT_SUBJECT, payload)
         await asyncio.sleep(0.5)
@@ -57,11 +67,13 @@ async def test_full_flow_publishes_chunks_downstream(
         "job_id": "1",
         "chunk_index": 0,
         "storage_path": "/fake/chunk-001.mp4",
+        "target_resolution": "480p",
     }
     assert nats_video_chunks_subscriber[1] == {
         "job_id": "1",
         "chunk_index": 1,
         "storage_path": "/fake/chunk-002.mp4",
+        "target_resolution": "480p",
     }
 
 
@@ -173,7 +185,11 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
     ):
         task = asyncio.create_task(start_service())
         payload = json.dumps(
-            {"job_id": "1", "storage_path": "/fake/video.mp4"}
+            {
+                "job_id": "1",
+                "storage_path": "/fake/video.mp4",
+                "target_resolution": "480p",
+            }
         ).encode()
         await nc.publish(settings.SCENE_SPLIT_SUBJECT, payload)
         await processing_started.wait()

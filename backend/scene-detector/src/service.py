@@ -14,7 +14,7 @@ async def start_service() -> None:
         await js.find_stream_name_by_subject(settings.SCENE_SPLIT_SUBJECT)
     except js_errors.NotFoundError:
         raise RuntimeError(
-            f"No stream found for scene split subject `{settings.SCENE_SPLIT_SUBJECT}`"
+            f"No stream found for subscriber `{settings.SCENE_SPLIT_SUBJECT}`"
         )
 
     try:
