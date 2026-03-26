@@ -5,6 +5,7 @@ from ..nats.messages import VideoChunkMessage
 from scenedetect import VideoOpenFailure
 import asyncio
 
+
 async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
     """
     takes in the msg from NATS subcriber splits the video into chunks, and returns
@@ -17,7 +18,7 @@ async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
         VideoOpenFailure: if the video exists but scenedetect is unable to open it for some
         reason, logs and raises
         OSError: if the video isnt found like not existing on the filepath, logs and raises
-    
+
     Returns:
         list of videochunkmessage
     """
