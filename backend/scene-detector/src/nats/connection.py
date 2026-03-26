@@ -5,7 +5,7 @@ from nats.js.client import JetStreamContext
 import nats
 
 
-async def connect() -> tuple[NATS, JetStreamContext]:
+async def nats_connect() -> tuple[NATS, JetStreamContext]:
     """nats connection and jetstream context required for pub/sub"""
     nats_url = settings.NATS_URL  # the nats server url
 
