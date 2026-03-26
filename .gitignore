@@ -30,3 +30,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# python specific
+.venv
+docs/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
