@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -27,44 +28,56 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	var slogHandler slog.Handler
-	if cfg.ProdMode {
-		slogHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
-	} else {
-		slogHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
-	}
-	logger := slog.New(slogHandler).With("service", "transcoder-worker")
+	logger := newLogger(cfg)
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
-		logger.Error("Unable to connect to nats", "err", err)
+		logger.Error("unable to connect to nats", "err", err)
 		os.Exit(1)
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
-		logger.Error("Unable to connect to jetstream", "err", err)
+		logger.Error("unable to connect to jetstream", "err", err)
 		os.Exit(1)
 	}
 
-	logger.Debug("starting service")
-
-	consCtx, err := handler.ConsumeVideoChunk(js, logger, cfg.OutputDir)
-	if err != nil {
-		logger.Error("failed to start consumer", "err", err)
-		os.Exit(1)
-	}
-
-	// blocking so main doesnt exit after consumevideochunk retunrs
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
 
-	consCtx.Stop()   // stop recieving new msgs from jetstream
-	err = nc.Drain() // cleanup in flight and close
+	err = runProcessing(js, nc, logger, cfg.OutputDir, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
+}
+
+type ncDrainer interface {
+	Drain() error
+}
+
+// run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
+func runProcessing(js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, outputDir string, quit <-chan os.Signal) error {
+	logger.Debug("starting service")
+
+	consCtx, err := handler.ConsumeVideoChunk(js, logger, outputDir)
+	if err != nil {
+		return fmt.Errorf("failed to start consumer: %w", err)
+	}
+
+	<-quit
+
+	consCtx.Stop() // stop recieving new msgs from jetstream
+	return nc.Drain()
+}
+
+func newLogger(cfg *Config) *slog.Logger {
+	level := slog.LevelDebug
+	if cfg.ProdMode {
+		level = slog.LevelInfo
+	}
+	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+
+	return slog.New(h).With("service", "transcoder-worker")
 }
 
 func loadConfig() (*Config, error) {

@@ -3,10 +3,11 @@
 package handler_test
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"transcoder-worker/internal/handler"
+	"transcoder-worker/internal/service"
 	"transcoder-worker/internal/test"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -14,51 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockJS struct {
-	jetstream.JetStream
-	streamNameErr error
-	streamErr     error
-	stream        jetstream.Stream
-}
-
-func (m *mockJS) StreamNameBySubject(_ context.Context, _ string) (string, error) {
-	return "jobs", m.streamNameErr
-}
-
-func (m *mockJS) Stream(_ context.Context, _ string) (jetstream.Stream, error) {
-	return m.stream, m.streamErr
-}
-
-type mockStream struct {
-	jetstream.Stream
-	consumerErr error
-	consumer    jetstream.Consumer
-}
-
-func (m *mockStream) CreateOrUpdateConsumer(_ context.Context, _ jetstream.ConsumerConfig) (jetstream.Consumer, error) {
-	return m.consumer, m.consumerErr
-}
-
-type mockConsumer struct {
-	jetstream.Consumer
-	consumeErr   error
-	msgToDeliver jetstream.Msg
-}
-
-func (m *mockConsumer) Consume(h jetstream.MessageHandler, _ ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
-	if m.consumeErr != nil {
-		return nil, m.consumeErr
-	}
-	if m.msgToDeliver != nil {
-		h(m.msgToDeliver)
-	}
-	return &mockConsumeCtx{}, nil
-}
-
-type mockConsumeCtx struct {
-	jetstream.ConsumeContext
-}
-
+// mockMsg stubs jetstream.Msg for message-handling tests.
+// It is kept here rather than in internal/test because it is only
+// needed for subscriber behaviour and carries no value elsewhere.
 type mockMsg struct {
 	jetstream.Msg
 	data      []byte
@@ -72,7 +31,7 @@ func (m *mockMsg) Ack() error   { m.ackCalled = true; return nil }
 
 func TestStreamNameBySubjectFailsReturnsError(t *testing.T) {
 	lookupErr := errors.New("no stream")
-	js := &mockJS{streamNameErr: lookupErr}
+	js := &test.MockJS{JStreamNameErr: lookupErr}
 
 	_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
@@ -82,7 +41,7 @@ func TestStreamNameBySubjectFailsReturnsError(t *testing.T) {
 
 func TestStreamFailsReturnsError(t *testing.T) {
 	streamErr := errors.New("stream error")
-	js := &mockJS{streamErr: streamErr}
+	js := &test.MockJS{JStreamErr: streamErr}
 
 	_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
@@ -92,7 +51,7 @@ func TestStreamFailsReturnsError(t *testing.T) {
 
 func TestCreateConsumerFailsReturnsError(t *testing.T) {
 	consumerErr := errors.New("consumer error")
-	js := &mockJS{stream: &mockStream{consumerErr: consumerErr}}
+	js := &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}}
 
 	_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
@@ -102,7 +61,7 @@ func TestCreateConsumerFailsReturnsError(t *testing.T) {
 
 func TestConsumeFailsReturnsError(t *testing.T) {
 	consumeErr := errors.New("consume error")
-	js := &mockJS{stream: &mockStream{consumer: &mockConsumer{consumeErr: consumeErr}}}
+	js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
 
 	_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
@@ -112,12 +71,34 @@ func TestConsumeFailsReturnsError(t *testing.T) {
 
 func TestInvalidJSONNaksAndDoesNotAck(t *testing.T) {
 	msg := &mockMsg{data: []byte("not valid json")}
-	js := &mockJS{stream: &mockStream{consumer: &mockConsumer{msgToDeliver: msg}}}
+	consumer := &test.MockConsumerWithMsg{Msg: msg}
+	js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 	consCtx, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
 	require.NoError(t, err)
 	assert.NotNil(t, consCtx)
+	assert.True(t, msg.nakCalled)
+	assert.False(t, msg.ackCalled)
+}
+
+func TestValidJSONAcksMessage(t *testing.T) {
+	payload, err := json.Marshal(service.VideoChunkMessage{
+		JobID:            "job-1",
+		ChunkIndex:       0,
+		StoragePath:      "nonexistent",
+		TargetResolution: "720p",
+	})
+	require.NoError(t, err)
+
+	msg := &mockMsg{data: payload}
+	consumer := &test.MockConsumerWithMsg{Msg: msg}
+	js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+
+	// TranscodeVideo will fail (nonexistent file) so we expect a Nak, not Ack
+	_, err = handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+
+	require.NoError(t, err)
 	assert.True(t, msg.nakCalled)
 	assert.False(t, msg.ackCalled)
 }
