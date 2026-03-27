@@ -138,6 +138,7 @@ async def test_passes_chunk_messages_to_publisher() -> None:
         VideoChunkMessage(
             job_id="1",
             chunk_index=0,
+            total_chunks=1,
             storage_path="/tmp/chunk-001.mp4",
             target_resolution="480p",
         )

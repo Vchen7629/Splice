@@ -58,3 +58,5 @@ async def test_returns_chunk_messages_on_success() -> None:
     assert result[0].job_id == METADATA.job_id
     assert result[0].storage_path == chunk_paths[0]
     assert result[1].storage_path == chunk_paths[1]
+    assert result[0].total_chunks == 2
+    assert result[1].total_chunks == 2

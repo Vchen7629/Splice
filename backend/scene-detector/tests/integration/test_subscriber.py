@@ -1,4 +1,4 @@
-from typing import AsyncGenerator
+from typing import Any
 from unittest.mock import patch
 from nats.js.client import JetStreamContext
 from src.nats.subscriber import raw_videos
@@ -10,7 +10,7 @@ import asyncio
 
 @pytest.mark.asyncio
 async def test_processes_published_message(
-    js_context: AsyncGenerator[JetStreamContext, None], monkeypatch
+    js_context: tuple[Any, JetStreamContext], monkeypatch: Any
 ) -> None:
     """Verifies subscriber receives a message and calls process_job with correct data"""
     nc, js = js_context
@@ -24,9 +24,9 @@ async def test_processes_published_message(
     payload = json.dumps(
         {"job_id": "1", "storage_path": "/fake/video.mp4", "target_resolution": "480p"}
     ).encode()
-    received = []
+    received: list[Any] = []
 
-    async def fake_process_job(metadata):
+    async def fake_process_job(metadata: Any) -> list[Any]:
         received.append(metadata)
         return []
 

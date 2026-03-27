@@ -11,5 +11,6 @@ class SceneSplitMessage(BaseModel):
 class VideoChunkMessage(BaseModel):
     job_id: str
     chunk_index: int
+    total_chunks: int
     storage_path: str
     target_resolution: str

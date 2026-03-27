@@ -21,6 +21,7 @@ async def test_raises_on_publish_failure(exc: Any) -> None:
                 VideoChunkMessage(
                     job_id="1",
                     chunk_index=0,
+                    total_chunks=1,
                     storage_path="/fake/path.mp4",
                     target_resolution="480p",
                 )
@@ -39,12 +40,14 @@ async def test_calls_publish_per_msg() -> None:
             VideoChunkMessage(
                 job_id="1",
                 chunk_index=0,
+                total_chunks=2,
                 storage_path="/fake/path.mp4",
                 target_resolution="480p",
             ),
             VideoChunkMessage(
                 job_id="1",
                 chunk_index=0,
+                total_chunks=2,
                 storage_path="/fake/path.mp4",
                 target_resolution="480p",
             ),
