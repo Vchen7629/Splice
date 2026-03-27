@@ -16,4 +16,6 @@ integration:
 	go test -tags integration ${PKGS}
 
 unit:
-	go test -tags unit ${PKGS}
+	go test -tags unit .
+	go test -tags unit ../internal/handler/...
+	go test -race -tags unit ../internal/service/...
