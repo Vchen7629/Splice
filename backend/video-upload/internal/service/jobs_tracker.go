@@ -24,3 +24,10 @@ func (c *CompletedJobs) IsDone(jobID string) bool {
 	defer c.mu.RUnlock()
 	return c.jobs[jobID]
 }
+
+func (c *CompletedJobs) ClearAllJobs() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.jobs = map[string]bool{}
+}
