@@ -67,9 +67,10 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 		}
 
 		err = PublishChunkComplete(js)(service.ChunkCompleteMessage{
-			JobID:      payload.JobID,
-			ChunkIndex: payload.ChunkIndex,
-			OutputPath: outputPath,
+			JobID:       payload.JobID,
+			ChunkIndex:  payload.ChunkIndex,
+			TotalChunks: payload.TotalChunks,
+			OutputPath:  outputPath,
 		})
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
