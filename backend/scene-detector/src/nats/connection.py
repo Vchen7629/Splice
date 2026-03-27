@@ -1,15 +1,15 @@
 from ..core.logging import logger
 from ..core.settings import settings
-from nats import NATS
 from nats.js.client import JetStreamContext
-import nats
+from nats.aio.client import Client as NATSClient
 
 
-async def nats_connect() -> tuple[NATS, JetStreamContext]:
+async def nats_connect() -> tuple[NATSClient, JetStreamContext]:
     """nats connection and jetstream context required for pub/sub"""
     nats_url = settings.NATS_URL  # the nats server url
 
-    nats_client = await nats.connect(
+    nats_client = NATSClient()
+    await nats_client.connect(
         nats_url,
         max_reconnect_attempts=settings.MAX_RECONNECT_ATTEMPT,
         reconnect_time_wait=settings.RECONNECT_TIME_WAIT_S,

@@ -1,9 +1,11 @@
 from typing import Any
 from typing import Generator
 from typing import AsyncGenerator
+from nats.js import JetStreamContext
+from nats.aio.msg import Msg
 from testcontainers.nats import NatsContainer
 from src.core.settings import settings
-import nats
+import nats  # type: ignore[import-untyped]
 import json
 import pytest
 import pytest_asyncio
@@ -17,8 +19,10 @@ def nats_url() -> Generator[str, None]:
 
 
 @pytest_asyncio.fixture
-async def js_context(nats_url) -> AsyncGenerator[tuple, None]:
-    nc = await nats.connect(nats_url)
+async def js_context(
+    nats_url: str,
+) -> AsyncGenerator[tuple[Any, JetStreamContext], None]:
+    nc = await nats.connect(nats_url)  # type: ignore[import-untyped]
     js = nc.jetstream()
     try:
         await js.delete_stream("videos")
@@ -34,7 +38,7 @@ async def js_context(nats_url) -> AsyncGenerator[tuple, None]:
 
 @pytest_asyncio.fixture
 async def nats_video_chunks_subscriber(
-    js_context, monkeypatch
+    js_context: tuple[Any, JetStreamContext], monkeypatch: Any
 ) -> AsyncGenerator[list[Any], None]:
     monkeypatch.setattr(
         "src.nats.publisher.settings.VIDEO_CHUNKS_SUBJECT",
@@ -43,7 +47,7 @@ async def nats_video_chunks_subscriber(
     nc, js = js_context
     received = []
 
-    async def handler(msg):
+    async def handler(msg: Msg) -> None:
         received.append(json.loads(msg.data.decode()))
 
     sub = await nc.subscribe(settings.VIDEO_CHUNKS_SUBJECT, cb=handler)

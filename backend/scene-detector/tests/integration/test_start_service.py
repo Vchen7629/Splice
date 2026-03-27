@@ -1,18 +1,19 @@
-import asyncio
-import json
-import pytest
 from unittest.mock import patch, AsyncMock
-from typing import Any, AsyncGenerator
+from nats.js import JetStreamContext
+from typing import Any
 from src.service import start_service
 from src.nats.messages import VideoChunkMessage
 from src.core.settings import settings
+import asyncio
+import json
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_full_flow_publishes_chunks_downstream(
-    js_context: AsyncGenerator[tuple, None],
-    nats_video_chunks_subscriber: AsyncGenerator[list[Any], None],
-    monkeypatch,
+    js_context: tuple[Any, JetStreamContext],
+    nats_video_chunks_subscriber: list[Any],
+    monkeypatch: Any,
 ) -> None:
     """Publishes to upstream topic -> process_job runs -> chunks appear on downstream topic"""
     nc, js = js_context
@@ -28,18 +29,20 @@ async def test_full_flow_publishes_chunks_downstream(
         VideoChunkMessage(
             job_id="1",
             chunk_index=0,
+            total_chunks=2,
             storage_path="/fake/chunk-001.mp4",
             target_resolution="480p",
         ),
         VideoChunkMessage(
             job_id="1",
             chunk_index=1,
+            total_chunks=2,
             storage_path="/fake/chunk-002.mp4",
             target_resolution="480p",
         ),
     ]
 
-    async def fake_process_job(metadata):
+    async def fake_process_job(_metadata: Any) -> list[VideoChunkMessage]:
         return fake_chunks
 
     with (
@@ -66,12 +69,14 @@ async def test_full_flow_publishes_chunks_downstream(
     assert nats_video_chunks_subscriber[0] == {
         "job_id": "1",
         "chunk_index": 0,
+        "total_chunks": 2,
         "storage_path": "/fake/chunk-001.mp4",
         "target_resolution": "480p",
     }
     assert nats_video_chunks_subscriber[1] == {
         "job_id": "1",
         "chunk_index": 1,
+        "total_chunks": 2,
         "storage_path": "/fake/chunk-002.mp4",
         "target_resolution": "480p",
     }
@@ -79,8 +84,8 @@ async def test_full_flow_publishes_chunks_downstream(
 
 @pytest.mark.asyncio
 async def test_raises_runtime_error_when_video_chunks_stream_not_found(
-    js_context: AsyncGenerator[tuple, None],
-    monkeypatch,
+    js_context: tuple[Any, JetStreamContext],
+    monkeypatch: Any,
 ) -> None:
     """Raises RuntimeError when no NATS stream covers the downstream chunks subject"""
     nc, js = js_context
@@ -96,20 +101,20 @@ async def test_raises_runtime_error_when_video_chunks_stream_not_found(
 
 @pytest.mark.asyncio
 async def test_drain_called_in_finally_when_raw_videos_raises(
-    js_context: AsyncGenerator[tuple, None],
+    js_context: tuple[Any, JetStreamContext],
 ) -> None:
     """nc.drain() is called in the finally block even when raw_videos raises"""
     nc, js = js_context
     drain_called = False
 
-    async def spy_drain():
+    async def spy_drain() -> None:
         nonlocal drain_called
         drain_called = True
         # Don't call the real drain — the connection is shared with the fixture
 
     nc.drain = spy_drain
 
-    async def failing_raw_videos(_js):
+    async def failing_raw_videos(_js: JetStreamContext) -> None:
         raise RuntimeError("subscriber failed unexpectedly")
 
     with (
@@ -124,20 +129,20 @@ async def test_drain_called_in_finally_when_raw_videos_raises(
 
 @pytest.mark.asyncio
 async def test_drain_called_in_finally_on_cancellation(
-    js_context: AsyncGenerator[tuple, None],
+    js_context: tuple[Any, JetStreamContext],
 ) -> None:
     """nc.drain() is called in the finally block when the service task is cancelled"""
     nc, js = js_context
     drain_called = False
 
-    async def spy_drain():
+    async def spy_drain() -> None:
         nonlocal drain_called
         drain_called = True
         # Don't call the real drain — the connection is shared with the fixture
 
     nc.drain = spy_drain
 
-    async def hanging_raw_videos(_js):
+    async def hanging_raw_videos(_js: JetStreamContext) -> None:
         await asyncio.sleep(30)
 
     with (
@@ -157,8 +162,8 @@ async def test_drain_called_in_finally_on_cancellation(
 
 @pytest.mark.asyncio
 async def test_service_can_be_cancelled_while_process_job_is_running(
-    js_context: AsyncGenerator[tuple, None],
-    monkeypatch,
+    js_context: tuple[Any, JetStreamContext],
+    monkeypatch: Any,
 ) -> None:
     """Service cancels promptly mid-processing, proving process_job does not block the event loop"""
     nc, js = js_context
@@ -174,7 +179,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
     processing_started = asyncio.Event()
 
-    async def slow_process_job(metadata):
+    async def slow_process_job(_metadata: Any) -> list[Any]:
         processing_started.set()
         await asyncio.sleep(30)
         return []

@@ -29,9 +29,10 @@ func TestPublishChunkComplete_PublishError(t *testing.T) {
 
 	fn := handler.PublishChunkComplete(mock)
 	err := fn(service.ChunkCompleteMessage{
-		JobID:      "job-1",
-		ChunkIndex: 0,
-		OutputPath: "/output/chunk-0.mp4",
+		JobID:       "job-1",
+		ChunkIndex:  0,
+		TotalChunks: 0,
+		OutputPath:  "/output/chunk-0.mp4",
 	})
 
 	assert.ErrorIs(t, err, publishErr)

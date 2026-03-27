@@ -1,6 +1,7 @@
 from scenedetect import detect
 from scenedetect import AdaptiveDetector
 from scenedetect import split_video_ffmpeg
+from pathlib import Path
 import os
 
 
@@ -17,7 +18,7 @@ def split_into_chunks(video_path: str, output_dir: str) -> list[str]:
         a list of output video dir strings
     """
     scene_list = detect(video_path, AdaptiveDetector())
-    split_video_ffmpeg(video_path, scene_list, output_dir)
+    split_video_ffmpeg(video_path, scene_list, Path(output_dir))
     video_stem = os.path.splitext(os.path.basename(video_path))[0]
 
     return [

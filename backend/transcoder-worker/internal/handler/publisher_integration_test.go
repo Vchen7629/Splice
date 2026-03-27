@@ -29,9 +29,10 @@ func TestPublishesCorrectPayload(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 	msg := service.ChunkCompleteMessage{
-		JobID:      "job-1",
-		ChunkIndex: 2,
-		OutputPath: "/output/chunk-2.mp4",
+		JobID:       "job-1",
+		ChunkIndex:  2,
+		TotalChunks: 1,
+		OutputPath:  "/output/chunk-2.mp4",
 	}
 
 	fn := handler.PublishChunkComplete(js)
@@ -68,9 +69,10 @@ func TestNoStreamReturnsError(t *testing.T) {
 
 	fn := handler.PublishChunkComplete(js)
 	err = fn(service.ChunkCompleteMessage{
-		JobID:      "job-1",
-		ChunkIndex: 0,
-		OutputPath: "/output/chunk-0.mp4",
+		JobID:       "job-1",
+		ChunkIndex:  0,
+		TotalChunks: 1,
+		OutputPath:  "/output/chunk-0.mp4",
 	})
 
 	assert.Error(t, err)
