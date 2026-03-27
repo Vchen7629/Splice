@@ -57,7 +57,8 @@ func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, outputDIR strin
 
 		ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.OutputPath, payload.TotalChunks)
 
-		if err := msg.Ack(); err != nil {
+		err = msg.Ack()
+		if err != nil {
 			logger.Error("error acking msg", "err", err)
 			return
 		}
