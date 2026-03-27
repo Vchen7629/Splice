@@ -6,7 +6,9 @@ import os
 import pytest
 import tempfile
 
-METADATA = SceneSplitMessage(job_id="test-123", storage_path="/fake/video.mp4")
+METADATA = SceneSplitMessage(
+    job_id="test-123", storage_path="/fake/video.mp4", target_resolution="480p"
+)
 
 
 @pytest.mark.asyncio
@@ -17,7 +19,13 @@ async def test_catches_video_open_failure() -> None:
         tmp_path = f.name
     try:
         with pytest.raises(VideoOpenFailure):
-            await process_job(SceneSplitMessage(job_id="1", storage_path=tmp_path))
+            await process_job(
+                SceneSplitMessage(
+                    job_id="1",
+                    storage_path=tmp_path,
+                    target_resolution=METADATA.target_resolution,
+                )
+            )
     finally:
         os.unlink(tmp_path)
 
@@ -27,7 +35,11 @@ async def test_catches_video_not_found() -> None:
     """OSError raised when video path does not exist"""
     with pytest.raises(OSError):
         await process_job(
-            SceneSplitMessage(job_id="1", storage_path="/nonexistent/video.mp4")
+            SceneSplitMessage(
+                job_id="1",
+                storage_path="/nonexistent/video.mp4",
+                target_resolution=METADATA.target_resolution,
+            )
         )
 
 

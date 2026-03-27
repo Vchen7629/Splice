@@ -21,7 +21,9 @@ async def async_iter(items: Any) -> AsyncGenerator[Any, None]:
 
 @pytest.mark.asyncio
 async def test_acks_on_success() -> None:
-    msg = make_mock_msg({"job_id": "1", "storage_path": "/fake/idk.mp4"})
+    msg = make_mock_msg(
+        {"job_id": "1", "storage_path": "/fake/idk.mp4", "target_resolution": "480p"}
+    )
     mock_sub = MagicMock()
     mock_sub.messages = async_iter([msg])
     mock_js = AsyncMock(spec=JetStreamContext)
@@ -41,7 +43,9 @@ async def test_acks_on_success() -> None:
 
 @pytest.mark.asyncio
 async def test_naks_when_process_job_fails() -> None:
-    msg = make_mock_msg({"job_id": "1", "storage_path": "/fake/idk.mp4"})
+    msg = make_mock_msg(
+        {"job_id": "1", "storage_path": "/fake/idk.mp4", "target_resolution": "480p"}
+    )
     mock_sub = MagicMock()
     mock_sub.messages = async_iter([msg])
     mock_js = AsyncMock(spec=JetStreamContext)
@@ -63,7 +67,9 @@ async def test_naks_when_process_job_fails() -> None:
 
 @pytest.mark.asyncio
 async def test_naks_when_publish_fails() -> None:
-    msg = make_mock_msg({"job_id": "1", "storage_path": "/fake/idk.mp4"})
+    msg = make_mock_msg(
+        {"job_id": "1", "storage_path": "/fake/idk.mp4", "target_resolution": "480p"}
+    )
     mock_sub = MagicMock()
     mock_sub.messages = async_iter([msg])
     mock_js = AsyncMock(spec=JetStreamContext)
@@ -97,8 +103,12 @@ async def test_raises_when_subscribe_fails() -> None:
 @pytest.mark.asyncio
 async def test_calls_process_job_per_message() -> None:
     msgs = [
-        make_mock_msg({"job_id": "1", "storage_path": "/fake/a.mp4"}),
-        make_mock_msg({"job_id": "2", "storage_path": "/fake/b.mp4"}),
+        make_mock_msg(
+            {"job_id": "1", "storage_path": "/fake/a.mp4", "target_resolution": "480p"}
+        ),
+        make_mock_msg(
+            {"job_id": "2", "storage_path": "/fake/b.mp4", "target_resolution": "480p"}
+        ),
     ]
     mock_sub = MagicMock()
     mock_sub.messages = async_iter(msgs)
@@ -115,19 +125,26 @@ async def test_calls_process_job_per_message() -> None:
 
     assert mock_process.call_count == 2
     assert mock_process.call_args_list[0][0][0] == SceneSplitMessage(
-        job_id="1", storage_path="/fake/a.mp4"
+        job_id="1", storage_path="/fake/a.mp4", target_resolution="480p"
     )
     assert mock_process.call_args_list[1][0][0] == SceneSplitMessage(
-        job_id="2", storage_path="/fake/b.mp4"
+        job_id="2", storage_path="/fake/b.mp4", target_resolution="480p"
     )
 
 
 @pytest.mark.asyncio
 async def test_passes_chunk_messages_to_publisher() -> None:
     chunk_messages = [
-        VideoChunkMessage(job_id="1", chunk_index=0, storage_path="/tmp/chunk-001.mp4")
+        VideoChunkMessage(
+            job_id="1",
+            chunk_index=0,
+            storage_path="/tmp/chunk-001.mp4",
+            target_resolution="480p",
+        )
     ]
-    msg = make_mock_msg({"job_id": "1", "storage_path": "/fake/idk.mp4"})
+    msg = make_mock_msg(
+        {"job_id": "1", "storage_path": "/fake/idk.mp4", "target_resolution": "480p"}
+    )
     mock_sub = MagicMock()
     mock_sub.messages = async_iter([msg])
     mock_js = AsyncMock(spec=JetStreamContext)

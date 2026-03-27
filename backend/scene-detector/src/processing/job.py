@@ -36,6 +36,11 @@ async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
         raise
 
     return [
-        VideoChunkMessage(job_id=metadata.job_id, chunk_index=i, storage_path=path)
+        VideoChunkMessage(
+            job_id=metadata.job_id,
+            chunk_index=i,
+            storage_path=path,
+            target_resolution=metadata.target_resolution,
+        )
         for i, path in enumerate(chunk_paths)
     ]

@@ -11,10 +11,17 @@ async def start_service() -> None:
     nc, js = await nats_connect()
 
     try:
+        await js.find_stream_name_by_subject(settings.SCENE_SPLIT_SUBJECT)
+    except js_errors.NotFoundError:
+        raise RuntimeError(
+            f"No stream found for subscriber `{settings.SCENE_SPLIT_SUBJECT}`"
+        )
+
+    try:
         await js.find_stream_name_by_subject(settings.VIDEO_CHUNKS_SUBJECT)
     except js_errors.NotFoundError:
         raise RuntimeError(
-            f"No stream found for video chunks `{settings.VIDEO_CHUNKS_SUBJECT}"
+            f"No stream found for video chunks subject `{settings.VIDEO_CHUNKS_SUBJECT}`"
         )
     try:
         await raw_videos(js)

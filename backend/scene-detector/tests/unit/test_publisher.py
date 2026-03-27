@@ -19,7 +19,10 @@ async def test_raises_on_publish_failure(exc: Any) -> None:
             mock_js,
             [
                 VideoChunkMessage(
-                    job_id="1", chunk_index=0, storage_path="/fake/path.mp4"
+                    job_id="1",
+                    chunk_index=0,
+                    storage_path="/fake/path.mp4",
+                    target_resolution="480p",
                 )
             ],
         )
@@ -33,8 +36,18 @@ async def test_calls_publish_per_msg() -> None:
     await scene_video_chunks(
         mock_js,
         [
-            VideoChunkMessage(job_id="1", chunk_index=0, storage_path="/fake/path.mp4"),
-            VideoChunkMessage(job_id="1", chunk_index=0, storage_path="/fake/path.mp4"),
+            VideoChunkMessage(
+                job_id="1",
+                chunk_index=0,
+                storage_path="/fake/path.mp4",
+                target_resolution="480p",
+            ),
+            VideoChunkMessage(
+                job_id="1",
+                chunk_index=0,
+                storage_path="/fake/path.mp4",
+                target_resolution="480p",
+            ),
         ],
     )
 

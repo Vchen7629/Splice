@@ -21,7 +21,9 @@ async def test_processes_published_message(
         "src.nats.subscriber.settings.NATS_SUB_QUEUE_NAME", "scene-detector-workers"
     )
 
-    payload = json.dumps({"job_id": "1", "storage_path": "/fake/video.mp4"}).encode()
+    payload = json.dumps(
+        {"job_id": "1", "storage_path": "/fake/video.mp4", "target_resolution": "480p"}
+    ).encode()
     received = []
 
     async def fake_process_job(metadata):
@@ -39,4 +41,6 @@ async def test_processes_published_message(
             pass
 
     assert len(received) == 1
-    assert received[0] == SceneSplitMessage(job_id="1", storage_path="/fake/video.mp4")
+    assert received[0] == SceneSplitMessage(
+        job_id="1", storage_path="/fake/video.mp4", target_resolution="480p"
+    )

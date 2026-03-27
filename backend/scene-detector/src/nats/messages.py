@@ -5,9 +5,11 @@ from pydantic import BaseModel
 class SceneSplitMessage(BaseModel):
     job_id: str
     storage_path: str
+    target_resolution: str
 
 
 class VideoChunkMessage(BaseModel):
     job_id: str
     chunk_index: int
     storage_path: str
+    target_resolution: str
