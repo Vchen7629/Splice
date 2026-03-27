@@ -27,7 +27,7 @@ func CombineChunks(jobID string, chunks map[int]string, outputDir string) (strin
 
 	var sb strings.Builder
 	for _, i := range indices {
-		sb.WriteString(fmt.Sprintf("file '%s'\n", chunks[i]))
+		fmt.Fprintf(&sb, "file '%s'\n", chunks[i])
 	}
 
 	// manifest path contains a txt file listing all the inputs (video paths) to combine
