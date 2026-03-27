@@ -38,7 +38,7 @@ func TestWriteManifestFailsReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "write manifest error")
 }
 
-// Verifies that the manifest lists files in ascending index order regardless of how 
+// Verifies that the manifest lists files in ascending index order regardless of how
 // the map was constructed. ffmpeg will fail on the fake paths but the manifest is
 // written before ffmpeg runs.
 func TestManifestIsSortedByChunkIndex(t *testing.T) {
@@ -86,7 +86,7 @@ func TestFFmpegFailureWrappedInError(t *testing.T) {
 	assert.Contains(t, err.Error(), "ffmpeg concat error")
 }
 
-// Verifies that an empty chunk map writes an empty manifest and returns an ffmpeg error 
+// Verifies that an empty chunk map writes an empty manifest and returns an ffmpeg error
 // (concat with no inputs fails).
 func TestEmptyChunksMapProducesEmptyManifest(t *testing.T) {
 	tmpDir := t.TempDir()
