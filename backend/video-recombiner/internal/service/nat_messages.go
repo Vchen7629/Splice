@@ -8,5 +8,5 @@ type ChunkCompleteMessage struct {
 }
 
 type VideoProcessingCompleteMessage struct {
-	JobID       string `json:"job_id"`
+	JobID string `json:"job_id"`
 }

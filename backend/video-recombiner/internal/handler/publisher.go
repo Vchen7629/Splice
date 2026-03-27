@@ -10,10 +10,10 @@ import (
 
 const pubSubject = "jobs.complete"
 
-// publish a message saying the video processing is 
+// publish a message saying the video processing is
 // finished so frontend can update
 func PublishVideoProcessingComplete(
-	js jetstream.JetStream, 
+	js jetstream.JetStream,
 	msg service.VideoProcessingCompleteMessage,
 ) error {
 	data, err := json.Marshal(msg)

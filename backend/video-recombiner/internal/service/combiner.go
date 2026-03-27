@@ -13,7 +13,7 @@ import (
 // chunks is a map of chunk index -> output path, sorted by index
 func CombineChunks(jobID string, chunks map[int]string, outputDir string) (string, error) {
 	outDir := filepath.Join(outputDir, "jobs", jobID)
-	
+
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
 		return "", fmt.Errorf("create output dir error: %w", err)
@@ -47,7 +47,7 @@ func CombineChunks(jobID string, chunks map[int]string, outputDir string) (strin
 		"-y",
 		outputPath,
 	)
-	
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("ffmpeg concat error: %w\n%s", err, out)
