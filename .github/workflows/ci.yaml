@@ -1,0 +1,224 @@
+name: CI workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  path-filter:
+    runs-on: ubuntu-latest
+    outputs:
+        frontend: ${{ steps.changes.outputs.frontend }}
+        scene_detector: ${{ steps.changes.outputs.scene_detector }}
+        transcoder_worker: ${{ steps.changes.outputs.transcoder_worker }}
+        video_recombiner: ${{ steps.changes.outputs.video_recombiner }}
+        video_upload: ${{ steps.changes.outputs.video_upload }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            scene_detector:
+              - 'backend/scene-detector/src/**'
+            transcoder_worker:
+            - 'backend/transcoder-worker/**'
+            video_recombiner:
+              - 'backend/video-recombiner/**'
+            video_upload:
+              - 'backend/video-upload/**'
+  frontend-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '>=23.6.1'
+      
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install --dev
+
+      - name: Run Linting 
+        working-directory: frontend
+        run: npm run lint
+      
+      - name: Run tests
+        working-directory: frontend
+        run: npm run test
+  
+  scene-detector-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.scene_detector == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.19"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./backend/scene-detector
+      
+      - name: Run Linter and Formatting
+        run: |
+          uv run ruff check .
+          uv run ruff format --check
+        working-directory: ./backend/scene-detector
+      
+      - name: Run Type Checking
+        run: uv run pyrefly check
+        working-directory: ./backend/scene-detector
+      
+      - name: Run Unit/Integration Tests
+        run: make test_all
+        working-directory: ./backend/scene-detector
+
+  transcoder-worker-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.transcoder_worker == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: v1.26.1
+          cache: 'true'
+      
+      - name: Download Go modules
+        working-directory: ./backend/transcoder-worker
+        run: go mod download
+      
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.6
+          working-directory: ./backend/transcoder-worker
+      
+      - name: run tests
+        working-directory: ./backend/transcoder-worker/cmd
+        run: make test_all
+
+  video-recombiner-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.video_recombiner == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: v1.26.1
+          cache: 'true'
+      
+      - name: Download Go modules
+        working-directory: ./backend/video-recombiner
+        run: go mod download
+      
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.6
+          working-directory: ./backend/video-recombiner
+      
+      - name: run tests
+        working-directory: ./backend/video-recombiner/cmd
+        run: make test_all
+  
+  video-upload-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.video_upload == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: v1.26.1
+          cache: 'true'
+
+      - name: Download Go modules
+        working-directory: ./backend/video-upload
+        run: go mod download
+      
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.6
+          working-directory: ./backend/video-upload
+      
+      - name: run tests
+        working-directory: ./backend/video-upload/cmd
+        run: make test_all
+
+  coverage:
+    needs: path-filter
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' && (
+        needs.path-filter.outputs.scene_detector == 'true' ||
+        needs.path-filter.outputs.transcoder_worker == 'true' ||
+        needs.path-filter.outputs.video_recombiner == 'true' ||
+        needs.path-filter.outputs.video_upload == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run scene-detector coverage
+        working-directory: ./backend/scene-detector
+        run: make coverage
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'backend/transcoder-worker/go.mod'
+
+      - name: Run backend transcoder-worker coverage
+        working-directory: ./backend/transcoder-worker/cmd
+        run: make coverage
+
+      - name: Run video-recombiner coverage
+        working-directory: ./backend/video-recombiner/cmd
+        run: make coverage
+      
+      - name: Run video_upload coverage
+        working-directory: ./backend/video-upload/cmd
+        run: make coverage
+
+      - name: Upload coverage to Codecov                                                                       
+        uses: codecov/codecov-action@v4                                                                        
+        with:                                                                                                  
+          files: ./backend/transcoder-worker/cmd/coverage.out,./backend/video-recombiner/cmd/coverage.out,./backend/video-upload/cmd/coverage.out,./backend/scene-detector/coverage.xml                                                                       
+          token: ${{ secrets.CODECOV_TOKEN }}
