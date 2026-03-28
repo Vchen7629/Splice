@@ -39,7 +39,14 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		v.Logger.Error("missing video file in request")
 		return
 	}
-	defer file.Close()
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			http.Error(w, "error closing open file", http.StatusBadRequest)
+			v.Logger.Error("error closing open file", "err", err)
+			return
+		}
+	}()
 
 	targetRes := r.FormValue("target_resolution")
 	if targetRes == "" {
@@ -48,7 +55,7 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := service.SaveUploadedVideo(file, v.OutputDir, header.Filename)
+	result, err := service.SaveUploadedVideo(file, v.OutputDir, header.Filename, v.Logger)
 	if err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
 		v.Logger.Error("failed to save uploaded video", "err", err)
