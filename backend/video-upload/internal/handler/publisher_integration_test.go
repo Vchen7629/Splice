@@ -29,7 +29,7 @@ func TestPublishesCorrectPayload(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 	msg := service.SceneSplitMessage{
-		JobID:       "job-1",
+		JobID: "job-1",
 	}
 
 	err = handler.PublishVideoMetadata(js, msg)
@@ -64,7 +64,7 @@ func TestNoStreamReturnsError(t *testing.T) {
 	require.NoError(t, err)
 
 	err = handler.PublishVideoMetadata(js, service.SceneSplitMessage{
-		JobID:       "job-1",
+		JobID: "job-1",
 	})
 
 	assert.Error(t, err)

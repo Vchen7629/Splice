@@ -119,7 +119,9 @@ func TestPollJobStatus_ConcurrentRequests(t *testing.T) {
 					return
 				}
 				defer resp.Body.Close()
-				var body struct{ State string `json:"state"` }
+				var body struct {
+					State string `json:"state"`
+				}
 				if err := json.NewDecoder(resp.Body).Decode(&body); err == nil {
 					results[idx] = body.State
 				}

@@ -55,7 +55,6 @@ func TestErrorCases(t *testing.T) {
 	})
 }
 
-
 func TestSuccessResult(t *testing.T) {
 	t.Run("Returns non-empty JobID and StoragePath on success", func(t *testing.T) {
 		dir := t.TempDir()

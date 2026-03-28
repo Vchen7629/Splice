@@ -47,9 +47,11 @@ func SubscribeJobCompletion(js jetstream.JetStream, logger *slog.Logger) (*servi
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
 		var payload service.JobCompleteMessage
 
-		if err := json.Unmarshal(msg.Data(), &payload); err != nil {
+		err := json.Unmarshal(msg.Data(), &payload)
+		if err != nil {
 			logger.Error("failed to unmarshal job complete msg", "err", err)
-			if err := msg.Nak(); err != nil {
+			err := msg.Nak()
+			if err != nil {
 				logger.Error("error naking msg", "err", err)
 			}
 			return
@@ -58,7 +60,8 @@ func SubscribeJobCompletion(js jetstream.JetStream, logger *slog.Logger) (*servi
 		tracker.AddJob(payload.JobID)
 		logger.Debug("job marked complete", "job_id", payload.JobID)
 
-		if err := msg.Ack(); err != nil {
+		err = msg.Ack()
+		if err != nil {
 			logger.Error("error acking msg", "err", err)
 		}
 	})

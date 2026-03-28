@@ -25,13 +25,13 @@ func (m *mockJetStream) Publish(_ context.Context, _ string, _ []byte, _ ...jets
 
 func TestCatchesError(t *testing.T) {
 	t.Run("nats publish errors", func(t *testing.T) {
-        publishErr := errors.New("nats publish failed")
-	    mock := &mockJetStream{publishErr: publishErr}
+		publishErr := errors.New("nats publish failed")
+		mock := &mockJetStream{publishErr: publishErr}
 
-	    err := handler.PublishVideoMetadata(mock, service.SceneSplitMessage{
-		    JobID:       "job-1",
-	    })
+		err := handler.PublishVideoMetadata(mock, service.SceneSplitMessage{
+			JobID: "job-1",
+		})
 
-	    assert.ErrorIs(t, err, publishErr)
+		assert.ErrorIs(t, err, publishErr)
 	})
 }
