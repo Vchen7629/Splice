@@ -2,12 +2,17 @@ package test
 
 import (
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"video-upload/internal/handler"
 	"video-upload/internal/service"
 )
+
+func SilentLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 // droppedConnectionWriter simulates a client disconnecting before the response write completes.
 type droppedConnectionWriter struct {
