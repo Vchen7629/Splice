@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -15,7 +16,7 @@ type UploadResult struct {
 }
 
 // Saves the uploaded video from frontend to local storage, returns jobID and path
-func SaveUploadedVideo(src io.Reader, storageDir, filename string) (UploadResult, error) {
+func SaveUploadedVideo(src io.Reader, storageDir, filename string, logger *slog.Logger) (UploadResult, error) {
 	jobID := uuid.New().String()
 
 	jobDir := filepath.Join(storageDir, "jobs", jobID)
@@ -31,7 +32,13 @@ func SaveUploadedVideo(src io.Reader, storageDir, filename string) (UploadResult
 	if err != nil {
 		return UploadResult{}, fmt.Errorf("create video file error: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			logger.Error("error closing open file", "err", err)
+			return
+		}
+	}()
 
 	_, err = io.Copy(f, src)
 	if err != nil {
