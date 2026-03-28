@@ -11,9 +11,10 @@ import (
 )
 
 type VideoHandler struct {
-	Logger    *slog.Logger
-	JS        jetstream.JetStream
-	OutputDir string
+	Logger         *slog.Logger
+	JS             jetstream.JetStream
+	OutputDir      string
+	MaxUploadBytes int64
 }
 
 type uploadResponse struct {
@@ -23,8 +24,11 @@ type uploadResponse struct {
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
 // and publishes a scene split message to NATS for downstream processing
 func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
-	const maxUploadSize = 10 << 30 // 10 GB
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	limit := v.MaxUploadBytes
+	if limit == 0 {
+		limit = 10 << 30 // 10 GB
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 
 	err := r.ParseMultipartForm(32 << 20)
 	if err != nil {
