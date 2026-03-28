@@ -6,12 +6,14 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// MockJS stubs jetstream.JetStream. Set StreamNameErr to simulate a lookup failure.
+// MockJS stubs jetstream.JetStream.
 type MockJS struct {
 	jetstream.JetStream
 	JStreamNameErr error
 	JStreamErr     error
 	JStream        jetstream.Stream
+	PublishErr     error
+	PublishCalled  bool
 }
 
 func (m *MockJS) StreamNameBySubject(_ context.Context, _ string) (string, error) {
@@ -22,6 +24,11 @@ func (m *MockJS) Stream(_ context.Context, _ string) (jetstream.Stream, error) {
 	return m.JStream, m.JStreamErr
 }
 
+func (m *MockJS) Publish(_ context.Context, _ string, _ []byte, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+	m.PublishCalled = true
+	return nil, m.PublishErr
+}
+
 // MockStream stubs jetstream.Stream.
 // The consumer field is named Cons to avoid conflicting with the Consumer() method promoted by the embedded interface.
 type MockStream struct {
@@ -30,48 +37,25 @@ type MockStream struct {
 	Cons        jetstream.Consumer
 }
 
-func (m *MockStream) Consumer(_ context.Context, _ string) (jetstream.Consumer, error) {
-	panic("MockStream.Consumer not implemented")
-}
-
 func (m *MockStream) CreateOrUpdateConsumer(_ context.Context, _ jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	return m.Cons, m.ConsumerErr
 }
 
-// MockConsumer stubs jetstream.Consumer. After Consume is called, Ctx holds the
-// returned ConsumeContext so tests can inspect it.
+// MockConsumer stubs jetstream.Consumer. If Msg is set, it is delivered to the handler when Consume is called.
 type MockConsumer struct {
 	jetstream.Consumer
 	ConsumeErr error
-	Ctx        *MockConsumeCtx
-}
-
-func (m *MockConsumer) Consume(_ jetstream.MessageHandler, _ ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
-	if m.ConsumeErr != nil {
-		return nil, m.ConsumeErr
-	}
-	m.Ctx = &MockConsumeCtx{}
-	return m.Ctx, nil
-}
-
-// MockConsumerWithMsg is like MockConsumer but delivers a single Msg to the
-// handler immediately when Consume is called, useful for testing message-handling paths.
-type MockConsumerWithMsg struct {
-	jetstream.Consumer
-	ConsumeErr error
 	Msg        jetstream.Msg
-	Ctx        *MockConsumeCtx
 }
 
-func (m *MockConsumerWithMsg) Consume(h jetstream.MessageHandler, _ ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
+func (m *MockConsumer) Consume(h jetstream.MessageHandler, _ ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
 	if m.ConsumeErr != nil {
 		return nil, m.ConsumeErr
 	}
-	m.Ctx = &MockConsumeCtx{}
 	if m.Msg != nil {
 		h(m.Msg)
 	}
-	return m.Ctx, nil
+	return &MockConsumeCtx{}, nil
 }
 
 // MockConsumeCtx stubs jetstream.ConsumeContext.
@@ -81,14 +65,3 @@ type MockConsumeCtx struct {
 }
 
 func (m *MockConsumeCtx) Stop() { m.Stopped = true }
-
-// MockDrainer stubs the ncDrainer interface used in runProcessing.
-type MockDrainer struct {
-	DrainCalled bool
-	DrainErr    error
-}
-
-func (m *MockDrainer) Drain() error {
-	m.DrainCalled = true
-	return m.DrainErr
-}

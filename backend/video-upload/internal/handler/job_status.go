@@ -31,5 +31,10 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: state})
+	err := json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: state})
+	if err != nil {
+		http.Error(w, "error encoding job status response", http.StatusInternalServerError)
+		j.Logger.Error("error encoding job status response", "err", err)
+		return
+	}
 }

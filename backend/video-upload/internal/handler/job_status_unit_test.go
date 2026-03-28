@@ -1,6 +1,6 @@
 //go:build unit
 
-package handler_test
+package handler
 
 import (
 	"encoding/json"
@@ -8,20 +8,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"video-upload/internal/handler"
 	"video-upload/internal/service"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type jobStatusResponse struct {
-	JobID string `json:"job_id"`
-	State string `json:"state"`
-}
-
-func newJobStatusHandler(tracker *service.CompletedJobs) *handler.JobStatusHandler {
-	return &handler.JobStatusHandler{
+func newJobStatusHandler(tracker *service.CompletedJobs) *JobStatusHandler {
+	return &JobStatusHandler{
 		Logger:  slog.Default(),
 		Tracker: tracker,
 	}

@@ -73,7 +73,7 @@ func TestReturnError(t *testing.T) {
 func TestAckAndNacking(t *testing.T) {
 	t.Run("invalid json should nak and not ack", func(t *testing.T) {
 		msg := &mockMsg{data: []byte("not valid json")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		_, consCtx, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
@@ -89,7 +89,7 @@ func TestAckAndNacking(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &mockMsg{data: payload}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		_, _, err = handler.SubscribeJobCompletion(js, test.SilentLogger())
@@ -101,7 +101,7 @@ func TestAckAndNacking(t *testing.T) {
 
 	t.Run("nak error is handled without panic", func(t *testing.T) {
 		msg := &mockMsg{data: []byte("not valid json"), nakErr: errors.New("nak failed")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		assert.NotPanics(t, func() {
@@ -115,7 +115,7 @@ func TestAckAndNacking(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &mockMsg{data: payload, ackErr: errors.New("ack failed")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		assert.NotPanics(t, func() {
@@ -131,7 +131,7 @@ func TestTrackerPopulation(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &mockMsg{data: payload}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		tracker, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
@@ -142,7 +142,7 @@ func TestTrackerPopulation(t *testing.T) {
 
 	t.Run("invalid message does not add any job to the tracker", func(t *testing.T) {
 		msg := &mockMsg{data: []byte("not valid json")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		tracker, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
@@ -156,7 +156,7 @@ func TestTrackerPopulation(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &mockMsg{data: payload}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		consumer := &test.MockConsumer{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
 		tracker, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
