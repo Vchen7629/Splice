@@ -116,6 +116,11 @@ jobs:
           go-version: v1.26.1
           cache: 'true'
       
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      
       - name: Download Go modules
         working-directory: ./backend/transcoder-worker
         run: go mod download
@@ -143,6 +148,11 @@ jobs:
         with:
           go-version: v1.26.1
           cache: 'true'
+      
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       
       - name: Download Go modules
         working-directory: ./backend/video-recombiner
