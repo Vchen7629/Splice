@@ -21,6 +21,7 @@ def split_into_chunks(video_path: str, output_dir: str) -> list[str]:
     scene_list = detect(video_path, AdaptiveDetector())
 
     if not scene_list:
+        os.makedirs(output_dir, exist_ok=True)
         dest = os.path.join(output_dir, os.path.basename(video_path))
         shutil.copy2(video_path, dest)
         return [dest]

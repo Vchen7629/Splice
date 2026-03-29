@@ -24,7 +24,7 @@ async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
     """
     try:
         chunk_paths = await asyncio.to_thread(
-            split_into_chunks, metadata.storage_path, "../temp"
+            split_into_chunks, metadata.storage_path, f"../temp/{metadata.job_id}"
         )
     except VideoOpenFailure as e:
         logger.error("could not open video", job_id=metadata.job_id, err=str(e))
