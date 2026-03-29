@@ -44,6 +44,17 @@ async def test_catches_video_not_found() -> None:
 
 
 @pytest.mark.asyncio
+async def test_uses_job_scoped_output_dir() -> None:
+    """Chunks are written to a job-scoped temp dir to prevent concurrent jobs colliding."""
+    with patch("src.processing.job.split_into_chunks", return_value=[]) as mock_split:
+        await process_job(METADATA)
+
+    mock_split.assert_called_once_with(
+        METADATA.storage_path, f"../temp/{METADATA.job_id}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_returns_chunk_messages_on_success() -> None:
     """Returns correct VideoChunkMessage list when split succeeds"""
     chunk_paths = ["/tmp/video-Scene-001.mp4", "/tmp/video-Scene-002.mp4"]

@@ -26,7 +26,10 @@ def test_returns_correct_chunk_paths() -> None:
 
 def test_no_scene_boundaries_copies_original_as_single_chunk() -> None:
     """When no scene boundaries are detected the original file is returned as one chunk."""
-    with tempfile.TemporaryDirectory() as src_dir, tempfile.TemporaryDirectory() as output_dir:
+    with (
+        tempfile.TemporaryDirectory() as src_dir,
+        tempfile.TemporaryDirectory() as output_dir,
+    ):
         src = os.path.join(src_dir, "myvideo.mp4")
         open(src, "wb").close()
 
