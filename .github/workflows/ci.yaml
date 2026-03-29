@@ -29,13 +29,13 @@ jobs:
             frontend:
               - 'frontend/**'
             scene_detector:
-              - 'backend/scene_detector/src/**'
+              - 'backend/scene-detector/src/**'
             transcoder_worker:
-            - 'backend/transcoder_worker/**'
+            - 'backend/transcoder-worker/**'
             video_recombiner:
-              - 'backend/video_recombiner/**'
+              - 'backend/video-recombiner/**'
             video_upload:
-              - 'backend/video_upload/**'
+              - 'backend/video-upload/**'
   frontend-ci:
     needs: path-filter
     if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.frontend == 'true' }}
@@ -78,24 +78,29 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./backend/scene_detector
+        working-directory: ./backend/scene-detector
       
       - name: Run Linter and Formatting
         run: |
           uv run ruff check .
           uv run ruff format --check
-        working-directory: ./backend/scene_detector
+        working-directory: ./backend/scene-detector
       
       - name: Run Type Checking
         run: uv run pyrefly check
-        working-directory: ./backend/scene_detector
+        working-directory: ./backend/scene-detector
       
       - name: Run Unit/Integration Tests
         run: make test_all
-        working-directory: ./backend/audio_transcription
+        working-directory: ./backend/scene-detector
 
   transcoder-worker-ci:
     needs: path-filter
@@ -111,18 +116,23 @@ jobs:
           go-version: v1.26.1
           cache: 'true'
       
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      
       - name: Download Go modules
-        working-directory: ./backend/transcoder_worker
+        working-directory: ./backend/transcoder-worker
         run: go mod download
       
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.6
-          working-directory: ./backend/transcoder_worker
+          version: v2.11
+          working-directory: ./backend/transcoder-worker
       
       - name: run tests
-        working-directory: ./backend/transcoder_worker/cmd
+        working-directory: ./backend/transcoder-worker/cmd
         run: make test_all
 
   video-recombiner-ci:
@@ -139,18 +149,23 @@ jobs:
           go-version: v1.26.1
           cache: 'true'
       
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      
       - name: Download Go modules
-        working-directory: ./backend/video_recombiner
+        working-directory: ./backend/video-recombiner
         run: go mod download
       
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.6
-          working-directory: ./backend/video_recombiner
+          version: v2.11
+          working-directory: ./backend/video-recombiner
       
       - name: run tests
-        working-directory: ./backend/video_recombiner/cmd
+        working-directory: ./backend/video-recombiner/cmd
         run: make test_all
   
   video-upload-ci:
@@ -168,17 +183,17 @@ jobs:
           cache: 'true'
 
       - name: Download Go modules
-        working-directory: ./backend/video_upload
+        working-directory: ./backend/video-upload
         run: go mod download
       
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.6
-          working-directory: ./backend/video_upload
+          version: v2.11
+          working-directory: ./backend/video-upload
       
       - name: run tests
-        working-directory: ./backend/video_upload/cmd
+        working-directory: ./backend/video-upload/cmd
         run: make test_all
 
   coverage:
@@ -196,29 +211,34 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+      
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
-      - name: Run scene_detector coverage
-        working-directory: ./backend/scene_detector
+      - name: Run scene-detector coverage
+        working-directory: ./backend/scene-detector
         run: make coverage
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: 'backend/transcoder_worker/go.mod'
+          go-version-file: 'backend/transcoder-worker/go.mod'
 
-      - name: Run backend transcoder_worker coverage
-        working-directory: ./backend/transcoder_worker/cmd
+      - name: Run backend transcoder-worker coverage
+        working-directory: ./backend/transcoder-worker/cmd
         run: make coverage
 
-      - name: Run video_recombiner coverage
-        working-directory: ./backend/video_recombiner/cmd
+      - name: Run video-recombiner coverage
+        working-directory: ./backend/video-recombiner/cmd
         run: make coverage
       
       - name: Run video_upload coverage
-        working-directory: ./backend/video_upload/cmd
+        working-directory: ./backend/video-upload/cmd
         run: make coverage
 
       - name: Upload coverage to Codecov                                                                       
         uses: codecov/codecov-action@v4                                                                        
         with:                                                                                                  
-          files: ./backend/transcoder_worker/cmd/coverage.out,./backend/video_recombiner/cmd/coverage.out,./backend/video_upload/cmd/coverage.out,./backend/scene_detector/coverage.xml                                                                       
+          files: ./backend/transcoder-worker/cmd/coverage.out,./backend/video-recombiner/cmd/coverage.out,./backend/video-upload/cmd/coverage.out,./backend/scene-detector/coverage.xml                                                                       
           token: ${{ secrets.CODECOV_TOKEN }}

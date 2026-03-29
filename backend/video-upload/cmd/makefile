@@ -1,6 +1,6 @@
 test_all: integration unit
 
-PKGS := . ../internal/handler/... ../internal/service/...
+PKGS := . ../internal/handler/... ../internal/service/... ../internal/middleware/...
 
 format: 
 	go fmt ${PKGS} .
@@ -9,7 +9,7 @@ format:
 lint:
 	golangci-lint run ${PKGS}
 	golangci-lint run ../internal/test/...
-	
+
 coverage:
 	go test -tags=unit,integration ${PKGS} -v -coverprofile=coverage.out -covermode=atomic
 

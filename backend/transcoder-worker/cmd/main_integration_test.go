@@ -21,107 +21,109 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
-func TestRunProcessing_QuitSignal_ExitsCleanly(t *testing.T) {
-	js, nc := test.SetupNats(t)
-	quit := make(chan os.Signal, 1)
-	done := make(chan error, 1)
+func TestRunProcessingI(t *testing.T) {
+	t.Run("quit signal exits cleanly", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		quit := make(chan os.Signal, 1)
+		done := make(chan error, 1)
 
-	go func() {
-		done <- runProcessing(js, nc, test.SilentLogger(), t.TempDir(), quit)
-	}()
+		go func() {
+			done <- runProcessing(js, nc, test.SilentLogger(), t.TempDir(), quit)
+		}()
 
-	// give the consumer time to set up before signalling
-	time.Sleep(200 * time.Millisecond)
-	quit <- syscall.SIGTERM
+		// give the consumer time to set up before signalling
+		time.Sleep(200 * time.Millisecond)
+		quit <- syscall.SIGTERM
 
-	select {
-	case err := <-done:
-		assert.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("runProcessing did not exit after quit signal")
-	}
-}
-
-func TestRunProcessing_FullFlow_ReceiveTranscodePublish(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not available")
-	}
-
-	js, nc := test.SetupNats(t)
-
-	// subscribe to the downstream subject before starting the worker
-	received := make(chan []byte, 1)
-	sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) {
-		received <- msg.Data
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("runProcessing did not exit after quit signal")
+		}
 	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-	outputDir := t.TempDir()
-	quit := make(chan os.Signal, 1)
-	done := make(chan error, 1)
+	t.Run("full flow receives transcode message and publishes downstream", func(t *testing.T) {
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			t.Skip("ffmpeg not available")
+		}
 
-	go func() {
-		done <- runProcessing(js, nc, test.SilentLogger(), outputDir, quit)
-	}()
+		js, nc := test.SetupNats(t)
 
-	// give the consumer time to set up before publishing
-	time.Sleep(500 * time.Millisecond)
+		// subscribe to the downstream subject before starting the worker
+		received := make(chan []byte, 1)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) {
+			received <- msg.Data
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-	inputVideo := createTestVideo(t)
-	payload, err := json.Marshal(service.VideoChunkMessage{
-		JobID:            "job-1",
-		ChunkIndex:       0,
-		StoragePath:      inputVideo,
-		TargetResolution: "240p",
+		outputDir := t.TempDir()
+		quit := make(chan os.Signal, 1)
+		done := make(chan error, 1)
+
+		go func() {
+			done <- runProcessing(js, nc, test.SilentLogger(), outputDir, quit)
+		}()
+
+		// give the consumer time to set up before publishing
+		time.Sleep(500 * time.Millisecond)
+
+		inputVideo := createTestVideo(t)
+		payload, err := json.Marshal(service.VideoChunkMessage{
+			JobID:            "job-1",
+			ChunkIndex:       0,
+			StoragePath:      inputVideo,
+			TargetResolution: "240p",
+		})
+		require.NoError(t, err)
+
+		_, err = js.Publish(context.Background(), "jobs.video.chunks", payload)
+		require.NoError(t, err)
+
+		select {
+		case data := <-received:
+			var msg service.ChunkCompleteMessage
+			require.NoError(t, json.Unmarshal(data, &msg))
+			assert.Equal(t, "job-1", msg.JobID)
+			assert.Equal(t, 0, msg.ChunkIndex)
+			assert.NotEmpty(t, msg.OutputPath)
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for downstream message")
+		}
+
+		quit <- syscall.SIGTERM
+
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("runProcessing did not exit after quit signal")
+		}
 	})
-	require.NoError(t, err)
 
-	_, err = js.Publish(context.Background(), "jobs.video.chunks", payload)
-	require.NoError(t, err)
+	t.Run("no stream returns error", func(t *testing.T) {
+		ctx := context.Background()
 
-	select {
-	case data := <-received:
-		var msg service.ChunkCompleteMessage
-		require.NoError(t, json.Unmarshal(data, &msg))
-		assert.Equal(t, "job-1", msg.JobID)
-		assert.Equal(t, 0, msg.ChunkIndex)
-		assert.NotEmpty(t, msg.OutputPath)
-	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for downstream message")
-	}
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
 
-	quit <- syscall.SIGTERM
+		url, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
 
-	select {
-	case err := <-done:
-		assert.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("runProcessing did not exit after quit signal")
-	}
-}
+		nc, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(nc.Close)
 
-func TestRunProcessing_NoStream_ReturnsError(t *testing.T) {
-	ctx := context.Background()
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
 
-	container, err := natstc.Run(ctx, "nats:2.10-alpine")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
+		quit := make(chan os.Signal, 1)
+		err = runProcessing(js, nc, test.SilentLogger(), t.TempDir(), quit)
 
-	url, err := container.ConnectionString(ctx)
-	require.NoError(t, err)
-
-	nc, err := nats.Connect(url)
-	require.NoError(t, err)
-	t.Cleanup(nc.Close)
-
-	js, err := jetstream.New(nc)
-	require.NoError(t, err)
-
-	quit := make(chan os.Signal, 1)
-	err = runProcessing(js, nc, test.SilentLogger(), t.TempDir(), quit)
-
-	assert.Error(t, err)
+		assert.Error(t, err)
+	})
 }
 
 // createTestVideo generates a 1-second blue solid video using ffmpeg's lavfi source.

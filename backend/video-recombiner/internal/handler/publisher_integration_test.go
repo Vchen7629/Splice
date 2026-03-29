@@ -15,29 +15,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPublishesCorrectPayload(t *testing.T) {
-	js, nc := test.SetupNats(t)
+func TestPublishVideoProcessingCompleteI(t *testing.T) {
+	t.Run("publishes correct payload to jobs.complete", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
 
-	received := make(chan []byte, 1)
-	sub, err := nc.Subscribe("jobs.complete", func(msg *nats.Msg) {
-		received <- msg.Data
+		received := make(chan []byte, 1)
+		sub, err := nc.Subscribe("jobs.complete", func(msg *nats.Msg) {
+			received <- msg.Data
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		msg := service.VideoProcessingCompleteMessage{
+			JobID: "job-1",
+		}
+
+		err = handler.PublishVideoProcessingComplete(js, msg)
+		require.NoError(t, err)
+
+		select {
+		case data := <-received:
+			var got service.VideoProcessingCompleteMessage
+			require.NoError(t, json.Unmarshal(data, &got))
+			assert.Equal(t, msg, got)
+		case <-time.After(3 * time.Second):
+			t.Fatal("timed out waiting for message")
+		}
 	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-	msg := service.VideoProcessingCompleteMessage{
-		JobID: "job-1",
-	}
-
-	err = handler.PublishVideoProcessingComplete(js, msg)
-	require.NoError(t, err)
-
-	select {
-	case data := <-received:
-		var got service.VideoProcessingCompleteMessage
-		require.NoError(t, json.Unmarshal(data, &got))
-		assert.Equal(t, msg, got)
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for message")
-	}
 }

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Nats config
     NATS_URL: str = "nats://localhost:4222"
-    NATS_SUB_QUEUE_NAME: str = "scene-detetector-workers"
+    NATS_SUB_QUEUE_NAME: str = "scene-detector-workers"
     SCENE_SPLIT_SUBJECT: str = (
         "jobs.video.scene-split"  # topic containing Job ID + storage path in MinIO
     )

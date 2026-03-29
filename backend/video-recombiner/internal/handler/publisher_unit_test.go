@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// mockJetStream embeds the interface and overrides only Publish
 type mockJetStream struct {
 	jetstream.JetStream
 	publishErr error
@@ -22,13 +21,15 @@ func (m *mockJetStream) PublishAsync(_ string, _ []byte, _ ...jetstream.PublishO
 	return nil, m.publishErr
 }
 
-func TestPublishError(t *testing.T) {
-	publishErr := errors.New("nats publish failed")
-	mock := &mockJetStream{publishErr: publishErr}
+func TestPublishVideoProcessingComplete(t *testing.T) {
+	t.Run("returns wrapped error when publish fails", func(t *testing.T) {
+		publishErr := errors.New("nats publish failed")
+		mock := &mockJetStream{publishErr: publishErr}
 
-	err := handler.PublishVideoProcessingComplete(mock, service.VideoProcessingCompleteMessage{
-		JobID: "job-1",
+		err := handler.PublishVideoProcessingComplete(mock, service.VideoProcessingCompleteMessage{
+			JobID: "job-1",
+		})
+
+		assert.ErrorIs(t, err, publishErr)
 	})
-
-	assert.ErrorIs(t, err, publishErr)
 }
