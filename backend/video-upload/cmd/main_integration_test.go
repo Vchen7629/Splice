@@ -14,9 +14,11 @@ import (
 	"video-upload/internal/handler"
 	"video-upload/internal/test"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
 type serverEnv struct {
@@ -60,6 +62,30 @@ func setupServer(t *testing.T) *serverEnv {
 		js:        js,
 		outputDir: dir,
 	}
+}
+
+func TestMainErrors(t *testing.T) {
+	t.Run("no stream returns error", func(t *testing.T) {
+		ctx := context.Background()
+
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+		url, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
+
+		nc, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(nc.Close)
+
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
+
+		_, _, err = handler.SubscribeJobCompletion(js, test.SilentLogger())
+
+		assert.Error(t, err)
+	})
 }
 
 func TestSetupApiRoutes(t *testing.T) {
