@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"video-upload/internal/service"
 	"video-upload/internal/test"
@@ -128,5 +130,42 @@ func TestStartHttpApi(t *testing.T) {
 		server.Handler.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}
+
+func TestMain(t *testing.T) {
+	t.Run("exits on config load error", func(t *testing.T) {
+		if os.Getenv("RUN_MAIN") == "config_error" {
+			os.Chdir("/") //nolint:errcheck
+			main()
+			return
+		}
+		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_config_load_error", "-test.count=1")
+		cmd.Env = append(os.Environ(), "RUN_MAIN=config_error")
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, err, &exitErr)
+		assert.Equal(t, 1, exitErr.ExitCode())
+	})
+
+	t.Run("exits on NATS connect error", func(t *testing.T) {
+		if os.Getenv("RUN_MAIN") == "nats_error" {
+			main()
+			return
+		}
+		test.WriteEnvFile(t, "NATS_URL=nats://localhost:1\n")
+		var env []string
+		for _, e := range os.Environ() {
+			if !strings.HasPrefix(e, "NATS_URL=") && !strings.HasPrefix(e, "PROD_MODE=") &&
+				!strings.HasPrefix(e, "OUTPUT_DIR=") && !strings.HasPrefix(e, "HTTP_PORT=") {
+				env = append(env, e)
+			}
+		}
+		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_NATS_connect_error", "-test.count=1")
+		cmd.Env = append(env, "RUN_MAIN=nats_error")
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, err, &exitErr)
+		assert.Equal(t, 1, exitErr.ExitCode())
 	})
 }

@@ -24,13 +24,21 @@ def test_returns_correct_chunk_paths() -> None:
     ]
 
 
-def test_returns_empty_list_when_no_scenes() -> None:
-    """Returns empty list when no scenes are detected"""
-    with tempfile.TemporaryDirectory() as output_dir:
+def test_no_scene_boundaries_copies_original_as_single_chunk() -> None:
+    """When no scene boundaries are detected the original file is returned as one chunk."""
+    with (
+        tempfile.TemporaryDirectory() as src_dir,
+        tempfile.TemporaryDirectory() as output_dir,
+    ):
+        src = os.path.join(src_dir, "myvideo.mp4")
+        open(src, "wb").close()
+
         with (
             patch("src.processing.video.detect", return_value=[]),
-            patch("src.processing.video.split_video_ffmpeg"),
+            patch("src.processing.video.split_video_ffmpeg") as mock_split,
         ):
-            result = split_into_chunks("/explosion/myvideo.mp4", output_dir)
+            result = split_into_chunks(src, output_dir)
 
-    assert result == []
+        mock_split.assert_not_called()
+
+    assert result == [os.path.join(output_dir, "myvideo.mp4")]

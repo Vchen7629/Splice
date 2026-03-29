@@ -44,13 +44,13 @@ func WriteEnvFile(t *testing.T, content string) {
 	t.Helper()
 	for _, key := range []string{"NATS_URL", "PROD_MODE", "OUTPUT_DIR", "HTTP_PORT"} {
 		if old, set := os.LookupEnv(key); set {
-			t.Cleanup(func() { 
-				err := os.Setenv(key, old) 
+			t.Cleanup(func() {
+				err := os.Setenv(key, old)
 				require.NoError(t, err)
 			})
 		} else {
-			t.Cleanup(func() { 
-				err := os.Unsetenv(key) 
+			t.Cleanup(func() {
+				err := os.Unsetenv(key)
 				require.NoError(t, err)
 			})
 		}

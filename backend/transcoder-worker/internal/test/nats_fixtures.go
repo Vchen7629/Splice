@@ -5,6 +5,7 @@ package test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -24,7 +25,11 @@ func SetupNats(t *testing.T) (jetstream.JetStream, *nats.Conn) {
 	url, err := container.ConnectionString(ctx)
 	require.NoError(t, err)
 
-	nc, err := nats.Connect(url)
+	nc, err := nats.Connect(url,
+		nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(10),
+		nats.ReconnectWait(200*time.Millisecond),
+	)
 	require.NoError(t, err)
 	t.Cleanup(nc.Close)
 
