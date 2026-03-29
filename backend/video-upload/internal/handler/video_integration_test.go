@@ -58,7 +58,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		h.MaxUploadBytes = 100 // 100 bytes
 
 		// building a multipart body whose file part exceeds 100 bytes
-		req := test.NewUploadRequest(t, "big.mp4", bytes.Repeat([]byte("x"), 200), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "big.mp4", bytes.Repeat([]byte("x"), 200), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -68,7 +68,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	})
 	t.Run("File is saved to disk at outputDir/jobs/jobID/filename", func(t *testing.T) {
 		h, _, dir := newUploadHandler(t)
-		req := test.NewUploadRequest(t, "clip.mp4", []byte("fake video bytes"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "clip.mp4", []byte("fake video bytes"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -84,7 +84,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	t.Run("Saved file contains the exact bytes that were uploaded", func(t *testing.T) {
 		h, _, dir := newUploadHandler(t)
 		content := []byte("precise video content")
-		req := test.NewUploadRequest(t, "video.mp4", content, "720p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", content, "720p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -110,7 +110,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "720p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "720p")
 		rec := httptest.NewRecorder()
 		h.UploadVideo(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code)
@@ -137,7 +137,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		seen := make(map[string]bool)
 
 		for range 3 {
-			req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+			req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 			rec := httptest.NewRecorder()
 			h.UploadVideo(rec, req)
 			require.Equal(t, http.StatusCreated, rec.Code)
@@ -156,7 +156,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	t.Run("Large file (5 MB) is fully persisted to disk", func(t *testing.T) {
 		h, _, dir := newUploadHandler(t)
 		content := bytes.Repeat([]byte("x"), 5*1024*1024)
-		req := test.NewUploadRequest(t, "big.mp4", content, "4k")
+		req := test.NewUploadRequest(t, "/jobs", "big.mp4", content, "4k")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)

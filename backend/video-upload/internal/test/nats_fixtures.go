@@ -4,7 +4,9 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+	"video-upload/internal/service"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -38,4 +40,14 @@ func SetupNats(t *testing.T) (jetstream.JetStream, *nats.Conn) {
 	require.NoError(t, err)
 
 	return js, nc
+}
+
+// PublishJobComplete publishes a JobCompleteMessage to jobs.complete, simulating
+// the downstream video processor signalling that a job has finished.
+func PublishJobComplete(t *testing.T, js jetstream.JetStream, jobID string) {
+	t.Helper()
+	payload, err := json.Marshal(service.JobCompleteMessage{JobID: jobID})
+	require.NoError(t, err)
+	_, err = js.Publish(context.Background(), "jobs.complete", payload)
+	require.NoError(t, err)
 }

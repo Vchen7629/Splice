@@ -102,7 +102,7 @@ func TestUploadVideoMissingFields(t *testing.T) {
 
 	t.Run("Returns 400 when video field is missing from multipart form", func(t *testing.T) {
 		h := newVideoHandler(t.TempDir(), &test.MockJS{})
-		req := test.NewUploadRequest(t, "", nil, "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "", nil, "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -113,7 +113,7 @@ func TestUploadVideoMissingFields(t *testing.T) {
 
 	t.Run("Returns 400 when target_resolution is missing from multipart form", func(t *testing.T) {
 		h := newVideoHandler(t.TempDir(), &test.MockJS{})
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -127,7 +127,7 @@ func TestUploadVideoErrors(t *testing.T) {
 	t.Run("Returns 500 when saving the video file fails", func(t *testing.T) {
 		// Null byte in path causes os.MkdirAll to fail
 		h := newVideoHandler("\x00", &test.MockJS{})
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -139,7 +139,7 @@ func TestUploadVideoErrors(t *testing.T) {
 	t.Run("Returns 500 when NATS publish fails", func(t *testing.T) {
 		js := &test.MockJS{PublishErr: errors.New("nats unavailable")}
 		h := newVideoHandler(t.TempDir(), js)
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -151,7 +151,7 @@ func TestUploadVideoErrors(t *testing.T) {
 	t.Run("Does not publish to NATS when saving fails", func(t *testing.T) {
 		js := &test.MockJS{}
 		h := newVideoHandler("\x00", js)
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -163,7 +163,7 @@ func TestUploadVideoErrors(t *testing.T) {
 func TestUploadVideoSuccess(t *testing.T) {
 	t.Run("Returns 201 on a valid upload", func(t *testing.T) {
 		h := newVideoHandler(t.TempDir(), &test.MockJS{})
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -173,7 +173,7 @@ func TestUploadVideoSuccess(t *testing.T) {
 
 	t.Run("Response Content-Type is application/json", func(t *testing.T) {
 		h := newVideoHandler(t.TempDir(), &test.MockJS{})
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -183,7 +183,7 @@ func TestUploadVideoSuccess(t *testing.T) {
 
 	t.Run("Response body contains a non-empty job_id", func(t *testing.T) {
 		h := newVideoHandler(t.TempDir(), &test.MockJS{})
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
 		h.UploadVideo(rec, req)
@@ -198,7 +198,7 @@ func TestUploadVideoSuccess(t *testing.T) {
 	t.Run("Publishes to NATS on a successful upload", func(t *testing.T) {
 		js := &test.MockJS{}
 		h := newVideoHandler(t.TempDir(), js)
-		req := test.NewUploadRequest(t, "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 
 		h.UploadVideo(httptest.NewRecorder(), req)
 

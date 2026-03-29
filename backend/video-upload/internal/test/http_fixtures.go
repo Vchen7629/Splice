@@ -4,10 +4,15 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"testing"
 	"video-upload/internal/handler"
 	"video-upload/internal/service"
+
+	"github.com/stretchr/testify/require"
 )
 
 func SilentLogger() *slog.Logger {
@@ -31,6 +36,18 @@ func (d *droppedConnectionWriter) Write(_ []byte) (int, error) {
 }
 
 // http test server for http integration tests
+// FreePort returns an OS-assigned free port number as a string.
+// There is a small TOCTOU window between Close and the caller binding the port,
+// but it is acceptable for tests.
+func FreePort(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+	l.Close()
+	return port
+}
+
 func NewTestServer(tracker *service.CompletedJobs) *httptest.Server {
 	h := &handler.JobStatusHandler{
 		Logger:  slog.Default(),

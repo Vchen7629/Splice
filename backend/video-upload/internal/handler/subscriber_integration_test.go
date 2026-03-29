@@ -4,11 +4,9 @@ package handler_test
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 	"video-upload/internal/handler"
-	"video-upload/internal/service"
 	"video-upload/internal/test"
 
 	"github.com/nats-io/nats.go"
@@ -83,17 +81,12 @@ func TestSubscribeConsumerConfig(t *testing.T) {
 
 func TestSubscribeMessageHandling(t *testing.T) {
 	t.Run("valid message adds job ID to tracker", func(t *testing.T) {
-		ctx := context.Background()
 		js, _ := test.SetupNats(t)
 
 		tracker, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
 		require.NoError(t, err)
 
-		payload, err := json.Marshal(service.JobCompleteMessage{JobID: "job-abc"})
-		require.NoError(t, err)
-
-		_, err = js.Publish(ctx, "jobs.complete", payload)
-		require.NoError(t, err)
+		test.PublishJobComplete(t, js, "job-abc")
 
 		assert.Eventually(t, func() bool {
 			return tracker.IsDone("job-abc")
