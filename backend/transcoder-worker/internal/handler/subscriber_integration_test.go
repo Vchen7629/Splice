@@ -17,83 +17,91 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
-func TestNoStream_ReturnsError(t *testing.T) {
-	ctx := context.Background()
+func TestConsumeVideoChunkErrors(t *testing.T) {
+	t.Run("no stream for subject returns error", func(t *testing.T) {
+		ctx := context.Background()
 
-	container, err := natstc.Run(ctx, "nats:2.10-alpine")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
 
-	url, err := container.ConnectionString(ctx)
-	require.NoError(t, err)
+		url, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
 
-	nc, err := nats.Connect(url)
-	require.NoError(t, err)
-	t.Cleanup(nc.Close)
+		nc, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(nc.Close)
 
-	js, err := jetstream.New(nc)
-	require.NoError(t, err)
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
 
-	_, err = handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+		_, err = handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
-	assert.Error(t, err)
-}
-
-func TestReturnsConsumeContext(t *testing.T) {
-	js, _ := test.SetupNats(t)
-
-	consCtx, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
-
-	require.NoError(t, err)
-	assert.NotNil(t, consCtx)
-}
-
-func TestCreatesConsumerWithCorrectConfig(t *testing.T) {
-	ctx := context.Background()
-	js, _ := test.SetupNats(t)
-
-	_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
-	require.NoError(t, err)
-
-	stream, err := js.Stream(ctx, "jobs")
-	require.NoError(t, err)
-
-	cons, err := stream.Consumer(ctx, "transcoder-worker")
-	require.NoError(t, err)
-
-	info, err := cons.Info(ctx)
-	require.NoError(t, err)
-
-	assert.Equal(t, "transcoder-worker", info.Config.Name)
-	assert.Equal(t, "transcoder-worker", info.Config.Durable)
-	assert.Equal(t, "jobs.video.chunks", info.Config.FilterSubject)
-	assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
-	assert.Equal(t, 10, info.Config.MaxAckPending)
-	assert.Equal(t, 3, info.Config.MaxDeliver)
-}
-
-func TestInvalidJSON_DoesNotPublishDownstream(t *testing.T) {
-	js, nc := test.SetupNats(t)
-
-	_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
-	require.NoError(t, err)
-
-	received := make(chan struct{}, 1)
-	sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) {
-		received <- struct{}{}
+		assert.Error(t, err)
 	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
+}
 
-	invalidPayload, err := json.Marshal("not a VideoChunkMessage")
-	require.NoError(t, err)
+func TestConsumeVideoChunkSuccess(t *testing.T) {
+	t.Run("returns non-nil consume context", func(t *testing.T) {
+		js, _ := test.SetupNats(t)
 
-	_, err = js.Publish(context.Background(), "jobs.video.chunks", invalidPayload)
-	require.NoError(t, err)
+		consCtx, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
 
-	select {
-	case <-received:
-		t.Fatal("unexpected message published downstream after invalid JSON")
-	case <-time.After(2 * time.Second):
-	}
+		require.NoError(t, err)
+		assert.NotNil(t, consCtx)
+	})
+}
+
+func TestConsumeVideoChunkConsumerConfig(t *testing.T) {
+	t.Run("consumer is created with the correct config", func(t *testing.T) {
+		ctx := context.Background()
+		js, _ := test.SetupNats(t)
+
+		_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+		require.NoError(t, err)
+
+		stream, err := js.Stream(ctx, "jobs")
+		require.NoError(t, err)
+
+		cons, err := stream.Consumer(ctx, "transcoder-worker")
+		require.NoError(t, err)
+
+		info, err := cons.Info(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, "transcoder-worker", info.Config.Name)
+		assert.Equal(t, "transcoder-worker", info.Config.Durable)
+		assert.Equal(t, "jobs.video.chunks", info.Config.FilterSubject)
+		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
+		assert.Equal(t, 10, info.Config.MaxAckPending)
+		assert.Equal(t, 3, info.Config.MaxDeliver)
+	})
+}
+
+func TestConsumeVideoChunkMessageHandling(t *testing.T) {
+	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+
+		_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+		require.NoError(t, err)
+
+		received := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) {
+			received <- struct{}{}
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		invalidPayload, err := json.Marshal("not a VideoChunkMessage")
+		require.NoError(t, err)
+
+		_, err = js.Publish(context.Background(), "jobs.video.chunks", invalidPayload)
+		require.NoError(t, err)
+
+		select {
+		case <-received:
+			t.Fatal("unexpected message published downstream after invalid JSON")
+		case <-time.After(2 * time.Second):
+		}
+	})
 }

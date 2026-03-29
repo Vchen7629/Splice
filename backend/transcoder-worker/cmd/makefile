@@ -5,6 +5,10 @@ PKGS := . ../internal/handler/... ../internal/service/...
 format: 
 	go fmt ${PKGS} .
 	go fmt ../internal/test/... .
+
+lint:
+	golangci-lint run ${PKGS}
+	golangci-lint run ../internal/test/...
 	
 coverage:
 	go test -tags=unit,integration ${PKGS} -v -coverprofile=coverage.out -covermode=atomic

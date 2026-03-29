@@ -18,62 +18,64 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
-func TestPublishesCorrectPayload(t *testing.T) {
-	js, nc := test.SetupNats(t)
+func TestPublishChunkCompleteI(t *testing.T) {
+	t.Run("publishes correct payload to downstream subject", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
 
-	received := make(chan []byte, 1)
-	sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) {
-		received <- msg.Data
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
+		received := make(chan []byte, 1)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) {
+			received <- msg.Data
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-	msg := service.ChunkCompleteMessage{
-		JobID:       "job-1",
-		ChunkIndex:  2,
-		TotalChunks: 1,
-		OutputPath:  "/output/chunk-2.mp4",
-	}
+		msg := service.ChunkCompleteMessage{
+			JobID:       "job-1",
+			ChunkIndex:  2,
+			TotalChunks: 1,
+			OutputPath:  "/output/chunk-2.mp4",
+		}
 
-	fn := handler.PublishChunkComplete(js)
-	err = fn(msg)
-	require.NoError(t, err)
+		fn := handler.PublishChunkComplete(js)
+		err = fn(msg)
+		require.NoError(t, err)
 
-	select {
-	case data := <-received:
-		var got service.ChunkCompleteMessage
-		require.NoError(t, json.Unmarshal(data, &got))
-		assert.Equal(t, msg, got)
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for message")
-	}
-}
-
-func TestNoStreamReturnsError(t *testing.T) {
-	ctx := context.Background()
-
-	container, err := natstc.Run(ctx, "nats:2.10-alpine")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-	url, err := container.ConnectionString(ctx)
-	require.NoError(t, err)
-
-	nc, err := nats.Connect(url)
-	require.NoError(t, err)
-	t.Cleanup(nc.Close)
-
-	// JetStream with no stream configured for the subject
-	js, err := jetstream.New(nc)
-	require.NoError(t, err)
-
-	fn := handler.PublishChunkComplete(js)
-	err = fn(service.ChunkCompleteMessage{
-		JobID:       "job-1",
-		ChunkIndex:  0,
-		TotalChunks: 1,
-		OutputPath:  "/output/chunk-0.mp4",
+		select {
+		case data := <-received:
+			var got service.ChunkCompleteMessage
+			require.NoError(t, json.Unmarshal(data, &got))
+			assert.Equal(t, msg, got)
+		case <-time.After(3 * time.Second):
+			t.Fatal("timed out waiting for message")
+		}
 	})
 
-	assert.Error(t, err)
+	t.Run("no stream returns error", func(t *testing.T) {
+		ctx := context.Background()
+
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+		url, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
+
+		nc, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(nc.Close)
+
+		// JetStream with no stream configured for the subject
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
+
+		fn := handler.PublishChunkComplete(js)
+		err = fn(service.ChunkCompleteMessage{
+			JobID:       "job-1",
+			ChunkIndex:  0,
+			TotalChunks: 1,
+			OutputPath:  "/output/chunk-0.mp4",
+		})
+
+		assert.Error(t, err)
+	})
 }

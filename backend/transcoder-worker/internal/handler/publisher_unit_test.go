@@ -23,17 +23,19 @@ func (m *mockJetStream) Publish(_ context.Context, _ string, _ []byte, _ ...jets
 	return nil, m.publishErr
 }
 
-func TestPublishChunkComplete_PublishError(t *testing.T) {
-	publishErr := errors.New("nats publish failed")
-	mock := &mockJetStream{publishErr: publishErr}
+func TestPublishChunkComplete(t *testing.T) {
+	t.Run("publish error is returned", func(t *testing.T) {
+		publishErr := errors.New("nats publish failed")
+		mock := &mockJetStream{publishErr: publishErr}
 
-	fn := handler.PublishChunkComplete(mock)
-	err := fn(service.ChunkCompleteMessage{
-		JobID:       "job-1",
-		ChunkIndex:  0,
-		TotalChunks: 0,
-		OutputPath:  "/output/chunk-0.mp4",
+		fn := handler.PublishChunkComplete(mock)
+		err := fn(service.ChunkCompleteMessage{
+			JobID:       "job-1",
+			ChunkIndex:  0,
+			TotalChunks: 0,
+			OutputPath:  "/output/chunk-0.mp4",
+		})
+
+		assert.ErrorIs(t, err, publishErr)
 	})
-
-	assert.ErrorIs(t, err, publishErr)
 }
