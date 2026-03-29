@@ -44,11 +44,18 @@ func WriteEnvFile(t *testing.T, content string) {
 	t.Helper()
 	for _, key := range []string{"NATS_URL", "PROD_MODE", "OUTPUT_DIR", "HTTP_PORT"} {
 		if old, set := os.LookupEnv(key); set {
-			t.Cleanup(func() { os.Setenv(key, old) })
+			t.Cleanup(func() { 
+				err := os.Setenv(key, old) 
+				require.NoError(t, err)
+			})
 		} else {
-			t.Cleanup(func() { os.Unsetenv(key) })
+			t.Cleanup(func() { 
+				err := os.Unsetenv(key) 
+				require.NoError(t, err)
+			})
 		}
-		os.Unsetenv(key)
+		err := os.Unsetenv(key)
+		require.NoError(t, err)
 	}
 	path := filepath.Join("..", ".env")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0600))

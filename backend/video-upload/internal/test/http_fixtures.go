@@ -44,7 +44,8 @@ func FreePort(t *testing.T) string {
 	l, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
 	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
-	l.Close()
+	err = l.Close()
+	require.NoError(t, err)
 	return port
 }
 
