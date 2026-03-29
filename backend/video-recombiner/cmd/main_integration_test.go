@@ -20,102 +20,104 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
-func TestQuitSignalExitsCleanly(t *testing.T) {
-	js, nc := test.SetupNats(t)
-	quit := make(chan os.Signal, 1)
-	done := make(chan error, 1)
+func TestRunCombinerI(t *testing.T) {
+	t.Run("quit signal exits cleanly", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		quit := make(chan os.Signal, 1)
+		done := make(chan error, 1)
 
-	go func() {
-		done <- runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
-	}()
+		go func() {
+			done <- runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
+		}()
 
-	// give the consumer time to set up before signalling
-	time.Sleep(200 * time.Millisecond)
-	quit <- syscall.SIGTERM
+		// give the consumer time to set up before signalling
+		time.Sleep(200 * time.Millisecond)
+		quit <- syscall.SIGTERM
 
-	select {
-	case err := <-done:
-		assert.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("runCombiner did not exit after quit signal")
-	}
-}
-
-func TestFullFlowReceiveTranscodePublish(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not available")
-	}
-
-	js, nc := test.SetupNats(t)
-
-	// subscribe to the downstream subject before starting the worker
-	received := make(chan []byte, 1)
-	sub, err := nc.Subscribe("jobs.complete", func(msg *nats.Msg) {
-		received <- msg.Data
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("runCombiner did not exit after quit signal")
+		}
 	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-	outputDir := t.TempDir()
-	quit := make(chan os.Signal, 1)
-	done := make(chan error, 1)
+	t.Run("no stream returns error", func(t *testing.T) {
+		ctx := context.Background()
 
-	go func() {
-		done <- runCombiner(js, nc, test.SilentLogger(), outputDir, quit)
-	}()
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
 
-	// give the consumer time to set up before publishing
-	time.Sleep(500 * time.Millisecond)
+		url, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
 
-	payload, err := json.Marshal(service.ChunkCompleteMessage{
-		JobID:       "job-1",
-		ChunkIndex:  0,
-		TotalChunks: 1,
-		OutputPath:  "idk",
+		nc, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(nc.Close)
+
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
+
+		quit := make(chan os.Signal, 1)
+		err = runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
+
+		assert.Error(t, err)
 	})
-	require.NoError(t, err)
 
-	_, err = js.Publish(context.Background(), "jobs.complete", payload)
-	require.NoError(t, err)
+	t.Run("full flow: receive chunk, combine, publish downstream", func(t *testing.T) {
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			t.Skip("ffmpeg not available")
+		}
 
-	select {
-	case data := <-received:
-		var msg service.VideoProcessingCompleteMessage
-		require.NoError(t, json.Unmarshal(data, &msg))
-		assert.Equal(t, "job-1", msg.JobID)
-	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for downstream message")
-	}
+		js, nc := test.SetupNats(t)
 
-	quit <- syscall.SIGTERM
+		// subscribe to the downstream subject before starting the worker
+		received := make(chan []byte, 1)
+		sub, err := nc.Subscribe("jobs.complete", func(msg *nats.Msg) {
+			received <- msg.Data
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-	select {
-	case err := <-done:
-		assert.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("runCombiner did not exit after quit signal")
-	}
-}
+		outputDir := t.TempDir()
+		quit := make(chan os.Signal, 1)
+		done := make(chan error, 1)
 
-func TestNoStreamReturnsError(t *testing.T) {
-	ctx := context.Background()
+		go func() {
+			done <- runCombiner(js, nc, test.SilentLogger(), outputDir, quit)
+		}()
 
-	container, err := natstc.Run(ctx, "nats:2.10-alpine")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
+		// give the consumer time to set up before publishing
+		time.Sleep(500 * time.Millisecond)
 
-	url, err := container.ConnectionString(ctx)
-	require.NoError(t, err)
+		payload, err := json.Marshal(service.ChunkCompleteMessage{
+			JobID:       "job-1",
+			ChunkIndex:  0,
+			TotalChunks: 1,
+			OutputPath:  "idk",
+		})
+		require.NoError(t, err)
 
-	nc, err := nats.Connect(url)
-	require.NoError(t, err)
-	t.Cleanup(nc.Close)
+		_, err = js.Publish(context.Background(), "jobs.complete", payload)
+		require.NoError(t, err)
 
-	js, err := jetstream.New(nc)
-	require.NoError(t, err)
+		select {
+		case data := <-received:
+			var msg service.VideoProcessingCompleteMessage
+			require.NoError(t, json.Unmarshal(data, &msg))
+			assert.Equal(t, "job-1", msg.JobID)
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for downstream message")
+		}
 
-	quit := make(chan os.Signal, 1)
-	err = runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
+		quit <- syscall.SIGTERM
 
-	assert.Error(t, err)
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("runCombiner did not exit after quit signal")
+		}
+	})
 }
