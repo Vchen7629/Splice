@@ -8,6 +8,7 @@ format:
 
 lint:
 	golangci-lint run ${PKGS}
+	golangci-lint run ../internal/test/...
 
 coverage:
 	go test -tags=unit,integration ${PKGS} -v -coverprofile=coverage.out -covermode=atomic
