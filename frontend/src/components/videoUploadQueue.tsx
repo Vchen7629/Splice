@@ -32,23 +32,23 @@ const VideoUploadQueue = () => {
             <span className="text-xs font-medium tracking-widest uppercase text-text-1 font-mono tracking-[0.12em]">
                 Queue
             </span>
-            <span className="text-xs px-2 py-0.5 rounded-full tabular-nums bg-accent-bg border-1 border-accent-border font-mono text-accent">
-                {count}
+            <span className="text-xs tabular-nums font-mono text-accent tracking-widest uppercase">
+                {count} {count === 1 ? 'file' : 'files'}
             </span>
         </div>
-        <ul className="flex-1 overflow-y-auto" style={{ background: 'var(--bg-row)' }}>
+        <ul className="flex flex-col gap-2 p-3 flex-1 overflow-y-auto bg-row-bg">
             {STUB_FILES.map((item, _i) => (
             <li
                 key={item.id}
-                className="flex items-center gap-3 px-4 border-b-1 border-line h-[56px]"
+                className="flex items-center gap-3 px-3 shrink-0 h-[56px] rounded-lg bg-panel border-1 border-line border-x-2 border-x-accent transition-[transform,box-shadow,background] duration-150 hover:[transform:scaleX(1.015)] hover:bg-[#2a2a2e] hover:shadow-[0_0_12px_var(--accent-glow),rgba(0,0,0,0.35)_0_2px_8px_-2px]"
             >
-                <Video className='text-accent' size={20}/>
+                <Video className='text-accent shrink-0' size={18}/>
 
                 <span className="flex-1 text-xs truncate font-mono" title={item.name}>
                     {truncateName(item.name)}
                 </span>
 
-                <span className="text-xs shrink-0 tabular-nums font-mono text-[11px] text-right min-w-[48px]">
+                <span className="text-xs shrink-0 tabular-nums font-mono text-[11px] text-right min-w-[48px] text-zinc-400">
                     {item.size}
                 </span>
 
@@ -61,23 +61,16 @@ const VideoUploadQueue = () => {
                     <option value="1080p">1080p</option>
                 </select>
 
-                <button className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-base leading-none transition-colors duration-0.1s hover:text-accent">
-                    <X size={20}/>
+                <button className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-base leading-none">
+                    <X size={16} className='text-zinc-400 transition-colors duration-0.1s hover:text-accent'/>
                 </button>
             </li>
             ))}
         </ul>
 
         <div className="p-4 shrink-0 border-t-1 border-line">
-            <button
-            className="transcode-btn w-full rounded-lg text-sm font-medium h-[40px] text-white bg-accent-btn"
-            style={{
-                boxShadow: '0 0 18px var(--accent-btn-glow), 0 4px 12px rgba(0,0,0,0.35)',
-                letterSpacing: '0.01em',
-                transition: 'box-shadow 0.15s, opacity 0.15s',
-            }}
-            >
-            Transcode {count} {count === 1 ? 'file' : 'files'} →
+            <button className="transcode-btn w-full rounded-lg text-sm font-medium h-[40px] text-white bg-accent-btn">
+                Transcode {count} {count === 1 ? 'file' : 'files'} →
             </button>
         </div>
         </section>
