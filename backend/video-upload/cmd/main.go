@@ -87,7 +87,7 @@ func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,
-		Handler: middleware.ApiRequestLogging(router),
+		Handler: middleware.Cors(middleware.ApiRequestLogging(router)),
 	}
 
 	go func() {
