@@ -1,20 +1,62 @@
 import { Upload } from 'lucide-react'
-import type { CSSProperties } from 'react'
-
-const FORMATS = ['.mp4', '.mov', '.mkv', '.webm', '.avi']
+import { useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent } from 'react'
+import { ALLOWED_EXTENSIONS, CollectFilesFromDrop, FilterFiles } from '../utils/fileUpload'
 
 /**
  * Drop zone, used to add video files for upload via drag & drop or click to browse.
  * TODO: wire onDragOver, onDragLeave, onDrop, onClick (hidden <input type="file">)
  */
-const FileUploadDropZone = () => {
+const FileUploadDropZone = ({ onFiles }: { onFiles: (files: File[]) => void}) => {
+  const [isDragging, setIsDragging] = useState<boolean>(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  function handleDragLeave() {
+    setIsDragging(false)
+  }
+
+  async function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(false)
+    const files = await CollectFilesFromDrop(e)
+    const { accepted } = FilterFiles(files)
+
+    if (accepted.length > 0) onFiles(accepted)
+  }
+
+  function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    
+    const { accepted } = FilterFiles(files)
+    if (accepted.length > 0) onFiles(accepted)
+
+    e.target.value = '' // reseting so the same file can be readded
+  }
+
   return (
     <div
-      className="relative flex flex-col bg-panel min-h-0 items-center justify-center w-[50%] border-1 border-line rounded-xl cursor-pointer gap-6 group"
-
-      /* TODO: onDragOver, onDragLeave, onDrop handlers */
+      className={`relative flex flex-col min-h-0 items-center justify-center flex-1 aspect-square border-2
+        rounded-xl cursor-pointer gap-6 group transition-all duration-150
+        ${isDragging ? 'border-transparent bg-accent/10 scale-[1.01] shadow-[0_0_24px_rgba(var(--accent-rgb),0.25)]'
+          : 'bg-panel border-line border-solid'
+        }`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
-      <CornerBrackets />
+      <input 
+        ref={inputRef}
+        type="file"
+        accept={ALLOWED_EXTENSIONS.join(',')}
+        multiple
+        className='hidden'
+        onChange={handleInputChange}
+      />
+      <CornerBrackets active={isDragging} />
 
       <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent-bg border-1 border-accent-border">
         <Upload className='text-accent mb-1'/>
@@ -26,15 +68,18 @@ const FileUploadDropZone = () => {
         </span>
         <span className="text-xs leading-relaxed text-text-1">
           or
-          <span className="ml-1 underline underline-offset-2 text-accent decoration-accent-border">
+          <button
+            className="ml-1 underline underline-offset-2 text-accent decoration-accent-border"
+            onClick={() => inputRef.current?.click()}
+          >
             click to browse
-          </span>
+          </button>
         </span>
       </div>
 
       {/* Format pills */}
       <div className="flex items-center gap-1.5 flex-wrap justify-center px-10">
-        {FORMATS.map(fmt => (
+        {ALLOWED_EXTENSIONS.map(fmt => (
           <span
             key={fmt}
             className="text-xs px-2 py-0.5 rounded font-mono border-1 border-line bg-row-bg"
@@ -48,13 +93,15 @@ const FileUploadDropZone = () => {
 }
 
 /** Decorative corner brackets — add visual framing to the drop zone */
-function CornerBrackets() {
+const CornerBrackets = ({ active }: { active: boolean }) => {
   const s: CSSProperties = {
     position: 'absolute',
-    width: 14,
-    height: 14,
-    borderColor: 'var(--border-hi)',
+    width: active ? 18 : 14,
+    height: active ? 18 : 14,
+    borderColor: active ? 'var(--accent)' : 'var(--border-hi)',
+    transition: 'all 0.15s ease',
   }
+
   return (
     <>
       <span style={{ ...s, top: 10, left: 10, borderTop: '1px solid', borderLeft: '1px solid' }} />
