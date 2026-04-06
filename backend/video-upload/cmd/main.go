@@ -103,7 +103,7 @@ func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.
 func loadConfig() (*Config, error) {
 	err := godotenv.Load("../.env")
 	if err != nil {
-		return nil, err
+		log.Println("missing .env file")
 	}
 	var cfg Config
 

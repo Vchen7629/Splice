@@ -41,14 +41,14 @@ func startTestServer(t *testing.T) (*http.Server, *Config) {
 }
 
 func TestLoadConfig(t *testing.T) {
-	t.Run("missing env file should return error", func(t *testing.T) {
+	t.Run("missing env file shouldnt return error", func(t *testing.T) {
 		if _, err := os.Stat(filepath.Join("..", ".env")); err == nil {
 			t.Skip(".env already exists")
 		}
 
 		_, err := loadConfig()
 
-		assert.Error(t, err)
+		assert.NoError(t, err)
 	})
 
 	t.Run("reads all values from env file", func(t *testing.T) {
