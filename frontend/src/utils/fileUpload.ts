@@ -48,7 +48,11 @@ export function FilterFiles(files: File[]): filterResult {
 
     for (const file of files) {
         const error = validateFile(file)
-        error ? rejected.push({ file, error}) : accepted.push(file)
+        if (error) {
+            rejected.push({ file, error })
+        } else {
+            accepted.push(file)
+        }
     }
 
     return { accepted, rejected }
