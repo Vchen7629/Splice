@@ -87,7 +87,7 @@ func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,
-		Handler: middleware.ApiRequestLogging(router),
+		Handler: middleware.Cors(middleware.ApiRequestLogging(router)),
 	}
 
 	go func() {
@@ -103,7 +103,7 @@ func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.
 func loadConfig() (*Config, error) {
 	err := godotenv.Load("../.env")
 	if err != nil {
-		return nil, err
+		log.Println("missing .env file")
 	}
 	var cfg Config
 

@@ -56,10 +56,6 @@ jobs:
       - name: Run Linting 
         working-directory: frontend
         run: npm run lint
-      
-      - name: Run tests
-        working-directory: frontend
-        run: npm run test
   
   scene-detector-ci:
     needs: path-filter

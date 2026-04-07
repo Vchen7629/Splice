@@ -81,7 +81,7 @@ func newLogger(cfg *Config) *slog.Logger {
 func loadConfig() (*Config, error) {
 	err := godotenv.Load("../.env")
 	if err != nil {
-		return nil, err
+		log.Println("missing .env file")
 	}
 	var cfg Config
 
