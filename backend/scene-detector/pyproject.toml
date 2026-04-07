@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.13.1",
     "scenedetect[opencv-headless]>=0.6.7.1",
     "structlog>=25.5.0",
+    "types-requests>=2.33.0.20260402",
 ]
 
 [tool.pyright]
