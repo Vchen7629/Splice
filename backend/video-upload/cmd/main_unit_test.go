@@ -34,7 +34,9 @@ func freePort(t *testing.T) string {
 // registers a Cleanup to shut the server down, and returns the server and cfg.
 func startTestServer(t *testing.T) (*http.Server, *Config) {
 	t.Helper()
-	cfg := &Config{HTTPPort: freePort(t), OutputDir: t.TempDir()}
+	fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(fakeSrv.Close)
+	cfg := &Config{HTTPPort: freePort(t), StorageURL: fakeSrv.URL}
 	server := startHttpApi(test.SilentLogger(), &test.MockJS{}, service.NewCompletedJobs(), cfg)
 	t.Cleanup(func() { server.Shutdown(context.Background()) }) //nolint:errcheck
 	return server, cfg
@@ -52,14 +54,14 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("reads all values from env file", func(t *testing.T) {
-		test.WriteEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nOUTPUT_DIR=/custom/dir\nHTTP_PORT=9090\n")
+		test.WriteEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nSTORAGE_URL=http://storage:9333\nHTTP_PORT=9090\n")
 
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
 		assert.Equal(t, "nats://test:9999", cfg.NatsURL)
 		assert.True(t, cfg.ProdMode)
-		assert.Equal(t, "/custom/dir", cfg.OutputDir)
+		assert.Equal(t, "http://storage:9333", cfg.StorageURL)
 		assert.Equal(t, "9090", cfg.HTTPPort)
 	})
 
@@ -71,12 +73,12 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
 		assert.False(t, cfg.ProdMode)
-		assert.Equal(t, "/tmp/splice", cfg.OutputDir)
+		assert.Equal(t, "http://localhost:8888", cfg.StorageURL)
 		assert.Equal(t, "8080", cfg.HTTPPort)
 	})
 }
 
-func TestStartHttpApi(t *testing.T) {
+func TestStartHttp(t *testing.T) {
 	t.Run("returns non-nil server with address derived from config", func(t *testing.T) {
 		server, cfg := startTestServer(t)
 
@@ -99,41 +101,9 @@ func TestStartHttpApi(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
-
-	// Route registration: a wrong method on a registered route returns 405,
-	// which distinguishes "route exists, wrong method" from "route not found" (404).
-	t.Run("POST /jobs route is registered", func(t *testing.T) {
-		server, _ := startTestServer(t)
-
-		req := httptest.NewRequest(http.MethodDelete, "/jobs", nil)
-		w := httptest.NewRecorder()
-		server.Handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-
-	t.Run("GET /jobs/{id}/status route is registered", func(t *testing.T) {
-		server, _ := startTestServer(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/jobs/abc/status", nil)
-		w := httptest.NewRecorder()
-		server.Handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-
-	t.Run("GET /jobs/{id}/download route is registered", func(t *testing.T) {
-		server, _ := startTestServer(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/jobs/abc/download", nil)
-		w := httptest.NewRecorder()
-		server.Handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
 }
 
-func TestMain(t *testing.T) {
+func TestMainFunc(t *testing.T) {
 	t.Run("exits on config load error", func(t *testing.T) {
 		if os.Getenv("RUN_MAIN") == "config_error" {
 			os.Chdir("/") //nolint:errcheck
@@ -157,7 +127,7 @@ func TestMain(t *testing.T) {
 		var env []string
 		for _, e := range os.Environ() {
 			if !strings.HasPrefix(e, "NATS_URL=") && !strings.HasPrefix(e, "PROD_MODE=") &&
-				!strings.HasPrefix(e, "OUTPUT_DIR=") && !strings.HasPrefix(e, "HTTP_PORT=") {
+				!strings.HasPrefix(e, "STORAGE_URL=") && !strings.HasPrefix(e, "HTTP_PORT=") {
 				env = append(env, e)
 			}
 		}

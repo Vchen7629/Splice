@@ -13,12 +13,12 @@ import (
 
 func TestCors(t *testing.T) {
 	tests := []struct {
-		name               string
-		method             string
-		origin             string
-		expectStatus       int
-		expectAllowOrigin  string
-		expectNextCalled   bool
+		name              string
+		method            string
+		origin            string
+		expectStatus      int
+		expectAllowOrigin string
+		expectNextCalled  bool
 	}{
 		{
 			name:              "Allowed origin GET receives CORS headers",

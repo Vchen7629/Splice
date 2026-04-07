@@ -42,7 +42,7 @@ func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte,
 // for main.go unit tests
 func WriteEnvFile(t *testing.T, content string) {
 	t.Helper()
-	for _, key := range []string{"NATS_URL", "PROD_MODE", "OUTPUT_DIR", "HTTP_PORT"} {
+	for _, key := range []string{"NATS_URL", "PROD_MODE", "STORAGE_URL", "HTTP_PORT"} {
 		if old, set := os.LookupEnv(key); set {
 			t.Cleanup(func() {
 				err := os.Setenv(key, old)

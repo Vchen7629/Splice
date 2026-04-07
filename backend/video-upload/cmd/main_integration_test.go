@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 	"video-upload/internal/handler"
@@ -21,15 +21,24 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
-type serverEnv struct {
-	url       string
-	server    *http.Server
-	js        jetstream.JetStream
-	outputDir string
+var sharedStorageURL string
+
+func TestMain(m *testing.M) {
+	url, cleanup := test.StartSeaweedFSFiler()
+	sharedStorageURL = url
+	code := m.Run()
+	cleanup()
+	os.Exit(code)
 }
 
-// starts a NATS container, wires up the job-completion subscriber,
-// and launches the HTTP API via startHttpApi. Everything is torn down via t.Cleanup.
+type serverEnv struct {
+	url        string
+	server     *http.Server
+	js         jetstream.JetStream
+	storageURL string
+}
+
+// starts a NATS container, wires up the job-completion subscriber
 func setupServer(t *testing.T) *serverEnv {
 	t.Helper()
 	js, _ := test.SetupNats(t)
@@ -37,8 +46,7 @@ func setupServer(t *testing.T) *serverEnv {
 	tracker, consCtx, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
 	require.NoError(t, err)
 
-	dir := t.TempDir()
-	cfg := &Config{HTTPPort: test.FreePort(t), OutputDir: dir}
+	cfg := &Config{HTTPPort: test.FreePort(t), StorageURL: sharedStorageURL}
 
 	url := "http://localhost:" + cfg.HTTPPort
 	server := startHttpApi(test.SilentLogger(), js, tracker, cfg)
@@ -57,10 +65,10 @@ func setupServer(t *testing.T) *serverEnv {
 	}, 5*time.Second, 10*time.Millisecond, "server did not start in time")
 
 	return &serverEnv{
-		url:       url,
-		server:    server,
-		js:        js,
-		outputDir: dir,
+		url:        url,
+		server:     server,
+		js:         js,
+		storageURL: sharedStorageURL,
 	}
 }
 
@@ -88,45 +96,59 @@ func TestMainErrors(t *testing.T) {
 	})
 }
 
-func TestSetupApiRoutes(t *testing.T) {
+func TestStartHttpApi(t *testing.T) {
 	env := setupServer(t)
 
-	t.Run("POST /jobs is wired to the upload handler", func(t *testing.T) {
-		req := test.NewUploadRequest(t, env.url+"/jobs", "clip.mp4", []byte("data"), "1080p")
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+	const seedJobID, seedFileName = "route-test-job", "output.mp4"
+	test.SeedProcessedVideo(t, sharedStorageURL, seedJobID, seedFileName, []byte("processed"))
 
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	})
+	tests := []struct {
+		name       string
+		buildReq   func() *http.Request
+		wantStatus int
+	}{
+		{
+			name: "POST /jobs/upload is wired to the upload handler",
+			buildReq: func() *http.Request {
+				return test.NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", []byte("data"), "1080p")
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name: "GET /jobs/{id}/status is wired to the job status handler",
+			buildReq: func() *http.Request {
+				req, _ := http.NewRequest(http.MethodGet, env.url+"/jobs/any-job/status", nil)
+				return req
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "GET /jobs/download is wired to the download handler",
+			buildReq: func() *http.Request {
+				body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, seedJobID, seedFileName)
+				req, _ := http.NewRequest(http.MethodGet, env.url+"/jobs/download", strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				return req
+			},
+			wantStatus: http.StatusOK,
+		},
+	}
 
-	t.Run("GET /jobs/{id}/status is wired to the job status handler", func(t *testing.T) {
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/any-job/status", env.url))
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	})
-
-	t.Run("GET /jobs/{id}/download is wired to the download handler", func(t *testing.T) {
-		jobID := "seed-job"
-		path := filepath.Join(env.outputDir, "jobs", jobID, "output.mp4")
-		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
-		require.NoError(t, os.WriteFile(path, []byte("data"), 0644))
-
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/download", env.url, jobID))
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := http.DefaultClient.Do(tc.buildReq())
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.Equal(t, tc.wantStatus, resp.StatusCode)
+		})
+	}
 }
 
 func TestJobCompletionFlow(t *testing.T) {
 	env := setupServer(t)
 
 	t.Run("job transitions from PROCESSING to COMPLETE after completion message is received", func(t *testing.T) {
-		req := test.NewUploadRequest(t, env.url+"/jobs", "video.mp4", []byte("data"), "720p")
+		req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", []byte("data"), "720p")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, resp.StatusCode)

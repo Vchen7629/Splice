@@ -2,18 +2,21 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"path/filepath"
 	"video-upload/internal/service"
+	"video-upload/internal/storage"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 type VideoHandler struct {
 	Logger         *slog.Logger
 	JS             jetstream.JetStream
-	OutputDir      string
+	StorageURL     string
 	MaxUploadBytes int64
 }
 
@@ -59,7 +62,7 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := service.SaveUploadedVideo(file, v.OutputDir, header.Filename, v.Logger)
+	result, err := storage.SaveUploadedVideo(file, v.StorageURL, header.Filename)
 	if err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
 		v.Logger.Error("failed to save uploaded video", "err", err)
@@ -68,7 +71,7 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 
 	err = PublishVideoMetadata(
 		v.JS, service.SceneSplitMessage{
-			JobID: result.JobID, TargetResolution: targetRes, StoragePath: result.StoragePath,
+			JobID: result.JobID, TargetResolution: targetRes, StorageURL: result.StorageURL,
 		},
 	)
 	if err != nil {
@@ -91,14 +94,46 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 
 // handler for streaming the completed out video for a given job ID
 func (v *VideoHandler) DownloadVideo(w http.ResponseWriter, r *http.Request) {
-	jobID := r.PathValue("id")
-	if jobID == "" {
-		http.Error(w, "missing job_id", http.StatusBadRequest)
-		v.Logger.Error("missing job_id path param")
+	var payload struct {
+		JobID    string `json:"job_id" validate:"required,min=2"`
+		FileName string `json:"file_name" validate:"required,min=2"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		v.Logger.Error("error decoding the request body", "err", err)
+		http.Error(w, "invalid json payload", http.StatusBadRequest)
 		return
 	}
 
-	outputPath := filepath.Join(v.OutputDir, "jobs", jobID, "output.mp4")
-	v.Logger.Debug("serving output video", "job_id", jobID, "path", outputPath)
-	http.ServeFile(w, r, outputPath)
+	err = validator.New().Struct(payload)
+	if err != nil {
+		v.Logger.Error("error validating request body", "err", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	body, err := storage.GetProcessedVideo(v.StorageURL, payload.JobID, payload.FileName)
+	if err != nil {
+		v.Logger.Error("failed to fetch processed video", "err", err)
+		http.Error(w, "failed to fetch video", http.StatusInternalServerError)
+		return
+	}
+	defer func() {
+		err := body.Close()
+		if err != nil {
+			v.Logger.Warn("failed to close response body for Get Processed Video", "err", err)
+		}
+	}()
+
+	v.Logger.Debug("fetching output video", "job_id", payload.JobID, "fileName", payload.FileName)
+
+	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(payload.FileName))
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+	_, err = io.Copy(w, body)
+	if err != nil {
+		v.Logger.Error("error streaming video to response", "err", err)
+		return
+	}
 }
