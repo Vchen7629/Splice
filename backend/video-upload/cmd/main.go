@@ -13,6 +13,7 @@ import (
 	"video-upload/internal/handler"
 	"video-upload/internal/middleware"
 	"video-upload/internal/service"
+	"video-upload/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -21,10 +22,10 @@ import (
 )
 
 type Config struct {
-	NatsURL   string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode  bool   `envconfig:"PROD_MODE" default:"false"`
-	OutputDir string `envconfig:"OUTPUT_DIR" default:"/tmp/splice"`
-	HTTPPort  string `envconfig:"HTTP_PORT" default:"8080"`
+	NatsURL    string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	ProdMode   bool   `envconfig:"PROD_MODE" default:"false"`
+	StorageURL string `envconfig:"STORAGE_URL" default:"http://localhost:8888"`
+	HTTPPort   string `envconfig:"HTTP_PORT" default:"8080"`
 }
 
 func main() {
@@ -34,6 +35,12 @@ func main() {
 	}
 
 	logger := middleware.StructuredLogger(cfg.ProdMode)
+
+	err = storage.CheckHealth(cfg.StorageURL, logger)
+	if err != nil {
+		logger.Error("storage seedweedfs unreachable", "url", cfg.StorageURL, "err", err)
+		os.Exit(1)
+	}
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
@@ -78,12 +85,12 @@ func main() {
 func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.CompletedJobs, cfg *Config) *http.Server {
 	router := http.NewServeMux()
 
-	vh := &handler.VideoHandler{Logger: logger, JS: js, OutputDir: cfg.OutputDir}
+	vh := &handler.VideoHandler{Logger: logger, JS: js, StorageURL: cfg.StorageURL}
 	jh := &handler.JobStatusHandler{Logger: logger, Tracker: tracker}
 
-	router.HandleFunc("POST /jobs", vh.UploadVideo)
+	router.HandleFunc("POST /jobs/upload", vh.UploadVideo)
 	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
-	router.HandleFunc("GET /jobs/{id}/download", vh.DownloadVideo)
+	router.HandleFunc("GET /jobs/download", vh.DownloadVideo)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,

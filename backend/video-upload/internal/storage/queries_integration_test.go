@@ -15,7 +15,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSaveUploadedVideo(t *testing.T, filerURL string) {
+var sharedFilerUrl string
+
+func TestMain(m *testing.M) {
+	filerURL, cleanup := test.StartSeaweedFSFiler()
+	sharedFilerUrl = filerURL
+
+	code := m.Run()
+
+	cleanup()
+	os.Exit(code)
+}
+
+func TestSaveUploadedVideo(t *testing.T) {
 	t.Run("returns empty result and error", func(t *testing.T) {
 		tests := []struct {
 			name       string
@@ -78,12 +90,11 @@ func TestSaveUploadedVideo(t *testing.T, filerURL string) {
 
 	t.Run("stores correct video file content at storage location", func(t *testing.T) {
 		const fileName = "testvideo.mp4"
-		storageURL := test.SetupSeaweedFSFiler(t)
 
 		expectedBytes, err := os.ReadFile("../test/testvideo.mp4")
 		require.NoError(t, err)
 
-		result, err := storage.SaveUploadedVideo(test.OpenTestVideo(t), storageURL, fileName)
+		result, err := storage.SaveUploadedVideo(test.OpenTestVideo(t), sharedFilerUrl, fileName)
 		require.NoError(t, err)
 
 		resp, err := http.Get(result.StorageURL)
@@ -109,9 +120,15 @@ func TestGetProcessedVideo(t *testing.T) {
 				storageURL: "http://localhost:1",
 			},
 			{
-				name: "when storage returns status 400",
+				name: "when storage returns status 404",
 				handler: func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusBadRequest)
+					w.WriteHeader(http.StatusNotFound)
+				},
+			},
+			{
+				name: "when storage returns status 403",
+				handler: func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusForbidden)
 				},
 			},
 			{
@@ -141,13 +158,11 @@ func TestGetProcessedVideo(t *testing.T) {
 
 	t.Run("fetches correct video content from storage", func(t *testing.T) {
 		const fileName = "testvideo.mp4"
-		storageURL := test.SetupSeaweedFSFiler(t)
 
 		expectedBytes, err := os.ReadFile("../test/testvideo.mp4")
 		require.NoError(t, err)
 
-		// seed the video at the /processed path that GetProcessedVideo will fetch
-		seedReq, err := http.NewRequest(http.MethodPut, storageURL+"/job123/"+fileName+"/processed", test.OpenTestVideo(t))
+		seedReq, err := http.NewRequest(http.MethodPut, sharedFilerUrl+"/job123/"+fileName+"/processed", test.OpenTestVideo(t))
 		require.NoError(t, err)
 		seedReq.Header.Set("Content-Type", "application/octet-stream")
 		seedResp, err := http.DefaultClient.Do(seedReq)
@@ -155,7 +170,7 @@ func TestGetProcessedVideo(t *testing.T) {
 		seedResp.Body.Close()
 		require.Less(t, seedResp.StatusCode, 400)
 
-		body, err := storage.GetProcessedVideo(storageURL, "job123", fileName)
+		body, err := storage.GetProcessedVideo(sharedFilerUrl, "job123", fileName)
 		require.NoError(t, err)
 		defer body.Close()
 

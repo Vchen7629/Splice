@@ -2,12 +2,14 @@ package test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"video-upload/internal/handler"
 	"video-upload/internal/service"
@@ -47,6 +49,16 @@ func FreePort(t *testing.T) string {
 	err = l.Close()
 	require.NoError(t, err)
 	return port
+}
+
+// NewDownloadRequest builds a GET request with a JSON body containing job_id and file_name.
+func NewDownloadRequest(t *testing.T, jobID, fileName string) *http.Request {
+	t.Helper()
+	body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, jobID, fileName)
+	req, err := http.NewRequest(http.MethodGet, "/jobs", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	return req
 }
 
 func NewTestServer(tracker *service.CompletedJobs) *httptest.Server {

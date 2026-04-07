@@ -44,9 +44,13 @@ func GetProcessedVideo(storageUrl, jobID, fileName string) (io.ReadCloser, error
 		return nil, fmt.Errorf("error connecting to seedweedfs, %w", err)
 	}
 
-	if resp.StatusCode >= 400 {
-		resp.Body.Close()
-		return nil, fmt.Errorf("seedweedfs returned status %d", resp.StatusCode)
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return nil, fmt.Errorf("video not found")
+	case http.StatusForbidden:
+		return nil, fmt.Errorf("access denied")
+	case http.StatusInternalServerError:
+		return nil, fmt.Errorf("error accessing seedweedfs")
 	}
 
 	return resp.Body, nil

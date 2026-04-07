@@ -12,15 +12,13 @@ import (
 
 func TestCheckHealth(t *testing.T) {
 	t.Run("storage health check fails when seedweedfs is unreachable", func(t *testing.T) {
-		err := storage.CheckHealth("http://localhost:1")
+		err := storage.CheckHealth("http://localhost:1", test.SilentLogger())
 
 		assert.Error(t, err)
 	})
 
 	t.Run("storage health check passes when seedweedfs is reachable", func(t *testing.T) {
-		storageURL := test.SetupSeaweedFS(t)
-
-		err := storage.CheckHealth(storageURL)
+		err := storage.CheckHealth(sharedFilerUrl, test.SilentLogger())
 
 		assert.NoError(t, err)
 	})

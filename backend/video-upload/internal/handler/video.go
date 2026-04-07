@@ -119,12 +119,17 @@ func (v *VideoHandler) DownloadVideo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to fetch video", http.StatusInternalServerError)
 		return
 	}
-	defer body.Close()
+	defer func() {
+		err := body.Close()
+		if err != nil {
+			v.Logger.Warn("failed to close response body for Get Processed Video", "err", err)
+		}
+	}()
 
 	v.Logger.Debug("fetching output video", "job_id", payload.JobID, "fileName", payload.FileName)
 
 	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(payload.FileName))
-	w.Header().Set("Content-Type", "video")
+	w.Header().Set("Content-Type", "application/octet-stream")
 
 	_, err = io.Copy(w, body)
 	if err != nil {

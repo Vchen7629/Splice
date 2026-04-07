@@ -40,25 +40,18 @@ func TestSubscribeErrors(t *testing.T) {
 	})
 }
 
-func TestSubscribeSuccess(t *testing.T) {
+func TestSubscribe(t *testing.T) {
+	js, _ := test.SetupNats(t)
+	tracker, consCtx, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
+	require.NoError(t, err)
+
 	t.Run("returns non-nil tracker and consume context", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-
-		tracker, consCtx, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
-
-		require.NoError(t, err)
 		assert.NotNil(t, tracker)
 		assert.NotNil(t, consCtx)
 	})
-}
 
-func TestSubscribeConsumerConfig(t *testing.T) {
 	t.Run("consumer is created with the correct config", func(t *testing.T) {
 		ctx := context.Background()
-		js, _ := test.SetupNats(t)
-
-		_, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
-		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
 		require.NoError(t, err)
@@ -77,15 +70,8 @@ func TestSubscribeConsumerConfig(t *testing.T) {
 		assert.Equal(t, 3, info.Config.MaxDeliver)
 		assert.Equal(t, 30*time.Second, info.Config.AckWait)
 	})
-}
 
-func TestSubscribeMessageHandling(t *testing.T) {
 	t.Run("valid message adds job ID to tracker", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-
-		tracker, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
-		require.NoError(t, err)
-
 		test.PublishJobComplete(t, js, "job-abc")
 
 		assert.Eventually(t, func() bool {
@@ -95,11 +81,6 @@ func TestSubscribeMessageHandling(t *testing.T) {
 
 	t.Run("invalid json does not add any job to tracker", func(t *testing.T) {
 		ctx := context.Background()
-		js, _ := test.SetupNats(t)
-
-		tracker, _, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
-		require.NoError(t, err)
-
 		_, err = js.Publish(ctx, "jobs.complete", []byte("not valid json"))
 		require.NoError(t, err)
 
