@@ -15,6 +15,9 @@ import (
 
 const subSubject = "jobs.video.chunks"
 
+// removeAll is a variable so tests can override it to simulate filesystem failures.
+var removeAll = os.RemoveAll
+
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(baseStorageURL string, js jetstream.JetStream, logger *slog.Logger) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
@@ -112,8 +115,16 @@ func ConsumeVideoChunk(baseStorageURL string, js jetstream.JetStream, logger *sl
 			return
 		}
 
-		os.RemoveAll("/tmp/temp-unprocessed-" + payload.JobID)
-		os.RemoveAll("/tmp/temp-processed-" + payload.JobID)
+		err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+			return
+		}
+		err = removeAll("/tmp/temp-processed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+			return
+		}
 	})
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,7 +19,12 @@ func SaveTranscodedVideoChunk(baseStorageURL, filePath, jobID string) (string, e
 	if err != nil {
 		return "", fmt.Errorf("error opening transcoded video file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			log.Printf("error closing the file, %v", err)
+		}
+	}()
 
 	req, err := http.NewRequest(http.MethodPut, url, file)
 	if err != nil {
@@ -30,7 +36,12 @@ func SaveTranscodedVideoChunk(baseStorageURL, filePath, jobID string) (string, e
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seaweedfs: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Printf("error closing the response body, %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("seaweedfs upload failed with status: %d", resp.StatusCode)
@@ -45,7 +56,12 @@ func GetUnprocessedVideoChunk(storageURL, jobID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seedweedfs, %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Printf("error closing the response body, %v", err)
+		}
+	}()
 
 	switch resp.StatusCode {
 	case http.StatusNotFound:
@@ -69,11 +85,19 @@ func GetUnprocessedVideoChunk(storageURL, jobID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error creating video file: %w", err)
 	}
-	defer outFile.Close()
+	defer func() {
+		err := outFile.Close()
+		if err != nil {
+			log.Printf("error closing the file, %v", err)
+		}
+	}()
 
 	_, err = io.Copy(outFile, resp.Body)
 	if err != nil {
-		os.RemoveAll(jobDir)
+		err := os.RemoveAll(jobDir)
+		if err != nil {
+			return "", fmt.Errorf("error removing all files: %w", err)
+		}
 		return "", fmt.Errorf("error writing video to file: %w", err)
 	}
 
