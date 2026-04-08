@@ -4,16 +4,23 @@ import requests
 import pytest
 
 
-def test_check_health_succeeds(seaweedfs_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_health_succeeds(
+    seaweedfs_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Passes without raising when SeaweedFS master and filer are reachable"""
-    monkeypatch.setattr("src.storage.check_health.settings.BASE_STORAGE_URL", seaweedfs_url)
+    monkeypatch.setattr(
+        "src.storage.check_health.settings.BASE_STORAGE_URL", seaweedfs_url
+    )
     check_storage_health()
 
 
-@pytest.mark.parametrize("bad_url", [
-    "http://localhost:1",
-    "http://doesnotexist.invalid",
-])
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "http://localhost:1",
+        "http://doesnotexist.invalid",
+    ],
+)
 def test_check_health_raises_on_connection_error(
     bad_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

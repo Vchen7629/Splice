@@ -6,11 +6,15 @@ import uuid
 import time
 import os
 
-TEST_VIDEO_PATH = os.path.join(os.path.dirname(__file__), "..", "videos", "ForBiggerBlazes.mp4")
+TEST_VIDEO_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "videos", "ForBiggerBlazes.mp4"
+)
 TEST_VIDEO_FILENAME = "ForBiggerBlazes.mp4"
 
 
-def _wait_for_seaweedfs(host: str, master_port: int, filer_port: int, timeout: int = 60) -> None:
+def _wait_for_seaweedfs(
+    host: str, master_port: int, filer_port: int, timeout: int = 60
+) -> None:
     """Poll SeaweedFS master and filer HTTP endpoints until both are ready."""
     endpoints = [
         f"http://{host}:{master_port}/dir/status",
