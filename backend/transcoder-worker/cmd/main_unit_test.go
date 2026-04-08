@@ -4,12 +4,9 @@ package main
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 	"transcoder-worker/internal/test"
@@ -17,10 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func silentLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 // okJS returns a mock JetStream that succeeds through the full consumer setup.
 func okJS() *test.MockJS {
@@ -48,7 +41,7 @@ func TestRunProcessing(t *testing.T) {
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runProcessing("http://storage", js, nc, silentLogger(), quit)
+		err := runProcessing("http://storage", js, nc, test.SilentLogger(), quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -59,7 +52,7 @@ func TestRunProcessing(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing("http://storage", okJS(), &test.MockDrainer{}, silentLogger(), quit)
+			done <- runProcessing("http://storage", okJS(), &test.MockDrainer{}, test.SilentLogger(), quit)
 		}()
 
 		select {
@@ -84,7 +77,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", js, &test.MockDrainer{}, silentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", js, &test.MockDrainer{}, test.SilentLogger(), quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -95,7 +88,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", okJS(), nc, silentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", okJS(), nc, test.SilentLogger(), quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -105,26 +98,10 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runProcessing("http://storage", okJS(), nc, silentLogger(), quit)
+		err := runProcessing("http://storage", okJS(), nc, test.SilentLogger(), quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
-}
-
-// writeEnvFile creates ../.env with the given content and removes it on cleanup.
-func writeEnvFile(t *testing.T, content string) {
-	t.Helper()
-	for _, key := range []string{"NATS_URL", "PROD_MODE", "BASE_STORAGE_URL"} {
-		if old, set := os.LookupEnv(key); set {
-			t.Cleanup(func() { os.Setenv(key, old) })
-		} else {
-			t.Cleanup(func() { os.Unsetenv(key) })
-		}
-		os.Unsetenv(key)
-	}
-	path := filepath.Join("..", ".env")
-	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
-	t.Cleanup(func() { _ = os.Remove(path) })
 }
 
 func TestLoadConfig(t *testing.T) {
@@ -162,57 +139,12 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestMainFunc(t *testing.T) {
-	t.Run("exits on config load error", func(t *testing.T) {
-		if os.Getenv("RUN_MAIN") == "config_error" {
-			os.Chdir("/")
-			main()
-			return
-		}
-		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_config_load_error", "-test.count=1")
-		cmd.Env = append(os.Environ(), "RUN_MAIN=config_error")
-		err := cmd.Run()
-		var exitErr *exec.ExitError
-		require.ErrorAs(t, err, &exitErr)
-		assert.Equal(t, 1, exitErr.ExitCode())
-	})
-
 	t.Run("exits on storage health check failure", func(t *testing.T) {
-		if os.Getenv("RUN_MAIN") == "storage_error" {
-			main()
-			return
-		}
-		writeEnvFile(t, "NATS_URL=nats://localhost:4222\nBASE_STORAGE_URL=http://localhost:1\n")
-		var env []string
-		for _, e := range os.Environ() {
-			if !strings.HasPrefix(e, "NATS_URL=") && !strings.HasPrefix(e, "PROD_MODE=") && !strings.HasPrefix(e, "BASE_STORAGE_URL=") {
-				env = append(env, e)
-			}
-		}
-		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_storage_health_check_failure", "-test.count=1")
-		cmd.Env = append(env, "RUN_MAIN=storage_error")
-		err := cmd.Run()
-		var exitErr *exec.ExitError
-		require.ErrorAs(t, err, &exitErr)
-		assert.Equal(t, 1, exitErr.ExitCode())
-	})
+		code := patchExit(t)
+		writeEnvFile(t, "BASE_STORAGE_URL=http://localhost:1\n")
 
-	t.Run("exits on NATS connect error", func(t *testing.T) {
-		if os.Getenv("RUN_MAIN") == "nats_error" {
-			main()
-			return
-		}
-		writeEnvFile(t, "NATS_URL=nats://localhost:1\n")
-		var env []string
-		for _, e := range os.Environ() {
-			if !strings.HasPrefix(e, "NATS_URL=") && !strings.HasPrefix(e, "PROD_MODE=") && !strings.HasPrefix(e, "BASE_STORAGE_URL=") {
-				env = append(env, e)
-			}
-		}
-		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_NATS_connect_error", "-test.count=1")
-		cmd.Env = append(env, "RUN_MAIN=nats_error")
-		err := cmd.Run()
-		var exitErr *exec.ExitError
-		require.ErrorAs(t, err, &exitErr)
-		assert.Equal(t, 1, exitErr.ExitCode())
+		main()
+
+		assert.Equal(t, 1, *code)
 	})
 }

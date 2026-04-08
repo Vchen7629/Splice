@@ -143,3 +143,32 @@ func TestRunProcessingI(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestMainI(t *testing.T) {
+	t.Run("exits on NATS connect error", func(t *testing.T) {
+		code := patchExit(t)
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\n", sharedFilerURL))
+
+		main()
+
+		assert.Equal(t, 1, *code)
+	})
+
+	t.Run("reaches runProcessing and logs error on no stream", func(t *testing.T) {
+		ctx := context.Background()
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+		natsURL, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
+
+		// No stream configured — ConsumeVideoChunk fails, main() logs the error and returns (no os.Exit)
+		code := patchExit(t)
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\n", sharedFilerURL, natsURL))
+
+		main()
+
+		assert.Equal(t, -1, *code) // osExit was never called
+	})
+}
