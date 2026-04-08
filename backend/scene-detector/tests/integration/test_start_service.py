@@ -46,6 +46,7 @@ async def test_full_flow_publishes_chunks_downstream(
         return fake_chunks
 
     with (
+        patch("src.service.check_storage_health"),
         patch("src.service.nats_connect", return_value=(nc, js)),
         patch("src.nats.subscriber.process_job", side_effect=fake_process_job),
     ):
@@ -94,9 +95,12 @@ async def test_raises_runtime_error_when_video_chunks_stream_not_found(
     )
     nc.drain = AsyncMock()
 
-    with patch("src.service.nats_connect", return_value=(nc, js)):
-        with pytest.raises(RuntimeError, match="No stream found for video chunks"):
-            await start_service()
+    with (
+        patch("src.service.check_storage_health"),
+        patch("src.service.nats_connect", return_value=(nc, js)),
+        pytest.raises(RuntimeError, match="No stream found for video chunks"),
+    ):
+        await start_service()
 
 
 @pytest.mark.asyncio
@@ -118,11 +122,12 @@ async def test_drain_called_in_finally_when_raw_videos_raises(
         raise RuntimeError("subscriber failed unexpectedly")
 
     with (
+        patch("src.service.check_storage_health"),
         patch("src.service.nats_connect", return_value=(nc, js)),
         patch("src.service.raw_videos", side_effect=failing_raw_videos),
+        pytest.raises(RuntimeError, match="subscriber failed unexpectedly"),
     ):
-        with pytest.raises(RuntimeError, match="subscriber failed unexpectedly"):
-            await start_service()
+        await start_service()
 
     assert drain_called
 
@@ -146,6 +151,7 @@ async def test_drain_called_in_finally_on_cancellation(
         await asyncio.sleep(30)
 
     with (
+        patch("src.service.check_storage_health"),
         patch("src.service.nats_connect", return_value=(nc, js)),
         patch("src.service.raw_videos", side_effect=hanging_raw_videos),
     ):
@@ -185,6 +191,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
         return []
 
     with (
+        patch("src.service.check_storage_health"),
         patch("src.service.nats_connect", return_value=(nc, js)),
         patch("src.nats.subscriber.process_job", side_effect=slow_process_job),
     ):
@@ -208,3 +215,23 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
             pytest.fail(
                 "Service did not cancel within 2 seconds — process_job may be blocking the event loop"
             )
+
+
+@pytest.mark.asyncio
+async def test_raises_before_nats_when_storage_unreachable(
+    js_context: tuple[Any, JetStreamContext],
+    monkeypatch: Any,
+) -> None:
+    """Service raises and never connects to NATS when SeaweedFS is unreachable"""
+    nc, js = js_context
+    monkeypatch.setattr(
+        "src.storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
+    )
+
+    with (
+        patch("src.service.nats_connect") as mock_nats_connect,
+        pytest.raises(Exception),
+    ):
+        await start_service()
+
+    mock_nats_connect.assert_not_called()

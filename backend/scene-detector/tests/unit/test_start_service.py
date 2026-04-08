@@ -15,6 +15,9 @@ async def test_raises_on_runtime_error() -> None:
     mock_nc = MagicMock()
     mock_nc.drain = AsyncMock()
 
-    with patch("src.service.nats_connect", return_value=(mock_nc, mock_js)):
-        with pytest.raises(RuntimeError):
-            await start_service()
+    with (
+        patch("src.service.check_storage_health"),
+        patch("src.service.nats_connect", return_value=(mock_nc, mock_js)),
+        pytest.raises(RuntimeError),
+    ):
+        await start_service()
