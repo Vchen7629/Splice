@@ -21,5 +21,7 @@ class Settings(BaseSettings):
     MAX_RECONNECT_ATTEMPT: int = 5
     RECONNECT_TIME_WAIT_S: int = 2
 
+    BASE_STORAGE_URL: str = "http://localhost:8888"
+
 
 settings = Settings()

@@ -1,5 +1,6 @@
 from .nats.subscriber import raw_videos
 from .nats.connection import nats_connect
+from .storage.check_health import check_storage_health
 from .core.logging import logger
 from .core.settings import settings
 import nats.js.errors as js_errors
@@ -8,6 +9,8 @@ import asyncio
 
 async def start_service() -> None:
     """Start the python scene-detection service"""
+    check_storage_health()
+
     nc, js = await nats_connect()
 
     try:

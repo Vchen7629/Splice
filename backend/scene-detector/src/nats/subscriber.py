@@ -20,5 +20,5 @@ async def raw_videos(js: JetStreamContext) -> None:
             await scene_video_chunks(js, chunk_messages)
             await msg.ack()
         except Exception as e:
-            logger.error("video split error", err=str(e))
+            logger.error("unexpected error processing job", err=str(e))
             await msg.nak()
