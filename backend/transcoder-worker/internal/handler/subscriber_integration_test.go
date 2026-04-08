@@ -1,15 +1,15 @@
 //go:build integration
 
-package handler_test
+package handler
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 	"time"
-	"transcoder-worker/internal/handler"
 	"transcoder-worker/internal/service"
 	"transcoder-worker/internal/test"
 
@@ -32,10 +32,9 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestConsumeVideoChunkErrors(t *testing.T) {
+func TestConsumeVideoChunk(t *testing.T) {
 	t.Run("no stream for subject returns error", func(t *testing.T) {
 		ctx := context.Background()
-
 		container, err := natstc.Run(ctx, "nats:2.10-alpine")
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = container.Terminate(ctx) })
@@ -50,37 +49,31 @@ func TestConsumeVideoChunkErrors(t *testing.T) {
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
 
-		_, err = handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
 
 		assert.Error(t, err)
 	})
-}
 
-func TestConsumeVideoChunkSuccess(t *testing.T) {
 	t.Run("returns non-nil consume context", func(t *testing.T) {
 		js, _ := test.SetupNats(t)
 
-		consCtx, err := handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		consCtx, err := ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
 	})
-}
 
-func TestConsumeVideoChunkConsumerConfig(t *testing.T) {
-	t.Run("consumer is created with the correct config", func(t *testing.T) {
+	t.Run("consumer is created with correct config", func(t *testing.T) {
 		ctx := context.Background()
 		js, _ := test.SetupNats(t)
 
-		_, err := handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
 		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
 		require.NoError(t, err)
-
 		cons, err := stream.Consumer(ctx, "transcoder-worker")
 		require.NoError(t, err)
-
 		info, err := cons.Info(ctx)
 		require.NoError(t, err)
 
@@ -91,25 +84,20 @@ func TestConsumeVideoChunkConsumerConfig(t *testing.T) {
 		assert.Equal(t, 10, info.Config.MaxAckPending)
 		assert.Equal(t, 3, info.Config.MaxDeliver)
 	})
-}
 
-func TestConsumeVideoChunkMessageHandling(t *testing.T) {
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 
-		_, err := handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
-		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) {
-			received <- struct{}{}
-		})
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) { received <- struct{}{} })
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 		invalidPayload, err := json.Marshal("not a VideoChunkMessage")
 		require.NoError(t, err)
-
 		_, err = js.Publish(context.Background(), "jobs.video.chunks", invalidPayload)
 		require.NoError(t, err)
 
@@ -129,32 +117,22 @@ func TestConsumeVideoChunkMessageHandling(t *testing.T) {
 			os.RemoveAll("/tmp/temp-processed-" + jobID)
 		})
 
-		// seed test video to seaweedfs
 		videoContent, err := os.ReadFile("../test/test_video.mp4")
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 
 		received := make(chan []byte, 1)
-		sub, err := nc.Subscribe("jobs.chunks.complete", func(m *nats.Msg) {
-			received <- m.Data
-		})
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(m *nats.Msg) { received <- m.Data })
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		_, err = handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
 		require.NoError(t, err)
 
-		payload, err := json.Marshal(service.VideoChunkMessage{
-			JobID:            jobID,
-			ChunkIndex:       0,
-			TotalChunks:      1,
-			StorageURL:       storageURL,
-			TargetResolution: "480p",
+		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p",
 		})
-		require.NoError(t, err)
-
-		_, err = js.Publish(context.Background(), "jobs.video.chunks", payload)
-		require.NoError(t, err)
 
 		select {
 		case data := <-received:
@@ -170,100 +148,53 @@ func TestConsumeVideoChunkMessageHandling(t *testing.T) {
 	})
 }
 
-func TestConsumeVideoChunkTranscodeError(t *testing.T) {
-	t.Run("transcode failure naks the message for redelivery", func(t *testing.T) {
-		ctx := context.Background()
-		js, _ := test.SetupNats(t)
+func TestConsumeVideoChunkNaksOnError(t *testing.T) {
+	tests := []struct {
+		name           string
+		baseStorageURL string
+		videoContent   func(t *testing.T) []byte
+		fileName       string
+	}{
+		{
+			name:           "transcode failure naks for redelivery",
+			baseStorageURL: sharedFilerURL,
+			videoContent:   func(_ *testing.T) []byte { return []byte("this is not a video") },
+			fileName:       "not_a_video.mp4",
+		},
+		{
+			name:           "save failure naks for redelivery",
+			baseStorageURL: "http://localhost:1",
+			videoContent: func(t *testing.T) []byte {
+				b, err := os.ReadFile("../test/test_video.mp4")
+				require.NoError(t, err)
+				return b
+			},
+			fileName: "test_video.mp4",
+		},
+	}
 
-		jobID := "job-transcode-fail"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			js, _ := test.SetupNats(t)
+			jobID := "job-nak-" + tc.fileName
+			t.Cleanup(func() {
+				os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+				os.RemoveAll("/tmp/temp-processed-" + jobID)
+			})
+
+			storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, tc.fileName, tc.videoContent(t))
+
+			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, test.SilentLogger())
+			require.NoError(t, err)
+
+			test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+				JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+				StorageURL: storageURL, TargetResolution: "480p",
+			})
+
+			test.AssertNacked(t, js, "expected message to be nacked")
 		})
-
-		// Seed a non-video text file — ffmpeg will fail to transcode it
-		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "not_a_video.mp4", []byte("this is not a video"))
-
-		_, err := handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
-		require.NoError(t, err)
-
-		payload, err := json.Marshal(service.VideoChunkMessage{
-			JobID:            jobID,
-			ChunkIndex:       0,
-			TotalChunks:      1,
-			StorageURL:       storageURL,
-			TargetResolution: "480p",
-		})
-		require.NoError(t, err)
-
-		_, err = js.Publish(ctx, "jobs.video.chunks", payload)
-		require.NoError(t, err)
-
-		require.Eventually(t, func() bool {
-			stream, err := js.Stream(ctx, "jobs")
-			if err != nil {
-				return false
-			}
-			cons, err := stream.Consumer(ctx, "transcoder-worker")
-			if err != nil {
-				return false
-			}
-			info, err := cons.Info(ctx)
-			if err != nil {
-				return false
-			}
-			return info.NumAckPending > 0
-		}, 30*time.Second, 200*time.Millisecond, "expected message to be nacked after transcode failure")
-	})
-}
-
-func TestConsumeVideoChunkSaveError(t *testing.T) {
-	t.Run("save failure naks the message for redelivery", func(t *testing.T) {
-		ctx := context.Background()
-		js, _ := test.SetupNats(t)
-
-		jobID := "job-save-fail"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
-		})
-
-		videoContent, err := os.ReadFile("../test/test_video.mp4")
-		require.NoError(t, err)
-		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
-
-		// Use unreachable baseStorageURL so SaveTranscodedVideoChunk fails after a successful transcode
-		_, err = handler.ConsumeVideoChunk("http://localhost:1", js, test.SilentLogger())
-		require.NoError(t, err)
-
-		payload, err := json.Marshal(service.VideoChunkMessage{
-			JobID:            jobID,
-			ChunkIndex:       0,
-			TotalChunks:      1,
-			StorageURL:       storageURL,
-			TargetResolution: "480p",
-		})
-		require.NoError(t, err)
-
-		_, err = js.Publish(ctx, "jobs.video.chunks", payload)
-		require.NoError(t, err)
-
-		require.Eventually(t, func() bool {
-			stream, err := js.Stream(ctx, "jobs")
-			if err != nil {
-				return false
-			}
-			cons, err := stream.Consumer(ctx, "transcoder-worker")
-			if err != nil {
-				return false
-			}
-			info, err := cons.Info(ctx)
-			if err != nil {
-				return false
-			}
-			return info.NumAckPending > 0
-		}, 30*time.Second, 200*time.Millisecond, "expected message to be nacked after save failure")
-	})
+	}
 }
 
 func TestConsumeVideoChunkPublishFails(t *testing.T) {
@@ -300,35 +231,78 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 
-		_, err = handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
 		require.NoError(t, err)
 
-		payload, err := json.Marshal(service.VideoChunkMessage{
-			JobID:            jobID,
-			ChunkIndex:       0,
-			TotalChunks:      1,
-			StorageURL:       storageURL,
-			TargetResolution: "480p",
+		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p",
 		})
-		require.NoError(t, err)
 
-		_, err = js.Publish(ctx, "jobs.video.chunks", payload)
-		require.NoError(t, err)
-
-		require.Eventually(t, func() bool {
-			stream, err := js.Stream(ctx, "jobs")
-			if err != nil {
-				return false
-			}
-			cons, err := stream.Consumer(ctx, "transcoder-worker")
-			if err != nil {
-				return false
-			}
-			info, err := cons.Info(ctx)
-			if err != nil {
-				return false
-			}
-			return info.NumAckPending > 0
-		}, 30*time.Second, 200*time.Millisecond, "expected message to be nacked and pending redelivery")
+		test.AssertNacked(t, js, "expected message to be nacked after publish failure")
 	})
+}
+
+func TestConsumeVideoChunkCleanup(t *testing.T) {
+	seedAndConsume := func(t *testing.T, jobID string) (jetstream.JetStream, <-chan struct{}) {
+		t.Helper()
+		js, nc := test.SetupNats(t)
+
+		videoContent, err := os.ReadFile("../test/test_video.mp4")
+		require.NoError(t, err)
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		require.NoError(t, err)
+
+		received := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) { received <- struct{}{} })
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p",
+		})
+
+		return js, received
+	}
+
+	tests := []struct {
+		name       string
+		jobID      string
+		failOnCall int
+	}{
+		{"removeAll error on unprocessed dir logs warn and returns", "job-cleanup-unprocessed-err", 1},
+		{"removeAll error on processed dir logs warn and returns", "job-cleanup-processed-err", 2},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() {
+				removeAll = os.RemoveAll
+				os.RemoveAll("/tmp/temp-unprocessed-" + tc.jobID)
+				os.RemoveAll("/tmp/temp-processed-" + tc.jobID)
+			})
+
+			calls := 0
+			removeAll = func(path string) error {
+				calls++
+				if calls == tc.failOnCall {
+					return errors.New("remove failed")
+				}
+				return os.RemoveAll(path)
+			}
+
+			_, received := seedAndConsume(t, tc.jobID)
+
+			select {
+			case <-received:
+			case <-time.After(30 * time.Second):
+				t.Fatal("timed out waiting for chunk complete message")
+			}
+			time.Sleep(500 * time.Millisecond)
+			assert.Equal(t, tc.failOnCall, calls)
+		})
+	}
 }
