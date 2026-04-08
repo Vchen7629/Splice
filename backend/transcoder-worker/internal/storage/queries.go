@@ -50,6 +50,8 @@ func SaveTranscodedVideoChunk(baseStorageURL, filePath, jobID string) (string, e
 	return url, nil
 }
 
+var removeAll = os.RemoveAll
+
 // fetch the unprocessed video chunk seaweedfs storage
 func GetUnprocessedVideoChunk(storageURL, jobID string) (string, error) {
 	resp, err := http.Get(storageURL)
@@ -94,7 +96,7 @@ func GetUnprocessedVideoChunk(storageURL, jobID string) (string, error) {
 
 	_, err = io.Copy(outFile, resp.Body)
 	if err != nil {
-		err := os.RemoveAll(jobDir)
+		err := removeAll(jobDir)
 		if err != nil {
 			return "", fmt.Errorf("error removing all files: %w", err)
 		}

@@ -1,15 +1,15 @@
 //go:build unit
 
-package storage_test
+package storage
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"transcoder-worker/internal/storage"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,7 @@ func TestSaveTranscodedVideoChunkFileErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := storage.SaveTranscodedVideoChunk(srv.URL, tc.filePath, "job-123")
+			url, err := SaveTranscodedVideoChunk(srv.URL, tc.filePath, "job-123")
 
 			require.Error(t, err)
 			assert.Empty(t, url)
@@ -90,7 +90,7 @@ func TestSaveTranscodedVideoChunkHTTPErrors(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 
-			url, err := storage.SaveTranscodedVideoChunk(srv.URL, validFile, "job-123")
+			url, err := SaveTranscodedVideoChunk(srv.URL, validFile, "job-123")
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -135,7 +135,7 @@ func TestGetUnprocessedVideoChunkHTTPErrors(t *testing.T) {
 			t.Cleanup(srv.Close)
 
 			jobID := "job-123"
-			filePath, err := storage.GetUnprocessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4", jobID)
+			filePath, err := GetUnprocessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4", jobID)
 
 			require.Error(t, err)
 			assert.Empty(t, filePath)
@@ -160,7 +160,7 @@ func TestGetUnprocessedVideoChunkWritesFile(t *testing.T) {
 
 	storageURL := srv.URL + "/" + jobID + "/" + filename
 
-	filePath, err := storage.GetUnprocessedVideoChunk(storageURL, jobID)
+	filePath, err := GetUnprocessedVideoChunk(storageURL, jobID)
 
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(filePath, filename), "filePath %q should end with %q", filePath, filename)
@@ -170,4 +170,53 @@ func TestGetUnprocessedVideoChunkWritesFile(t *testing.T) {
 	got, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, videoContent, got)
+}
+
+func TestGetUnprocessedVideoChunkIoCopyError(t *testing.T) {
+	t.Run("io.Copy failure cleans up job dir and returns error", func(t *testing.T) {
+		jobID := "job-copy-err"
+		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
+
+		// Hijack the connection and close it mid-response to force io.Copy to fail
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hj, ok := w.(http.Hijacker)
+			require.True(t, ok)
+			conn, _, err := hj.Hijack()
+			require.NoError(t, err)
+			conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\npartial"))
+			conn.Close()
+		}))
+		t.Cleanup(srv.Close)
+
+		_, err := GetUnprocessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4", jobID)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error writing video to file")
+		assert.NoDirExists(t, "/tmp/temp-unprocessed-"+jobID)
+	})
+
+	t.Run("io.Copy failure with removeAll error returns removeAll error", func(t *testing.T) {
+		jobID := "job-copy-removall-err"
+		t.Cleanup(func() {
+			removeAll = os.RemoveAll
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+		})
+
+		removeAll = func(_ string) error { return errors.New("remove failed") }
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hj, ok := w.(http.Hijacker)
+			require.True(t, ok)
+			conn, _, err := hj.Hijack()
+			require.NoError(t, err)
+			conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\npartial"))
+			conn.Close()
+		}))
+		t.Cleanup(srv.Close)
+
+		_, err := GetUnprocessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4", jobID)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error removing all files")
+	})
 }
