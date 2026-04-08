@@ -16,14 +16,14 @@ async def test_publishes_all_messages_with_correct_payload(
             job_id="1",
             chunk_index=0,
             total_chunks=2,
-            storage_path="/fake/chunk-001.mp4",
+            storage_url="/fake/chunk-001.mp4",
             target_resolution="480p",
         ),
         VideoChunkMessage(
             job_id="1",
             chunk_index=1,
             total_chunks=2,
-            storage_path="/fake/chunk-002.mp4",
+            storage_url="/fake/chunk-002.mp4",
             target_resolution="480p",
         ),
     ]
@@ -35,13 +35,13 @@ async def test_publishes_all_messages_with_correct_payload(
         "job_id": "1",
         "chunk_index": 0,
         "total_chunks": 2,
-        "storage_path": "/fake/chunk-001.mp4",
+        "storage_url": "/fake/chunk-001.mp4",
         "target_resolution": "480p",
     }
     assert nats_video_chunks_subscriber[1] == {
         "job_id": "1",
         "chunk_index": 1,
         "total_chunks": 2,
-        "storage_path": "/fake/chunk-002.mp4",
+        "storage_url": "/fake/chunk-002.mp4",
         "target_resolution": "480p",
     }

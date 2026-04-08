@@ -22,7 +22,7 @@ async def test_processes_published_message(
     )
 
     payload = json.dumps(
-        {"job_id": "1", "storage_path": "/fake/video.mp4", "target_resolution": "480p"}
+        {"job_id": "1", "storage_url": "/fake/video.mp4", "target_resolution": "480p"}
     ).encode()
     received: list[Any] = []
 
@@ -42,5 +42,5 @@ async def test_processes_published_message(
 
     assert len(received) == 1
     assert received[0] == SceneSplitMessage(
-        job_id="1", storage_path="/fake/video.mp4", target_resolution="480p"
+        job_id="1", storage_url="/fake/video.mp4", target_resolution="480p"
     )
