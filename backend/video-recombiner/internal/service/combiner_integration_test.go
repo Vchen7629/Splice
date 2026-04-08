@@ -17,14 +17,14 @@ import (
 func TestCombineChunks(t *testing.T) {
 	t.Run("produces output file", func(t *testing.T) {
 		chunkDir := t.TempDir()
-		outputDir := t.TempDir()
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-full") })
 
 		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
 		chunk1 := filepath.Join(chunkDir, "chunk-1.mp4")
 		test.MakeVideoChunk(t, chunk0, 1)
 		test.MakeVideoChunk(t, chunk1, 1)
 
-		outputPath, err := service.CombineChunks("job-full", map[int]string{0: chunk0, 1: chunk1}, outputDir)
+		outputPath, err := service.CombineChunks("job-full", map[int]string{0: chunk0, 1: chunk1})
 
 		require.NoError(t, err)
 		info, statErr := os.Stat(outputPath)
@@ -34,25 +34,25 @@ func TestCombineChunks(t *testing.T) {
 
 	t.Run("output path is correctly formed", func(t *testing.T) {
 		chunkDir := t.TempDir()
-		outputDir := t.TempDir()
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/my-job") })
 
 		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
 		test.MakeVideoChunk(t, chunk0, 1)
 
-		outputPath, err := service.CombineChunks("my-job", map[int]string{0: chunk0}, outputDir)
+		outputPath, err := service.CombineChunks("my-job", map[int]string{0: chunk0})
 
 		require.NoError(t, err)
-		assert.Equal(t, filepath.Join(outputDir, "jobs", "my-job", "output.mp4"), outputPath)
+		assert.Equal(t, "/tmp/jobs/my-job/output.mp4", outputPath)
 	})
 
 	t.Run("single chunk completes without error", func(t *testing.T) {
 		chunkDir := t.TempDir()
-		outputDir := t.TempDir()
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-single") })
 
 		chunk0 := filepath.Join(chunkDir, "only-chunk.mp4")
 		test.MakeVideoChunk(t, chunk0, 1)
 
-		outputPath, err := service.CombineChunks("job-single", map[int]string{0: chunk0}, outputDir)
+		outputPath, err := service.CombineChunks("job-single", map[int]string{0: chunk0})
 
 		require.NoError(t, err)
 		_, statErr := os.Stat(outputPath)
@@ -61,7 +61,7 @@ func TestCombineChunks(t *testing.T) {
 
 	t.Run("all chunks are included in output", func(t *testing.T) {
 		chunkDir := t.TempDir()
-		outputDir := t.TempDir()
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-order") })
 
 		// chunks have durations 1s, 2s, 3s — total 6s
 		durations := map[int]int{0: 1, 1: 2, 2: 3}
@@ -74,7 +74,7 @@ func TestCombineChunks(t *testing.T) {
 			totalSeconds += float64(d)
 		}
 
-		outputPath, err := service.CombineChunks("job-order", chunks, outputDir)
+		outputPath, err := service.CombineChunks("job-order", chunks)
 
 		require.NoError(t, err)
 		got := test.VideoDuration(t, outputPath)
@@ -83,9 +83,9 @@ func TestCombineChunks(t *testing.T) {
 
 	t.Run("non-contiguous indices are all included", func(t *testing.T) {
 		chunkDir := t.TempDir()
-		outputDir := t.TempDir()
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-gaps") })
 
-		indices := map[int]int{0: 1, 5: 2, 10: 1} // index -> duration
+		indices := map[int]int{0: 1, 5: 2, 10: 1}
 		chunks := make(map[int]string, len(indices))
 		var totalSeconds float64
 		for idx, d := range indices {
@@ -95,7 +95,7 @@ func TestCombineChunks(t *testing.T) {
 			totalSeconds += float64(d)
 		}
 
-		outputPath, err := service.CombineChunks("job-gaps", chunks, outputDir)
+		outputPath, err := service.CombineChunks("job-gaps", chunks)
 
 		require.NoError(t, err)
 		got := test.VideoDuration(t, outputPath)
@@ -104,9 +104,8 @@ func TestCombineChunks(t *testing.T) {
 
 	t.Run("non-zero-based indices are all included", func(t *testing.T) {
 		chunkDir := t.TempDir()
-		outputDir := t.TempDir()
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-nonzero") })
 
-		// Simulates a partial re-deliver starting at index 3.
 		indices := map[int]int{3: 1, 4: 2, 5: 1}
 		chunks := make(map[int]string, len(indices))
 		var totalSeconds float64
@@ -117,7 +116,7 @@ func TestCombineChunks(t *testing.T) {
 			totalSeconds += float64(d)
 		}
 
-		outputPath, err := service.CombineChunks("job-nonzero", chunks, outputDir)
+		outputPath, err := service.CombineChunks("job-nonzero", chunks)
 
 		require.NoError(t, err)
 		got := test.VideoDuration(t, outputPath)

@@ -41,7 +41,7 @@ func TestRunCombiner(t *testing.T) {
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
+		err := runCombiner(js, nc, test.SilentLogger(), "http://storage", quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -52,7 +52,7 @@ func TestRunCombiner(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(okJS(), &test.MockDrainer{}, test.SilentLogger(), t.TempDir(), quit)
+			done <- runCombiner(okJS(), &test.MockDrainer{}, test.SilentLogger(), "http://storage", quit)
 		}()
 
 		select {
@@ -77,7 +77,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runCombiner(js, &test.MockDrainer{}, test.SilentLogger(), t.TempDir(), quit))
+		require.NoError(t, runCombiner(js, &test.MockDrainer{}, test.SilentLogger(), "http://storage", quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -88,7 +88,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runCombiner(okJS(), nc, test.SilentLogger(), t.TempDir(), quit))
+		require.NoError(t, runCombiner(okJS(), nc, test.SilentLogger(), "http://storage", quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -98,7 +98,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runCombiner(okJS(), nc, test.SilentLogger(), t.TempDir(), quit)
+		err := runCombiner(okJS(), nc, test.SilentLogger(), "http://storage", quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
@@ -116,14 +116,14 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("reads all values from env file", func(t *testing.T) {
-		test.WriteEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nOUTPUT_DIR=/custom/dir\nHTTP_PORT=9090\n")
+		test.WriteEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nBASE_STORAGE_URL=http://localhost:9333\nHTTP_PORT=9090\n")
 
 		cfg, err := loadConfig()
 
 		require.NoError(t, err)
 		assert.Equal(t, "nats://test:9999", cfg.NatsURL)
 		assert.True(t, cfg.ProdMode)
-		assert.Equal(t, "/custom/dir", cfg.OutputDir)
+		assert.Equal(t, "http://localhost:9333", cfg.BaseStorageURL)
 	})
 
 	t.Run("empty env file uses struct defaults", func(t *testing.T) {
@@ -134,6 +134,6 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
 		assert.False(t, cfg.ProdMode)
-		assert.Equal(t, "/tmp/splice", cfg.OutputDir)
+		assert.Equal(t, "http://localhost:8888", cfg.BaseStorageURL)
 	})
 }

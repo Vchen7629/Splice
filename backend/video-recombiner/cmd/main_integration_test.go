@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
@@ -20,6 +21,18 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
+var sharedFilerURL string
+
+func TestMain(m *testing.M) {
+	filerURL, cleanup := test.StartSeaweedFSFiler()
+	sharedFilerURL = filerURL
+
+	code := m.Run()
+
+	cleanup()
+	os.Exit(code)
+}
+
 func TestRunCombinerI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
@@ -27,10 +40,9 @@ func TestRunCombinerI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
+			done <- runCombiner(js, nc, test.SilentLogger(), sharedFilerURL, quit)
 		}()
 
-		// give the consumer time to set up before signalling
 		time.Sleep(200 * time.Millisecond)
 		quit <- syscall.SIGTERM
 
@@ -60,19 +72,30 @@ func TestRunCombinerI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runCombiner(js, nc, test.SilentLogger(), t.TempDir(), quit)
+		err = runCombiner(js, nc, test.SilentLogger(), sharedFilerURL, quit)
 
 		assert.Error(t, err)
 	})
 
-	t.Run("full flow: receive chunk, combine, publish downstream", func(t *testing.T) {
+	t.Run("full flow: receive chunks, combine, publish downstream", func(t *testing.T) {
 		if _, err := exec.LookPath("ffmpeg"); err != nil {
 			t.Skip("ffmpeg not available")
 		}
 
+		jobID := "job-full-flow"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/processed_chunk-" + jobID)
+			os.RemoveAll("/tmp/jobs/" + jobID)
+		})
+
+		videoData, err := os.ReadFile("../internal/test/testvideo.mp4")
+		require.NoError(t, err)
+
+		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-0.mp4", videoData)
+		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-1.mp4", videoData)
+
 		js, nc := test.SetupNats(t)
 
-		// subscribe to the downstream subject before starting the worker
 		received := make(chan []byte, 1)
 		sub, err := nc.Subscribe("jobs.complete", func(msg *nats.Msg) {
 			received <- msg.Data
@@ -80,33 +103,34 @@ func TestRunCombinerI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		outputDir := t.TempDir()
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, test.SilentLogger(), outputDir, quit)
+			done <- runCombiner(js, nc, test.SilentLogger(), sharedFilerURL, quit)
 		}()
 
-		// give the consumer time to set up before publishing
 		time.Sleep(500 * time.Millisecond)
 
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
-			TotalChunks: 1,
-			OutputPath:  "idk",
-		})
-		require.NoError(t, err)
-
-		_, err = js.Publish(context.Background(), "jobs.complete", payload)
-		require.NoError(t, err)
+		ctx := context.Background()
+		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
+			storageURL := fmt.Sprintf("%s/%s/%s/processed", sharedFilerURL, jobID, fileName)
+			payload, err := json.Marshal(service.ChunkCompleteMessage{
+				JobID:       jobID,
+				ChunkIndex:  i,
+				TotalChunks: 2,
+				StorageURL:  storageURL,
+			})
+			require.NoError(t, err)
+			_, err = js.Publish(ctx, "jobs.chunks.complete", payload)
+			require.NoError(t, err)
+		}
 
 		select {
 		case data := <-received:
 			var msg service.VideoProcessingCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
-			assert.Equal(t, "job-1", msg.JobID)
+			assert.Equal(t, jobID, msg.JobID)
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for downstream message")
 		}
@@ -119,5 +143,42 @@ func TestRunCombinerI(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("runCombiner did not exit after quit signal")
 		}
+	})
+}
+
+func TestMainI(t *testing.T) {
+	t.Run("storage unreachable exits with code 1", func(t *testing.T) {
+		code := patchExit(t)
+		writeEnvFile(t, "BASE_STORAGE_URL=http://localhost:1\nNATS_URL=nats://localhost:4222\n")
+
+		main()
+
+		assert.Equal(t, 1, *code)
+	})
+
+	t.Run("nats unreachable exits with code 1", func(t *testing.T) {
+		code := patchExit(t)
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\n", sharedFilerURL))
+
+		main()
+
+		assert.Equal(t, 1, *code)
+	})
+
+	t.Run("no stream logs error and returns", func(t *testing.T) {
+		ctx := context.Background()
+		container, err := natstc.Run(ctx, "nats:2.10-alpine")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+		natsURL, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
+
+		code := patchExit(t)
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\n", sharedFilerURL, natsURL))
+
+		main()
+
+		assert.Equal(t, -1, *code) // osExit was never called
 	})
 }

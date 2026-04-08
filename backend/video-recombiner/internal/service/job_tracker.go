@@ -20,7 +20,7 @@ func NewJobTracker() *JobTracker {
 
 // record a completed chunk for a job from nats msgs, returns read=true and a map of all chunk paths when all video
 // chunks for the job has been recieved so the subscriber can trigger combiner.go and pass in the mapping to combine all
-func (t *JobTracker) Add(jobID string, chunkIndex int, outputPath string, totalChunks int) (ready bool, chunks map[int]string) {
+func (t *JobTracker) Add(jobID string, chunkIndex int, storageURL string, totalChunks int) (ready bool, chunks map[int]string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -33,7 +33,7 @@ func (t *JobTracker) Add(jobID string, chunkIndex int, outputPath string, totalC
 		t.jobs[jobID] = state
 	}
 
-	state.chunks[chunkIndex] = outputPath
+	state.chunks[chunkIndex] = storageURL
 
 	if len(state.chunks) == state.totalChunks {
 		chunks = state.chunks
