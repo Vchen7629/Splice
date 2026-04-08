@@ -23,10 +23,11 @@ type mockMsg struct {
 	data      []byte
 	nakCalled bool
 	ackCalled bool
+	nakErr    error
 }
 
 func (m *mockMsg) Data() []byte { return m.data }
-func (m *mockMsg) Nak() error   { m.nakCalled = true; return nil }
+func (m *mockMsg) Nak() error   { m.nakCalled = true; return m.nakErr }
 func (m *mockMsg) Ack() error   { m.ackCalled = true; return nil }
 
 func TestReturnError(t *testing.T) {
@@ -84,6 +85,19 @@ func TestAckAndNacking(t *testing.T) {
 		assert.NotNil(t, consCtx)
 		assert.True(t, msg.nakCalled)
 		assert.False(t, msg.ackCalled)
+	})
+
+	t.Run("invalid JSON with nak error logs and returns", func(t *testing.T) {
+		nakErr := errors.New("nak failed")
+		msg := &mockMsg{data: []byte("not valid json"), nakErr: nakErr}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+
+		consCtx, err := handler.ConsumeVideoChunk("http://storage", js, test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.NotNil(t, consCtx)
+		assert.True(t, msg.nakCalled)
 	})
 
 	t.Run("fetch failure does not nak or ack", func(t *testing.T) {

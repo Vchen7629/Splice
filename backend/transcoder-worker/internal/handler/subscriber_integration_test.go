@@ -170,6 +170,102 @@ func TestConsumeVideoChunkMessageHandling(t *testing.T) {
 	})
 }
 
+func TestConsumeVideoChunkTranscodeError(t *testing.T) {
+	t.Run("transcode failure naks the message for redelivery", func(t *testing.T) {
+		ctx := context.Background()
+		js, _ := test.SetupNats(t)
+
+		jobID := "job-transcode-fail"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+			os.RemoveAll("/tmp/temp-processed-" + jobID)
+		})
+
+		// Seed a non-video text file — ffmpeg will fail to transcode it
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "not_a_video.mp4", []byte("this is not a video"))
+
+		_, err := handler.ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		require.NoError(t, err)
+
+		payload, err := json.Marshal(service.VideoChunkMessage{
+			JobID:            jobID,
+			ChunkIndex:       0,
+			TotalChunks:      1,
+			StorageURL:       storageURL,
+			TargetResolution: "480p",
+		})
+		require.NoError(t, err)
+
+		_, err = js.Publish(ctx, "jobs.video.chunks", payload)
+		require.NoError(t, err)
+
+		require.Eventually(t, func() bool {
+			stream, err := js.Stream(ctx, "jobs")
+			if err != nil {
+				return false
+			}
+			cons, err := stream.Consumer(ctx, "transcoder-worker")
+			if err != nil {
+				return false
+			}
+			info, err := cons.Info(ctx)
+			if err != nil {
+				return false
+			}
+			return info.NumAckPending > 0
+		}, 30*time.Second, 200*time.Millisecond, "expected message to be nacked after transcode failure")
+	})
+}
+
+func TestConsumeVideoChunkSaveError(t *testing.T) {
+	t.Run("save failure naks the message for redelivery", func(t *testing.T) {
+		ctx := context.Background()
+		js, _ := test.SetupNats(t)
+
+		jobID := "job-save-fail"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+			os.RemoveAll("/tmp/temp-processed-" + jobID)
+		})
+
+		videoContent, err := os.ReadFile("../test/test_video.mp4")
+		require.NoError(t, err)
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+
+		// Use unreachable baseStorageURL so SaveTranscodedVideoChunk fails after a successful transcode
+		_, err = handler.ConsumeVideoChunk("http://localhost:1", js, test.SilentLogger())
+		require.NoError(t, err)
+
+		payload, err := json.Marshal(service.VideoChunkMessage{
+			JobID:            jobID,
+			ChunkIndex:       0,
+			TotalChunks:      1,
+			StorageURL:       storageURL,
+			TargetResolution: "480p",
+		})
+		require.NoError(t, err)
+
+		_, err = js.Publish(ctx, "jobs.video.chunks", payload)
+		require.NoError(t, err)
+
+		require.Eventually(t, func() bool {
+			stream, err := js.Stream(ctx, "jobs")
+			if err != nil {
+				return false
+			}
+			cons, err := stream.Consumer(ctx, "transcoder-worker")
+			if err != nil {
+				return false
+			}
+			info, err := cons.Info(ctx)
+			if err != nil {
+				return false
+			}
+			return info.NumAckPending > 0
+		}, 30*time.Second, 200*time.Millisecond, "expected message to be nacked after save failure")
+	})
+}
+
 func TestConsumeVideoChunkPublishFails(t *testing.T) {
 	t.Run("publish error naks the message for redelivery", func(t *testing.T) {
 		ctx := context.Background()
