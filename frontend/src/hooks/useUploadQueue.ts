@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { VideoService } from "../api/services/video"
 
 export type JobStatus = 'pending' | 'uploading'| 'processing' | 'complete' | 'error'
@@ -57,6 +57,33 @@ export function useUploadQueue() {
             return { ...video, status: 'uploading' as JobStatus}
         }))
     }
+
+    const processingCount = uploadedVideos.filter(v => v.status === 'processing' && v.jobId).length
+
+    useEffect(() => {
+        if (processingCount === 0) return
+
+        const interval = setInterval(async () => {
+            setUploadedVideos(prev => {
+                const processing = prev.filter(v => v.status === 'processing' && v.jobId)
+                processing.forEach(async (video) => {
+                    try {
+                        const data = await VideoService.status(video.jobId!)
+                        if (data.state === 'COMPLETE') {
+                            updateUploadedVideo(video.id, { status: 'complete' })
+                        } else if (data.state === 'ERROR') {
+                            updateUploadedVideo(video.id, { status: 'error', error: data.error })
+                        }
+                    } catch {
+                        updateUploadedVideo(video.id, { status: 'error' })
+                    }
+                })
+                return prev
+            })
+        }, 1000)
+
+        return () => clearInterval(interval)
+    }, [processingCount])
 
     return { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads }
 }
