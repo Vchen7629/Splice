@@ -14,10 +14,11 @@ import (
 
 func TestTranscodeVideo(t *testing.T) {
 	t.Run("mkdir failure returns create output dir error", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		test.BlockDirCreation(t, tmpDir)
+		blockedDir := "/tmp/temp-processed-job-blocked"
+		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
+		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		path, err := service.TranscodeVideo(test.BasePayload(), tmpDir, test.SilentLogger())
+		path, err := service.TranscodeVideo("/some/input.mp4", "720p", "job-blocked", test.SilentLogger())
 
 		require.Error(t, err)
 		assert.Empty(t, path)
@@ -25,10 +26,11 @@ func TestTranscodeVideo(t *testing.T) {
 	})
 
 	t.Run("mkdir failure wraps underlying OS error", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		test.BlockDirCreation(t, tmpDir)
+		blockedDir := "/tmp/temp-processed-job-blocked2"
+		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
+		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		_, err := service.TranscodeVideo(test.BasePayload(), tmpDir, test.SilentLogger())
+		_, err := service.TranscodeVideo("/some/input.mp4", "720p", "job-blocked2", test.SilentLogger())
 
 		require.Error(t, err)
 		var pathErr *os.PathError
