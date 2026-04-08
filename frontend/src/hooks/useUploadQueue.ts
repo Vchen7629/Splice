@@ -1,32 +1,49 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { VideoService } from "../api/services/video"
 
-export type JobStatus = 'pending' | 'uploading'| 'processing' | 'complete' | 'error'
+export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
 
 export interface UploadedVideo {
-  id: number
-  name: string
-  size: number
-  resolution: string
-  status: JobStatus
-  uploadProgress: number
-  jobId: string | null
-  error?: string
+    id: number
+    name: string
+    size: number
+    resolution: string
+    status: JobStatus
+    uploadProgress: number
+    jobId: string | null
+    error?: string
 }
 
 export function useUploadQueue() {
     const [uploadedVideos, setUploadedVideos] = useState<UploadedVideo[]>([])
+    const [processedVideos, setProcessedVideos] = useState<UploadedVideo[]>([])
     const abortRefs = useRef<Map<number, () => void>>(new Map())
+    const completingIds = useRef<Set<number>>(new Set())
+    const uploadedVideosRef = useRef<UploadedVideo[]>([])
 
-    function updateUploadedVideo(id: number, patch: Partial<UploadedVideo>) {
-        setUploadedVideos(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j))
+    useEffect(() => {
+        uploadedVideosRef.current = uploadedVideos
+    }, [uploadedVideos])
+
+    function updateVideo(id: number, patch: Partial<UploadedVideo>) {
+        setUploadedVideos(prev => prev.map(v => v.id === id ? { ...v, ...patch } : v))
     }
 
-    // Removes a uploaded video from the queue and aborts its upload if in progress
     function removeUploadedVideo(id: number) {
         abortRefs.current.get(id)?.()
         abortRefs.current.delete(id)
-        setUploadedVideos(prev => prev.filter(j => j.id !== id))
+        setUploadedVideos(prev => prev.filter(v => v.id !== id))
+    }
+
+    function removeProcessedVideo(id: number) {
+        setProcessedVideos(prev => prev.filter(v => v.id !== id))
+    }
+
+    function markComplete(video: UploadedVideo) {
+        if (completingIds.current.has(video.id)) return
+        completingIds.current.add(video.id)
+        setUploadedVideos(prev => prev.filter(v => v.id !== video.id))
+        setProcessedVideos(prev => [...prev, { ...video, status: 'complete' }])
     }
 
     function startVideoUploads(files: Map<number, File>) {
@@ -37,7 +54,7 @@ export function useUploadQueue() {
             if (!file) return video
 
             const { promise, abort } = VideoService.upload(file, video.resolution, (pct) => {
-                updateUploadedVideo(video.id, { uploadProgress: pct })
+                updateVideo(video.id, { uploadProgress: pct })
             })
 
             abortRefs.current.set(video.id, abort)
@@ -45,18 +62,39 @@ export function useUploadQueue() {
             promise
                 .then(({ job_id }: { job_id: string }) => {
                     abortRefs.current.delete(video.id)
-                    updateUploadedVideo(video.id, { jobId: job_id, status: 'processing', uploadProgress: 100 })
+                    updateVideo(video.id, { jobId: job_id, status: 'processing', uploadProgress: 100 })
                 })
                 .catch((err: Error) => {
                     abortRefs.current.delete(video.id)
-                    if (err.name !== 'AbortError') {
-                        updateUploadedVideo(video.id, { status: 'error', error: err.message })
-                    }
+                    if (err.name !== 'AbortError') updateVideo(video.id, { status: 'error', error: err.message })
                 })
-            
-            return { ...video, status: 'uploading' as JobStatus}
+
+            return { ...video, status: 'uploading' as JobStatus }
         }))
     }
 
-    return { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads }
+    const processingCount = uploadedVideos.filter(v => v.status === 'processing' && v.jobId).length
+
+    useEffect(() => {
+        if (processingCount === 0) return
+
+        async function pollStatus(video: UploadedVideo) {
+            try {
+                const data = await VideoService.status(video.jobId!)
+                if (data.state === 'COMPLETE') markComplete(video)
+                else if (data.state === 'ERROR') updateVideo(video.id, { status: 'error', error: data.error })
+            } catch {
+                updateVideo(video.id, { status: 'error' })
+            }
+        }
+
+        const interval = setInterval(() => {
+            const processing = uploadedVideosRef.current.filter(v => v.status === 'processing' && v.jobId)
+            processing.forEach(pollStatus)
+        }, 1000)
+
+        return () => clearInterval(interval)
+    }, [processingCount])
+
+    return { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads, processedVideos, removeProcessedVideo }
 }

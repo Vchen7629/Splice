@@ -126,7 +126,7 @@ func TestStartHttpApi(t *testing.T) {
 			name: "GET /jobs/download is wired to the download handler",
 			buildReq: func() *http.Request {
 				body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, seedJobID, seedFileName)
-				req, _ := http.NewRequest(http.MethodGet, env.url+"/jobs/download", strings.NewReader(body))
+				req, _ := http.NewRequest(http.MethodPost, env.url+"/jobs/download", strings.NewReader(body))
 				req.Header.Set("Content-Type", "application/json")
 				return req
 			},

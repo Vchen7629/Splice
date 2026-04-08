@@ -78,7 +78,7 @@ func DownloadVideo(t *testing.T, baseURL, jobID, fileName string) (*http.Respons
 	}{JobID: jobID, FileName: fileName})
 	require.NoError(t, err)
 
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/jobs/download", strings.NewReader(string(payload)))
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/jobs/download", strings.NewReader(string(payload)))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	return http.DefaultClient.Do(req)

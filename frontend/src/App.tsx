@@ -3,11 +3,12 @@ import FileUploadDropZone from './components/fileUploadDropZone'
 import Header from './components/header'
 import VideoUploadQueue from './components/videoUploadQueue'
 import { useUploadQueue, type UploadedVideo } from './hooks/useUploadQueue'
+import ProcessedVideos from './components/processedVideos'
 
 let nextId = 0
 
 function App() {
-  const { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads } = useUploadQueue()
+  const { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads, processedVideos, removeProcessedVideo } = useUploadQueue()
   const fileMap = useRef<Map<number, File>>(new Map())
 
   function handleFiles(files: File[]) {
@@ -38,12 +39,15 @@ function App() {
       <Header />
       <main className="flex justify-center flex-1 w-full items-center px-6 py-6 gap-5 max-w-[80%] mx-auto">
         <FileUploadDropZone onFiles={handleFiles}/>
-        <VideoUploadQueue 
-          videos={uploadedVideos}
-          setVideos={setUploadedVideos}
-          onRemove={handleRemove}
-          onStartUploads={() => startVideoUploads(fileMap.current)}
-        />
+        <section className='flex flex-col flex-1 aspect-square justify-between'>
+          <ProcessedVideos processedVideos={processedVideos} onRemove={removeProcessedVideo}/>
+          <VideoUploadQueue 
+            videos={uploadedVideos}
+            setVideos={setUploadedVideos}
+            onRemove={handleRemove}
+            onStartUploads={() => startVideoUploads(fileMap.current)}
+          />
+        </section>
       </main>
     </>
   )
