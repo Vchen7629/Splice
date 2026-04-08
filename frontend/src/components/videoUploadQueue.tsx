@@ -1,6 +1,7 @@
 import { CheckCheck, Loader, Video, X } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { JobStatus, UploadedVideo } from '../hooks/useUploadQueue'
+import VideoDownloadButton from './videoDownloadButton'
 
 const RESOLUTIONS = ['480p', '720p', '1080p']
 
@@ -71,12 +72,15 @@ const VideoUploadQueue = ({ videos, setVideos, onRemove, onStartUploads}: VideoU
                             {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
 
-                        <button
-                            onClick={() => onRemove(video.id)}
-                            className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-base leading-none"
-                        >
-                            <X size={16} className='text-zinc-400 transition-colors duration-0.1s hover:text-accent'/>
-                        </button>
+                        {video.status === 'complete' && video.jobId
+                            ? <VideoDownloadButton jobId={video.jobId} fileName={video.name} />
+                            : <button
+                                onClick={() => onRemove(video.id)}
+                                className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-base leading-none"
+                              >
+                                  <X size={16} className='text-zinc-400 transition-colors duration-0.1s hover:text-accent'/>
+                              </button>
+                        }
                     </div>
 
                     {video.status === 'uploading' && (
