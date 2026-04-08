@@ -5,9 +5,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
@@ -21,6 +21,18 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
+var sharedFilerURL string
+
+func TestMain(m *testing.M) {
+	filerURL, cleanup := test.StartSeaweedFSFiler()
+	sharedFilerURL = filerURL
+
+	code := m.Run()
+
+	cleanup()
+	os.Exit(code)
+}
+
 func TestRunProcessingI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
@@ -28,10 +40,9 @@ func TestRunProcessingI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing(js, nc, test.SilentLogger(), t.TempDir(), quit)
+			done <- runProcessing(sharedFilerURL, js, nc, test.SilentLogger(), quit)
 		}()
 
-		// give the consumer time to set up before signalling
 		time.Sleep(200 * time.Millisecond)
 		quit <- syscall.SIGTERM
 
@@ -50,7 +61,16 @@ func TestRunProcessingI(t *testing.T) {
 
 		js, nc := test.SetupNats(t)
 
-		// subscribe to the downstream subject before starting the worker
+		jobID := "job-full-flow"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+			os.RemoveAll("/tmp/temp-processed-" + jobID)
+		})
+
+		videoContent, err := os.ReadFile("../internal/test/test_video.mp4")
+		require.NoError(t, err)
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+
 		received := make(chan []byte, 1)
 		sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) {
 			received <- msg.Data
@@ -58,22 +78,20 @@ func TestRunProcessingI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		outputDir := t.TempDir()
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing(js, nc, test.SilentLogger(), outputDir, quit)
+			done <- runProcessing(sharedFilerURL, js, nc, test.SilentLogger(), quit)
 		}()
 
-		// give the consumer time to set up before publishing
 		time.Sleep(500 * time.Millisecond)
 
-		inputVideo := createTestVideo(t)
 		payload, err := json.Marshal(service.VideoChunkMessage{
-			JobID:            "job-1",
+			JobID:            jobID,
 			ChunkIndex:       0,
-			StoragePath:      inputVideo,
+			TotalChunks:      1,
+			StorageURL:       storageURL,
 			TargetResolution: "240p",
 		})
 		require.NoError(t, err)
@@ -85,9 +103,9 @@ func TestRunProcessingI(t *testing.T) {
 		case data := <-received:
 			var msg service.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
-			assert.Equal(t, "job-1", msg.JobID)
+			assert.Equal(t, jobID, msg.JobID)
 			assert.Equal(t, 0, msg.ChunkIndex)
-			assert.NotEmpty(t, msg.OutputPath)
+			assert.Equal(t, fmt.Sprintf("%s/%s/processed/test_video.mp4", sharedFilerURL, jobID), msg.StorageURL)
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for downstream message")
 		}
@@ -120,26 +138,8 @@ func TestRunProcessingI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runProcessing(js, nc, test.SilentLogger(), t.TempDir(), quit)
+		err = runProcessing(sharedFilerURL, js, nc, test.SilentLogger(), quit)
 
 		assert.Error(t, err)
 	})
-}
-
-// createTestVideo generates a 1-second blue solid video using ffmpeg's lavfi source.
-func createTestVideo(t *testing.T) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "input.mp4")
-	cmd := exec.Command(
-		"ffmpeg",
-		"-f", "lavfi",
-		"-i", "color=c=blue:s=320x240:d=1",
-		"-c:v", "libx264",
-		"-t", "1",
-		"-y",
-		path,
-	)
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "ffmpeg test video creation failed: %s", out)
-	return path
 }
