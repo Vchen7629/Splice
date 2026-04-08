@@ -5,16 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 	"video-recombiner/internal/service"
+	"video-recombiner/internal/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 const subSubject = "jobs.chunks.complete"
 
+var removeAll = os.RemoveAll
+
 // recombines video chunks back into one video
-func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, outputDIR string) (jetstream.ConsumeContext, error) {
+func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, baseStorageURL string) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
 	streamName, err := js.StreamNameBySubject(ctx, subSubject)
@@ -55,7 +59,7 @@ func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, outputDIR strin
 			return
 		}
 
-		ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.OutputPath, payload.TotalChunks)
+		ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.StorageURL, payload.TotalChunks)
 
 		err = msg.Ack()
 		if err != nil {
@@ -64,11 +68,44 @@ func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, outputDIR strin
 		}
 
 		if ready {
-			outputPath, err := service.CombineChunks(payload.JobID, chunks, outputDIR)
+			localChunks := make(map[int]string)
+			failed := false
+
+			for idx, storageURL := range chunks {
+				localPath, err := storage.GetProcessedVideoChunk(storageURL, payload.JobID)
+				if err != nil {
+					logger.Error("failed to download chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
+					failed = true
+					break
+				}
+				localChunks[idx] = localPath
+			}
+			if failed {
+				return
+			}
+
+			outputPath, err := service.CombineChunks(payload.JobID, localChunks)
 			if err != nil {
 				logger.Error("failed to combine chunks", "job_id", payload.JobID, "err", err)
 				return
 			}
+
+			_, err = storage.UploadRecombinedVideo(baseStorageURL, outputPath, payload.JobID)
+			if err != nil {
+				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
+				return
+			}
+
+			err = removeAll("/tmp/processed_chunk-" + payload.JobID)
+			if err != nil {
+				logger.Warn("failed to clean up chunk temp dir", "job_id", payload.JobID, "err", err)
+			}
+
+			err = removeAll("/tmp/jobs/" + payload.JobID)
+			if err != nil {
+				logger.Warn("failed to clean up job temp dir", "job_id", payload.JobID, "err", err)
+			}
+
 			logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
 			if err := PublishVideoProcessingComplete(js, service.VideoProcessingCompleteMessage{JobID: payload.JobID}); err != nil {
 				logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
