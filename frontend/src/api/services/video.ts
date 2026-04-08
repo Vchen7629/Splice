@@ -32,7 +32,7 @@ export const VideoService = {
             xhr.addEventListener('error', () => reject(new Error('Network error during upload')))
             xhr.addEventListener('abort', () => reject(new DOMException('Upload cancelled', 'AbortError')))
 
-            xhr.open('POST', `${BASE_URL}/jobs`)
+            xhr.open('POST', `${BASE_URL}/jobs/upload`)
             xhr.send(formData)
         })
 
@@ -57,10 +57,10 @@ export const VideoService = {
         }
     },
 
-    download: async(id: string) => {
+    download: async(jobId: string, fileName: string) => {
         try {
-            const response = await api.get(`/jobs/${id}/download`)
-            return response.data
+            const response = await api.post(`/jobs/download`, { job_id: jobId, file_name: fileName }, { responseType: 'blob' })
+            return response.data as Blob
         } catch (error) {
             if (error instanceof AxiosError) {
                 console.error(error.response?.data || error.message);
