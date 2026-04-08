@@ -107,7 +107,8 @@ func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, baseStorageURL 
 			}
 
 			logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
-			if err := PublishVideoProcessingComplete(js, service.VideoProcessingCompleteMessage{JobID: payload.JobID}); err != nil {
+			err = PublishVideoProcessingComplete(js, service.VideoProcessingCompleteMessage{JobID: payload.JobID})
+			if err != nil {
 				logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
 			}
 		}
