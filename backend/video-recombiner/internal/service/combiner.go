@@ -11,8 +11,8 @@ import (
 
 // stitches transcoded video chunks for a job into a single output video file
 // chunks is a map of chunk index -> output path, sorted by index
-func CombineChunks(jobID string, chunks map[int]string, outputDir string) (string, error) {
-	outDir := filepath.Join(outputDir, "jobs", jobID)
+func CombineChunks(jobID string, chunks map[int]string) (string, error) {
+	outDir := filepath.Join("/tmp/jobs", jobID)
 
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
