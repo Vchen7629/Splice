@@ -32,7 +32,7 @@ func BasePayload() service.VideoChunkMessage {
 	return service.VideoChunkMessage{
 		JobID:            "job-abc",
 		ChunkIndex:       0,
-		StoragePath:      "/some/input.mp4",
+		StorageURL:       "/some/input.mp4",
 		TargetResolution: "720p",
 	}
 }

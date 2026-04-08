@@ -23,52 +23,54 @@ type mockMsg struct {
 	data      []byte
 	nakCalled bool
 	ackCalled bool
+	nakErr    error
 }
 
 func (m *mockMsg) Data() []byte { return m.data }
-func (m *mockMsg) Nak() error   { m.nakCalled = true; return nil }
+func (m *mockMsg) Nak() error   { m.nakCalled = true; return m.nakErr }
 func (m *mockMsg) Ack() error   { m.ackCalled = true; return nil }
 
 func TestReturnError(t *testing.T) {
-	t.Run("stream name lookup failure returns error", func(t *testing.T) {
-		lookupErr := errors.New("no stream")
-		js := &test.MockJS{JStreamNameErr: lookupErr}
+	streamNameErr := errors.New("no stream")
+	streamErr := errors.New("stream error")
+	consumerErr := errors.New("consumer error")
+	consumeErr := errors.New("consume error")
 
-		_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+	tests := []struct {
+		name    string
+		js      *test.MockJS
+		wantErr error
+	}{
+		{
+			name:    "stream name lookup failure returns error",
+			js:      &test.MockJS{JStreamNameErr: streamNameErr},
+			wantErr: streamNameErr,
+		},
+		{
+			name:    "stream failure returns error",
+			js:      &test.MockJS{JStreamErr: streamErr},
+			wantErr: streamErr,
+		},
+		{
+			name:    "create consumer failure returns error",
+			js:      &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}},
+			wantErr: consumerErr,
+		},
+		{
+			name:    "consume failure returns error",
+			js:      &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}},
+			wantErr: consumeErr,
+		},
+	}
 
-		require.Error(t, err)
-		assert.ErrorIs(t, err, lookupErr)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := handler.ConsumeVideoChunk("http://storage", tc.js, test.SilentLogger())
 
-	t.Run("stream failure returns error", func(t *testing.T) {
-		streamErr := errors.New("stream error")
-		js := &test.MockJS{JStreamErr: streamErr}
-
-		_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, streamErr)
-	})
-
-	t.Run("create consumer failure returns error", func(t *testing.T) {
-		consumerErr := errors.New("consumer error")
-		js := &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}}
-
-		_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, consumerErr)
-	})
-
-	t.Run("consume failure returns error", func(t *testing.T) {
-		consumeErr := errors.New("consume error")
-		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
-
-		_, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, consumeErr)
-	})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestAckAndNacking(t *testing.T) {
@@ -77,7 +79,7 @@ func TestAckAndNacking(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+		consCtx, err := handler.ConsumeVideoChunk("http://storage", js, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -85,11 +87,24 @@ func TestAckAndNacking(t *testing.T) {
 		assert.False(t, msg.ackCalled)
 	})
 
-	t.Run("valid JSON naks when transcode fails", func(t *testing.T) {
+	t.Run("invalid JSON with nak error logs and returns", func(t *testing.T) {
+		nakErr := errors.New("nak failed")
+		msg := &mockMsg{data: []byte("not valid json"), nakErr: nakErr}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+
+		consCtx, err := handler.ConsumeVideoChunk("http://storage", js, test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.NotNil(t, consCtx)
+		assert.True(t, msg.nakCalled)
+	})
+
+	t.Run("fetch failure does not nak or ack", func(t *testing.T) {
 		payload, err := json.Marshal(service.VideoChunkMessage{
 			JobID:            "job-1",
 			ChunkIndex:       0,
-			StoragePath:      "nonexistent",
+			StorageURL:       "http://localhost:1/job-1/chunk.mp4",
 			TargetResolution: "720p",
 		})
 		require.NoError(t, err)
@@ -98,11 +113,10 @@ func TestAckAndNacking(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		// TranscodeVideo will fail (nonexistent file) so we expect a Nak, not Ack
-		_, err = handler.ConsumeVideoChunk(js, test.SilentLogger(), t.TempDir())
+		_, err = handler.ConsumeVideoChunk("http://storage", js, test.SilentLogger())
 
 		require.NoError(t, err)
-		assert.True(t, msg.nakCalled)
+		assert.False(t, msg.nakCalled)
 		assert.False(t, msg.ackCalled)
 	})
 }

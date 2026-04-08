@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"transcoder-worker/internal/handler"
+	"transcoder-worker/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -16,10 +17,13 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// so tests can patch this to decide when to terminate
+var osExit = os.Exit
+
 type Config struct {
-	NatsURL   string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode  bool   `envconfig:"PROD_MODE" default:"false"`
-	OutputDir string `envconfig:"OUTPUT_DIR" default:"/tmp/splice"`
+	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
+	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
 }
 
 func main() {
@@ -30,22 +34,31 @@ func main() {
 
 	logger := newLogger(cfg)
 
+	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
+	if err != nil {
+		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
+		osExit(1)
+		return
+	}
+
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
 		logger.Error("unable to connect to nats", "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Error("unable to connect to jetstream", "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(js, nc, logger, cfg.OutputDir, quit)
+	err = runProcessing(cfg.BaseStorageURL, js, nc, logger, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -56,10 +69,10 @@ type ncDrainer interface {
 }
 
 // run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
-func runProcessing(js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, outputDir string, quit <-chan os.Signal) error {
+func runProcessing(baseStorageURL string, js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, quit <-chan os.Signal) error {
 	logger.Debug("starting service")
 
-	consCtx, err := handler.ConsumeVideoChunk(js, logger, outputDir)
+	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}

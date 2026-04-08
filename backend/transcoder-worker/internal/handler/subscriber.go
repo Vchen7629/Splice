@@ -5,16 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 	"transcoder-worker/internal/service"
+	"transcoder-worker/internal/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 const subSubject = "jobs.video.chunks"
 
+// removeAll is a variable so tests can override it to simulate filesystem failures.
+var removeAll = os.RemoveAll
+
 // consume video chunk from nats jetstream and process it
-func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir string) (jetstream.ConsumeContext, error) {
+func ConsumeVideoChunk(baseStorageURL string, js jetstream.JetStream, logger *slog.Logger) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
 	streamName, err := js.StreamNameBySubject(ctx, subSubject)
@@ -55,9 +60,31 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 			return
 		}
 
-		outputPath, err := service.TranscodeVideo(payload, outputDir, logger)
+		filePath, err := storage.GetUnprocessedVideoChunk(payload.StorageURL, payload.JobID)
+		if err != nil {
+			logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
+			return
+		}
+
+		outputPath, err := service.TranscodeVideo(filePath, payload.TargetResolution, payload.JobID, logger)
 		if err != nil {
 			logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("error naking msg", "err", err)
+				return
+			}
+			return
+		}
+
+		url, err := storage.SaveTranscodedVideoChunk(baseStorageURL, outputPath, payload.JobID)
+		if err != nil {
+			logger.Error(
+				"error saving transcoded video chunk to seaweedfs storage",
+				"job_id", payload.JobID,
+				"file_path", outputPath,
+				"err", err,
+			)
 			err := msg.Nak()
 			if err != nil {
 				logger.Error("error naking msg", "err", err)
@@ -70,7 +97,7 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 			JobID:       payload.JobID,
 			ChunkIndex:  payload.ChunkIndex,
 			TotalChunks: payload.TotalChunks,
-			OutputPath:  outputPath,
+			StorageURL:  url,
 		})
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -85,6 +112,17 @@ func ConsumeVideoChunk(js jetstream.JetStream, logger *slog.Logger, outputDir st
 		err = msg.Ack()
 		if err != nil {
 			logger.Error("error acking msg", "err", err)
+			return
+		}
+
+		err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+			return
+		}
+		err = removeAll("/tmp/temp-processed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
 			return
 		}
 	})
