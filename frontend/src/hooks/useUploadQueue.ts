@@ -20,7 +20,10 @@ export function useUploadQueue() {
     const abortRefs = useRef<Map<number, () => void>>(new Map())
     const completingIds = useRef<Set<number>>(new Set())
     const uploadedVideosRef = useRef<UploadedVideo[]>([])
-    uploadedVideosRef.current = uploadedVideos
+
+    useEffect(() => {
+        uploadedVideosRef.current = uploadedVideos
+    }, [uploadedVideos])
 
     function updateVideo(id: number, patch: Partial<UploadedVideo>) {
         setUploadedVideos(prev => prev.map(v => v.id === id ? { ...v, ...patch } : v))
@@ -41,16 +44,6 @@ export function useUploadQueue() {
         completingIds.current.add(video.id)
         setUploadedVideos(prev => prev.filter(v => v.id !== video.id))
         setProcessedVideos(prev => [...prev, { ...video, status: 'complete' }])
-    }
-
-    async function pollStatus(video: UploadedVideo) {
-        try {
-            const data = await VideoService.status(video.jobId!)
-            if (data.state === 'COMPLETE') markComplete(video)
-            else if (data.state === 'ERROR') updateVideo(video.id, { status: 'error', error: data.error })
-        } catch {
-            updateVideo(video.id, { status: 'error' })
-        }
     }
 
     function startVideoUploads(files: Map<number, File>) {
@@ -84,6 +77,16 @@ export function useUploadQueue() {
 
     useEffect(() => {
         if (processingCount === 0) return
+
+        async function pollStatus(video: UploadedVideo) {
+            try {
+                const data = await VideoService.status(video.jobId!)
+                if (data.state === 'COMPLETE') markComplete(video)
+                else if (data.state === 'ERROR') updateVideo(video.id, { status: 'error', error: data.error })
+            } catch {
+                updateVideo(video.id, { status: 'error' })
+            }
+        }
 
         const interval = setInterval(() => {
             const processing = uploadedVideosRef.current.filter(v => v.status === 'processing' && v.jobId)
