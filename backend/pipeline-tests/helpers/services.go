@@ -120,6 +120,9 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 	StartGoService(t, recombinerBin, filepath.Join(servicesDir, "video-recombiner"), sharedEnv)
 	StartSceneDetector(t, filepath.Join(servicesDir, "scene-detector"), natsURL, filerURL)
 
+	// NOTE: multiple transcoder workers share the host /tmp because they run as
+	// plain OS processes. In production each worker is containerised with its own
+	// filesystem so this path collision cannot occur there.
 	for i := range numTranscoderWorkers {
 		cwd := filepath.Join(servicesDir, fmt.Sprintf("transcoder-worker-%d", i))
 		StartGoService(t, transcoderBin, cwd, sharedEnv)

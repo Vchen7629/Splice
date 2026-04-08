@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"pipeline-tests/helpers"
 	"testing"
 	"time"
 
@@ -20,17 +21,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var sharedFilerURL string
+
+func TestMain(m *testing.M) {
+	filerURL, cleanup := helpers.StartSeaweedFSFiler()
+	sharedFilerURL = filerURL
+
+	code := m.Run()
+
+	cleanup()
+	os.Exit(code)
+}
+
 func TestPipelineHappyPath(t *testing.T) {
-	baseURL, _, _ := setupPipeline(t, 1)
+	baseURL, _ := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 	t.Run("multi-chunk video is transcoded to target resolution", func(t *testing.T) {
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
-		generateTestVideo(t, videoPath)
+		helpers.GenerateTestVideo(t, videoPath)
 
-		jobID := uploadVideo(t, baseURL, videoPath, "480p")
-		waitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
+		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
 
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/download", baseURL, jobID))
+		resp, err := helpers.DownloadVideo(t, baseURL, jobID, "output.mp4")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -56,12 +69,12 @@ func TestPipelineHappyPath(t *testing.T) {
 
 	t.Run("single-chunk video with no scene boundary completes successfully", func(t *testing.T) {
 		videoPath := filepath.Join(t.TempDir(), "single.mp4")
-		generateSingleSceneVideo(t, videoPath)
+		helpers.GenerateSingleSceneVideo(t, videoPath)
 
-		jobID := uploadVideo(t, baseURL, videoPath, "480p")
-		waitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
+		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
 
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/download", baseURL, jobID))
+		resp, err := helpers.DownloadVideo(t, baseURL, jobID, "output.mp4")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -69,13 +82,13 @@ func TestPipelineHappyPath(t *testing.T) {
 
 	t.Run("job transitions from PROCESSING to COMPLETE", func(t *testing.T) {
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
-		generateTestVideo(t, videoPath)
+		helpers.GenerateTestVideo(t, videoPath)
 
-		jobID := uploadVideo(t, baseURL, videoPath, "480p")
-		assert.Equal(t, "PROCESSING", pollJobStatus(t, baseURL, jobID))
+		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
+		assert.Equal(t, "PROCESSING", helpers.PollJobStatus(t, baseURL, jobID))
 
-		waitForJobComplete(t, baseURL, jobID, 3*time.Minute)
-		assert.Equal(t, "COMPLETE", pollJobStatus(t, baseURL, jobID))
+		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		assert.Equal(t, "COMPLETE", helpers.PollJobStatus(t, baseURL, jobID))
 	})
 }
 
@@ -83,13 +96,13 @@ func TestFaultTolerance(t *testing.T) {
 	t.Run("duplicate ChunkCompleteMessage does not trigger a second stitch", func(t *testing.T) {
 		t.Skip("TODO: video-recombiner JobTracker does not deduplicate chunk indices")
 
-		baseURL, natsURL, spliceDir := setupPipeline(t, 1)
+		baseURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
-		generateTestVideo(t, videoPath)
+		helpers.GenerateTestVideo(t, videoPath)
 
-		jobID := uploadVideo(t, baseURL, videoPath, "480p")
-		waitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
+		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
 
 		nc, err := nats.Connect(natsURL)
 		require.NoError(t, err)
@@ -105,20 +118,18 @@ func TestFaultTolerance(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		// Use the real transcoded chunk so the stitch would succeed if attempted.
-		chunkPath := filepath.Join(spliceDir, "jobs", jobID, "transcoded", "chunk_000.mp4")
-		require.FileExists(t, chunkPath)
-
+		// Re-publish a ChunkCompleteMessage for chunk 0 using its SeaweedFS storage URL.
+		chunkStorageURL := fmt.Sprintf("%s/%s/chunk_000/processed", sharedFilerURL, jobID)
 		payload, err := json.Marshal(struct {
 			JobID       string `json:"job_id"`
 			ChunkIndex  int    `json:"chunk_index"`
 			TotalChunks int    `json:"total_chunks"`
-			OutputPath  string `json:"output_path"`
+			StorageURL  string `json:"storage_url"`
 		}{
 			JobID:       jobID,
 			ChunkIndex:  0,
 			TotalChunks: 1,
-			OutputPath:  chunkPath,
+			StorageURL:  chunkStorageURL,
 		})
 		require.NoError(t, err)
 		_, err = js.Publish(context.Background(), "jobs.chunks.complete", payload)
@@ -134,13 +145,13 @@ func TestFaultTolerance(t *testing.T) {
 	t.Run("redelivered SceneSplitMessage does not publish duplicate chunks", func(t *testing.T) {
 		t.Skip("TODO: scene-detector has no idempotency check on redelivery")
 
-		baseURL, natsURL, spliceDir := setupPipeline(t, 1)
+		baseURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
-		generateTestVideo(t, videoPath)
+		helpers.GenerateTestVideo(t, videoPath)
 
-		jobID := uploadVideo(t, baseURL, videoPath, "480p")
-		waitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
+		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
 
 		nc, err := nats.Connect(natsURL)
 		require.NoError(t, err)
@@ -156,16 +167,16 @@ func TestFaultTolerance(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		// Re-publish the original SceneSplitMessage, simulating a redelivery after a
-		// scene-detector crash between split and ack.
+		// Re-publish the original SceneSplitMessage using its SeaweedFS storage URL.
+		videoStorageURL := fmt.Sprintf("%s/%s/test.mp4", sharedFilerURL, jobID)
 		payload, err := json.Marshal(struct {
 			JobID            string `json:"job_id"`
 			TargetResolution string `json:"target_resolution"`
-			StoragePath      string `json:"storage_path"`
+			StorageURL       string `json:"storage_url"`
 		}{
 			JobID:            jobID,
 			TargetResolution: "480p",
-			StoragePath:      filepath.Join(spliceDir, "jobs", jobID, "test.mp4"),
+			StorageURL:       videoStorageURL,
 		})
 		require.NoError(t, err)
 		_, err = js.Publish(context.Background(), "jobs.video.scene-split", payload)
