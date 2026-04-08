@@ -5,8 +5,6 @@ package handler_test
 import (
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"video-recombiner/internal/handler"
 	"video-recombiner/internal/service"
@@ -29,46 +27,47 @@ func (m *mockMsg) Data() []byte { return m.data }
 func (m *mockMsg) Nak() error   { m.nakCalled = true; return nil }
 func (m *mockMsg) Ack() error   { m.ackCalled = true; return m.ackErr }
 
-func TestRecombineVideoErrors(t *testing.T) {
-	t.Run("invalid stream name returns error", func(t *testing.T) {
-		lookupErr := errors.New("no stream")
-		js := &test.MockJS{JStreamNameErr: lookupErr}
+func TestReturnError(t *testing.T) {
+	streamNameErr := errors.New("no stream")
+	streamErr := errors.New("stream error")
+	consumerErr := errors.New("consumer error")
+	consumeErr := errors.New("consume error")
 
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+	tests := []struct {
+		name    string
+		js      *test.MockJS
+		wantErr error
+	}{
+		{
+			name:    "stream name lookup failure returns error",
+			js:      &test.MockJS{JStreamNameErr: streamNameErr},
+			wantErr: streamNameErr,
+		},
+		{
+			name:    "stream failure returns error",
+			js:      &test.MockJS{JStreamErr: streamErr},
+			wantErr: streamErr,
+		},
+		{
+			name:    "create consumer failure returns error",
+			js:      &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}},
+			wantErr: consumerErr,
+		},
+		{
+			name:    "consume failure returns error",
+			js:      &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}},
+			wantErr: consumeErr,
+		},
+	}
 
-		require.Error(t, err)
-		assert.ErrorIs(t, err, lookupErr)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := handler.RecombineVideo(tc.js, test.SilentLogger(), "http://storage")
 
-	t.Run("invalid stream returns error", func(t *testing.T) {
-		streamErr := errors.New("stream error")
-		js := &test.MockJS{JStreamErr: streamErr}
-
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, streamErr)
-	})
-
-	t.Run("consumer creation failure returns error", func(t *testing.T) {
-		consumerErr := errors.New("consumer error")
-		js := &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}}
-
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, consumerErr)
-	})
-
-	t.Run("consume failure returns error", func(t *testing.T) {
-		consumeErr := errors.New("consume error")
-		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
-
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, consumeErr)
-	})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestMessageHandling(t *testing.T) {
@@ -91,7 +90,7 @@ func TestMessageHandling(t *testing.T) {
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 2,
-			OutputPath:  "chunk-0.mp4",
+			StorageURL:  "http://storage/chunk-0.mp4",
 		})
 		require.NoError(t, err)
 
@@ -107,14 +106,14 @@ func TestMessageHandling(t *testing.T) {
 		assert.False(t, msg.nakCalled)
 	})
 
-	t.Run("all chunks ready acks and triggers combine even if ffmpeg fails", func(t *testing.T) {
+	t.Run("all chunks ready acks and triggers combine even if download fails", func(t *testing.T) {
 		// TotalChunks=1, ChunkIndex=0 — immediately ready.
-		// ffmpeg will fail on the nonexistent path, but msg must be acked before that.
+		// HTTP download will fail on invalid URL, but msg must be acked before that.
 		payload, err := json.Marshal(service.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
-			OutputPath:  "nonexistent-chunk.mp4",
+			StorageURL:  "http://127.0.0.1:0/nonexistent-chunk.mp4",
 		})
 		require.NoError(t, err)
 
@@ -131,30 +130,24 @@ func TestMessageHandling(t *testing.T) {
 	})
 
 	t.Run("ack failure does not trigger combine", func(t *testing.T) {
-		// When Ack returns an error the handler returns early.
-		// Verified by checking no manifest file was written.
+		// When Ack returns an error the handler returns early before downloading chunks.
 		payload, err := json.Marshal(service.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
-			OutputPath:  "chunk-0.mp4",
+			StorageURL:  "http://storage/chunk-0.mp4",
 		})
 		require.NoError(t, err)
 
-		outputDir := t.TempDir()
 		msg := &mockMsg{data: payload, ackErr: errors.New("ack failed")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), outputDir)
+		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
 		assert.True(t, msg.ackCalled)
 		assert.False(t, msg.nakCalled)
-
-		manifest := filepath.Join(outputDir, "jobs", "job-1", "manifest.txt")
-		_, statErr := os.Stat(manifest)
-		assert.True(t, os.IsNotExist(statErr), "manifest should not exist when ack fails before combine")
 	})
 }

@@ -5,8 +5,8 @@ package handler_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 	"video-recombiner/internal/handler"
@@ -19,6 +19,18 @@ import (
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
+
+var sharedFilerURL string
+
+func TestMain(m *testing.M) {
+	filerURL, cleanup := test.StartSeaweedFSFiler()
+	sharedFilerURL = filerURL
+
+	code := m.Run()
+
+	cleanup()
+	os.Exit(code)
+}
 
 func TestRecombineVideo(t *testing.T) {
 	t.Run("no stream returns error", func(t *testing.T) {
@@ -120,7 +132,7 @@ func TestMessageHandlingI(t *testing.T) {
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 2,
-			OutputPath:  "chunk-0.mp4",
+			StorageURL:  "http://storage/chunk-0.mp4",
 		})
 		require.NoError(t, err)
 
@@ -135,10 +147,16 @@ func TestMessageHandlingI(t *testing.T) {
 	})
 
 	t.Run("all chunks received triggers combine", func(t *testing.T) {
-		outputDir := t.TempDir()
 		js, nc := test.SetupNats(t)
 
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), outputDir)
+		videoFile := test.OpenTestVideo(t)
+		videoData, err := os.ReadFile(videoFile.Name())
+		require.NoError(t, err)
+
+		test.SeedProcessedVideo(t, sharedFilerURL, "job-1", "chunk-0.mp4", videoData)
+		test.SeedProcessedVideo(t, sharedFilerURL, "job-1", "chunk-1.mp4", videoData)
+
+		_, err = handler.RecombineVideo(js, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -149,30 +167,23 @@ func TestMessageHandlingI(t *testing.T) {
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 		ctx := context.Background()
-		for i, path := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
+		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
+			storageURL := fmt.Sprintf("%s/job-1/%s/processed", sharedFilerURL, fileName)
 			payload, err := json.Marshal(service.ChunkCompleteMessage{
 				JobID:       "job-1",
 				ChunkIndex:  i,
 				TotalChunks: 2,
-				OutputPath:  path,
+				StorageURL:  storageURL,
 			})
 			require.NoError(t, err)
 			_, err = js.Publish(ctx, "jobs.chunks.complete", payload)
 			require.NoError(t, err)
 		}
 
-		// Give the consumer time to process both messages and attempt combine.
-		// Verified by manifest existence — ffmpeg will fail on fake paths.
-		time.Sleep(2 * time.Second)
-
-		manifest := filepath.Join(outputDir, "jobs", "job-1", "manifest.txt")
-		_, err = os.Stat(manifest)
-		assert.NoError(t, err, "manifest.txt should exist — confirms combine was triggered")
-
 		select {
 		case <-received:
-			t.Fatal("unexpected downstream publish — ffmpeg should have failed on fake paths")
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(30 * time.Second):
+			t.Fatal("jobs.complete not published after all chunks received")
 		}
 	})
 }
