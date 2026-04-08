@@ -33,7 +33,7 @@ func TestPublishChunkComplete(t *testing.T) {
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 0,
-			OutputPath:  "/output/chunk-0.mp4",
+			StorageURL:  "/output/chunk-0.mp4",
 		})
 
 		assert.ErrorIs(t, err, publishErr)

@@ -33,7 +33,7 @@ func TestPublishChunkCompleteI(t *testing.T) {
 			JobID:       "job-1",
 			ChunkIndex:  2,
 			TotalChunks: 1,
-			OutputPath:  "/output/chunk-2.mp4",
+			StorageURL:  "/output/chunk-2.mp4",
 		}
 
 		fn := handler.PublishChunkComplete(js)
@@ -77,7 +77,7 @@ func TestPublishChunkCompleteI(t *testing.T) {
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
-			OutputPath:  "/output/chunk-0.mp4",
+			StorageURL:  "/output/chunk-0.mp4",
 		})
 
 		assert.Error(t, err)
