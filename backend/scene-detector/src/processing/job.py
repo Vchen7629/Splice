@@ -29,12 +29,13 @@ async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
         list of videochunkmessage with SeaweedFS storage URLS
     """
     temp_dir = f"../temp/{metadata.job_id}"
+    chunks_dir = f"../temp/{metadata.job_id}/chunks"
 
     local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url)
 
     try:
         chunk_paths = await asyncio.to_thread(
-            split_into_chunks, local_video_path, temp_dir
+            split_into_chunks, local_video_path, chunks_dir
         )
     except VideoOpenFailure as e:
         logger.error("could not open video", job_id=metadata.job_id, err=str(e))

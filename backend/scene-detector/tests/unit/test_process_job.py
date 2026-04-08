@@ -44,7 +44,9 @@ async def test_uses_job_scoped_output_dir() -> None:
     ):
         await process_job(METADATA)
 
-    mock_split.assert_called_once_with(FAKE_LOCAL_PATH, f"../temp/{METADATA.job_id}")
+    mock_split.assert_called_once_with(
+        FAKE_LOCAL_PATH, f"../temp/{METADATA.job_id}/chunks"
+    )
 
 
 @pytest.mark.asyncio
