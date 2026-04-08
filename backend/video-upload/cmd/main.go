@@ -90,7 +90,7 @@ func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.
 
 	router.HandleFunc("POST /jobs/upload", vh.UploadVideo)
 	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
-	router.HandleFunc("GET /jobs/download", vh.DownloadVideo)
+	router.HandleFunc("POST /jobs/download", vh.DownloadVideo)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,
