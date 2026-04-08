@@ -1,7 +1,7 @@
 import { CheckCheck, Loader, Video, X } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { JobStatus, UploadedVideo } from '../hooks/useUploadQueue'
-import VideoDownloadButton from './videoDownloadButton'
+import { formatSize, truncateName } from '../utils/fileDisplay'
 
 const RESOLUTIONS = ['480p', '720p', '1080p']
 
@@ -20,24 +20,14 @@ const VideoUploadQueue = ({ videos, setVideos, onRemove, onStartUploads}: VideoU
         setVideos(prev => prev.map(v => v.id === id ? { ...v, resolution }: v))
     }
 
-    // Truncate long filenames while keeping the extension visible
-    function truncateName(name: string): string {
-        const dotIdx = name.lastIndexOf('.')
-        const ext  = dotIdx !== -1 ? name.slice(dotIdx) : ''
-        const base = dotIdx !== -1 ? name.slice(0, dotIdx) : name
-        if (base.length <= 18) return name
-
-        return base.slice(0, 14) + '…' + ext
-    }
-
-    function formatSize(bytes: number): string {
-        if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB'
-        if (bytes >= 1e6) return (bytes / 1e6).toFixed(0) + ' MB'
-        return (bytes / 1e3).toFixed(0) + ' KB'
+    function StatusIcon({ status }: { status: JobStatus }) {
+        if (status === 'processing') return <Loader size={18} className="text-accent shrink-0 animate-spin" />
+        if (status === 'complete') return <CheckCheck size={18} className="text-green-400 shrink-0" />
+        return <Video size={18} className="text-accent shrink-0" />
     }
 
     return (
-        <section className="flex flex-col flex-1 aspect-square rounded-xl overflow-hidden bg-panel border-1 border-line">
+        <section className="flex flex-col w-full h-[60%] bg-panel border-1 border-line rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 shrink-0 h-[48px] border-b-1 border-line">
                 <span className="text-xs font-medium tracking-widest uppercase text-text-1 font-mono tracking-[0.12em]">
                     Queue
@@ -72,15 +62,12 @@ const VideoUploadQueue = ({ videos, setVideos, onRemove, onStartUploads}: VideoU
                             {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
 
-                        {video.status === 'complete' && video.jobId
-                            ? <VideoDownloadButton jobId={video.jobId} fileName={video.name} />
-                            : <button
-                                onClick={() => onRemove(video.id)}
-                                className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-base leading-none"
-                              >
-                                  <X size={16} className='text-zinc-400 transition-colors duration-0.1s hover:text-accent'/>
-                              </button>
-                        }
+                        <button
+                            onClick={() => onRemove(video.id)}
+                            className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-base leading-none"
+                        >
+                            <X size={16} className='text-zinc-400 transition-colors duration-0.1s hover:text-accent'/>
+                        </button>
                     </div>
 
                     {video.status === 'uploading' && (
@@ -106,12 +93,6 @@ const VideoUploadQueue = ({ videos, setVideos, onRemove, onStartUploads}: VideoU
             </div>
         </section>
     )
-}
-
-function StatusIcon({ status }: { status: JobStatus }) {
-    if (status === 'processing') return <Loader size={18} className="text-accent shrink-0 animate-spin" />
-    if (status === 'complete') return <CheckCheck size={18} className="text-green-400 shrink-0" />
-    return <Video size={18} className="text-accent shrink-0" />
 }
 
 export default VideoUploadQueue
