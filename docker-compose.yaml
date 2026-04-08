@@ -1,0 +1,70 @@
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"   # client connections
+      - "8222:8222"   # HTTP monitoring
+    command: -js -sd /data -m 8222
+    volumes:
+      - nats_data:/data
+  nats-init:
+    image: natsio/nats-box:latest
+    depends_on:
+      - nats
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until nats stream ls --server nats://nats:4222 2>/dev/null; do
+          echo 'waiting for nats...'; sleep 1;
+        done
+        sleep 1
+        nats stream add jobs \
+          --server nats://nats:4222 \
+          --subjects 'jobs.>' \
+          --storage=file \
+          --replicas=1 \
+          --retention=limits \
+          --max-msgs=-1 \
+          --max-bytes=-1 \
+          --max-age=24h \
+          --discard=old \
+          --dupe-window=2m \
+          --defaults
+  seedweedfs-master:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - 9333:9333
+      - 19333:19333
+      - 9324:9324
+    command: 'master -ip=seedweedfs-master -ip.bind=0.0.0.0 -metricsPort=9324'
+  seedweedfs-volume:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - 8081:8080
+      - 18080:18080
+      - 9325:9325
+    command: 'volume -ip=seedweedfs-volume -master="seedweedfs-master:9333" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
+    depends_on:
+      - seedweedfs-master
+  seedweedfs-filer:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - 8888:8888
+      - 18888:18888
+      - 9326:9326
+    command: 'filer -ip=filer -master="seedweedfs-master:9333" -ip.bind=0.0.0.0 -metricsPort=9326'
+    tty: true
+    stdin_open: true
+    depends_on:
+      - seedweedfs-master
+      - seedweedfs-volume
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8888/"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+volumes:
+  nats_data:
