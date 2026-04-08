@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 	"video-recombiner/internal/handler"
+	"video-recombiner/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -16,9 +17,9 @@ import (
 )
 
 type Config struct {
-	NatsURL   string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode  bool   `envconfig:"PROD_MODE" default:"false"`
-	OutputDir string `envconfig:"OUTPUT_DIR" default:"/tmp/splice"`
+	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
+	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
 }
 
 func main() {
@@ -28,6 +29,12 @@ func main() {
 	}
 
 	logger := newLogger(cfg)
+
+	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
+	if err != nil {
+		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
+		os.Exit(1)
+	}
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
@@ -44,7 +51,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runCombiner(js, nc, logger, cfg.OutputDir, quit)
+	err = runCombiner(js, nc, logger, cfg.BaseStorageURL, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -54,10 +61,10 @@ type ncDrainer interface {
 	Drain() error
 }
 
-func runCombiner(js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, outputDir string, quit <-chan os.Signal) error {
+func runCombiner(js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, baseStorageURL string, quit <-chan os.Signal) error {
 	logger.Debug("starting service...")
 
-	consCtx, err := handler.RecombineVideo(js, logger, outputDir)
+	consCtx, err := handler.RecombineVideo(js, logger, baseStorageURL)
 	if err != nil {
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
 	}
