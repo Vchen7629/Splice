@@ -16,7 +16,7 @@ func SilentLogger() *slog.Logger {
 
 func WriteEnvFile(t *testing.T, content string) {
 	t.Helper()
-	for _, key := range []string{"NATS_URL", "PROD_MODE", "OUTPUT_DIR"} {
+	for _, key := range []string{"NATS_URL", "PROD_MODE", "BASE_STORAGE_URL"} {
 		if old, set := os.LookupEnv(key); set {
 			t.Cleanup(func() {
 				err := os.Setenv(key, old)

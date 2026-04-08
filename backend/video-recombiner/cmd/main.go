@@ -16,6 +16,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+var osExit = os.Exit
+
 type Config struct {
 	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
 	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
@@ -33,19 +35,22 @@ func main() {
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {
 		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
 		logger.Error("unable to connect to nats", "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Error("unable to connect to jetstream", "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	quit := make(chan os.Signal, 1)
