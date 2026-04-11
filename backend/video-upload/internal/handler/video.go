@@ -16,6 +16,7 @@ import (
 type VideoHandler struct {
 	Logger         *slog.Logger
 	JS             jetstream.JetStream
+	KV			   jetstream.KeyValue
 	StorageURL     string
 	MaxUploadBytes int64
 }
@@ -77,6 +78,22 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "unable to send process request msg to system", http.StatusInternalServerError)
 		v.Logger.Error("error publishing split video request to nats", "err", err)
+		return
+	}
+
+	status, err := json.Marshal(struct {
+		State string `json:"state"`
+	}{State: "PROCESSING"})
+	if err != nil {
+		http.Error(w, "failed to build job status", http.StatusInternalServerError)
+		v.Logger.Error("error marshalling PROCESSING text", "err", err)
+		return
+	}
+
+	_, err = v.KV.Put(r.Context(), result.JobID, status)
+	if err != nil {
+		http.Error(w, "failed to record job status", http.StatusInternalServerError)
+		v.Logger.Error("failed to write job status to jetstream kv", "job_id", result.JobID, "err", err)
 		return
 	}
 
