@@ -1,53 +1,21 @@
-import { useEffect, useRef, useState } from "react"
+import { useRef } from "react"
 import { VideoService } from "../api/services/video"
-
-export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
-
-export interface UploadedVideo {
-    id: number
-    name: string
-    size: number
-    resolution: string
-    status: JobStatus
-    uploadProgress: number
-    jobId: string | null
-    error?: string
-}
+import { useVideoQueueStore } from "../state/videoQueue"
 
 export function useUploadQueue() {
-    const [uploadedVideos, setUploadedVideos] = useState<UploadedVideo[]>([])
-    const [processedVideos, setProcessedVideos] = useState<UploadedVideo[]>([])
     const abortRefs = useRef<Map<number, () => void>>(new Map())
-    const completingIds = useRef<Set<number>>(new Set())
-    const uploadedVideosRef = useRef<UploadedVideo[]>([])
-
-    useEffect(() => {
-        uploadedVideosRef.current = uploadedVideos
-    }, [uploadedVideos])
-
-    function updateVideo(id: number, patch: Partial<UploadedVideo>) {
-        setUploadedVideos(prev => prev.map(v => v.id === id ? { ...v, ...patch } : v))
-    }
+    const removeUploadedVideoFromStore = useVideoQueueStore(s => s.removeUploadedVideo)
 
     function removeUploadedVideo(id: number) {
         abortRefs.current.get(id)?.()
         abortRefs.current.delete(id)
-        setUploadedVideos(prev => prev.filter(v => v.id !== id))
-    }
-
-    function removeProcessedVideo(id: number) {
-        setProcessedVideos(prev => prev.filter(v => v.id !== id))
-    }
-
-    function markComplete(video: UploadedVideo) {
-        if (completingIds.current.has(video.id)) return
-        completingIds.current.add(video.id)
-        setUploadedVideos(prev => prev.filter(v => v.id !== video.id))
-        setProcessedVideos(prev => [...prev, { ...video, status: 'complete' }])
+        removeUploadedVideoFromStore(id)
     }
 
     function startVideoUploads(files: Map<number, File>) {
-        setUploadedVideos(prev => prev.map(video => {
+        const { uploadedVideos, updateVideo } = useVideoQueueStore.getState()
+
+        uploadedVideos.forEach(video => {
             if (video.status !== 'pending') return video
 
             const file = files.get(video.id)
@@ -58,6 +26,7 @@ export function useUploadQueue() {
             })
 
             abortRefs.current.set(video.id, abort)
+            updateVideo(video.id, { status: 'uploading' })
 
             promise
                 .then(({ job_id }: { job_id: string }) => {
@@ -68,33 +37,8 @@ export function useUploadQueue() {
                     abortRefs.current.delete(video.id)
                     if (err.name !== 'AbortError') updateVideo(video.id, { status: 'error', error: err.message })
                 })
-
-            return { ...video, status: 'uploading' as JobStatus }
-        }))
+        })
     }
 
-    const processingCount = uploadedVideos.filter(v => v.status === 'processing' && v.jobId).length
-
-    useEffect(() => {
-        if (processingCount === 0) return
-
-        async function pollStatus(video: UploadedVideo) {
-            try {
-                const data = await VideoService.status(video.jobId!)
-                if (data.state === 'COMPLETE') markComplete(video)
-                else if (data.state === 'ERROR') updateVideo(video.id, { status: 'error', error: data.error })
-            } catch {
-                updateVideo(video.id, { status: 'error' })
-            }
-        }
-
-        const interval = setInterval(() => {
-            const processing = uploadedVideosRef.current.filter(v => v.status === 'processing' && v.jobId)
-            processing.forEach(pollStatus)
-        }, 1000)
-
-        return () => clearInterval(interval)
-    }, [processingCount])
-
-    return { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads, processedVideos, removeProcessedVideo }
+    return { removeUploadedVideo, startVideoUploads }
 }

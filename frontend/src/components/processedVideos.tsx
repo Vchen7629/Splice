@@ -1,5 +1,5 @@
 import { CheckCheck, X } from "lucide-react"
-import type { UploadedVideo } from "../hooks/useUploadQueue"
+import type { UploadedVideo } from "../types/video"
 import { formatSize, truncateName } from "../utils/fileDisplay"
 import VideoDownloadButton from "./videoDownloadButton"
 

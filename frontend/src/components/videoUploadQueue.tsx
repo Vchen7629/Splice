@@ -1,24 +1,19 @@
 import { CheckCheck, Loader, Video, X } from 'lucide-react'
-import type { Dispatch, SetStateAction } from 'react'
-import type { JobStatus, UploadedVideo } from '../hooks/useUploadQueue'
+import type { JobStatus, UploadedVideo } from '../types/video'
 import { formatSize, truncateName } from '../utils/fileDisplay'
 
 const RESOLUTIONS = ['480p', '720p', '1080p']
 
 interface VideoUploadQueueProps {
     videos: UploadedVideo[]
-    setVideos: Dispatch<SetStateAction<UploadedVideo[]>>
     onRemove: (id: number) => void
+    onSetResolution: (id: number, resolution: string) => void
     onStartUploads: () => void
 }
 
-const VideoUploadQueue = ({ videos, setVideos, onRemove, onStartUploads}: VideoUploadQueueProps) => {
+const VideoUploadQueue = ({ videos, onRemove, onSetResolution, onStartUploads}: VideoUploadQueueProps) => {
     const count = videos.length
     const pendingCount = videos.filter(v => v.status === 'pending').length
-
-    function setResolution(id: number, resolution: string) {
-        setVideos(prev => prev.map(v => v.id === id ? { ...v, resolution }: v))
-    }
 
     function StatusIcon({ status }: { status: JobStatus }) {
         if (status === 'processing') return <Loader size={18} className="text-accent shrink-0 animate-spin" />
@@ -56,7 +51,7 @@ const VideoUploadQueue = ({ videos, setVideos, onRemove, onStartUploads}: VideoU
                         <select
                             value={video.resolution}
                             disabled={video.status !== 'pending'}
-                            onChange={e => setResolution(video.id, e.target.value)}
+                            onChange={e => onSetResolution(video.id, e.target.value)}
                             className="resolution-select text-xs text-[11px] font-mono rounded-md outline-none shrink-0 w-[72px] h-[28px] pl-[8px] bg-input-bg border-1 border-zinc-700"
                         >
                             {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
