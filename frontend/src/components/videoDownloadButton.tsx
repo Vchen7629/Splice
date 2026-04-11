@@ -19,6 +19,7 @@ const VideoDownloadButton = ({ jobId, fileName, downloadName }: VideoDownloadBut
 
         URL.revokeObjectURL(url)
     }
+    
     return (
         <button
             onClick={handleDownload}
