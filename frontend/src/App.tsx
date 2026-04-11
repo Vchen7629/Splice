@@ -1,32 +1,39 @@
 import { useRef } from 'react'
 import FileUploadDropZone from './components/fileUploadDropZone'
 import Header from './components/header'
-import VideoUploadQueue from './components/videoUploadQueue'
-import { useUploadQueue, type UploadedVideo } from './hooks/useUploadQueue'
-import ProcessedVideos from './components/processedVideos'
+import { Toaster } from 'sonner'
+import { useVideoQueueStore } from './state/videoQueue'
+import { useUploadQueue } from './hooks/useUploadQueue'
+import { useJobPolling } from './hooks/useJobPolling'
+import type { UploadedVideo } from './types/video'
+import VideoHeader from './components/videoHeader'
+import VideoUploadButton from './components/videoUploadButton'
+import UploadVideoList from './components/uploadVideosList'
+import ProcessedVideoList from './components/processedVideoList'
 
 let nextId = 0
 
 function App() {
-  const { uploadedVideos, setUploadedVideos, removeUploadedVideo, startVideoUploads, processedVideos, removeProcessedVideo } = useUploadQueue()
+  const { uploadedVideos, processedVideos, addVideos, removeProcessedVideo } = useVideoQueueStore()
+  const { removeUploadedVideo } = useUploadQueue()
   const fileMap = useRef<Map<number, File>>(new Map())
+  useJobPolling()
 
   function handleFiles(files: File[]) {
     const newVideos: UploadedVideo[] = files.map(file => {
       const id = nextId++
       fileMap.current.set(id, file)
-      return { 
-        id, 
-        name: file.name, 
-        size: file.size, 
-        resolution: '1080p', 
-        status: 'pending' as const, 
-        uploadProgress: 0, 
+      return {
+        id,
+        name: file.name,
+        size: file.size,
+        resolution: '1080p',
+        status: 'pending' as const,
+        uploadProgress: 0,
         jobId: null
       }
     })
-
-    setUploadedVideos(prev => [...prev, ...newVideos])
+    addVideos(newVideos)
   }
 
   function handleRemove(id: number) {
@@ -37,16 +44,19 @@ function App() {
   return (
     <>
       <Header />
+      <Toaster position='bottom-right'/>
       <main className="flex justify-center flex-1 w-full items-center px-6 py-6 gap-5 max-w-[80%] mx-auto">
         <FileUploadDropZone onFiles={handleFiles}/>
         <section className='flex flex-col flex-1 aspect-square justify-between'>
-          <ProcessedVideos processedVideos={processedVideos} onRemove={removeProcessedVideo}/>
-          <VideoUploadQueue 
-            videos={uploadedVideos}
-            setVideos={setUploadedVideos}
-            onRemove={handleRemove}
-            onStartUploads={() => startVideoUploads(fileMap.current)}
-          />
+          <section className="flex flex-col w-full h-[60%] bg-panel border-1 border-line rounded-xl overflow-hidden">
+            <VideoHeader videos={uploadedVideos} title='Processing Queue'/>
+            <UploadVideoList videos={uploadedVideos} onRemove={handleRemove}/>
+            <VideoUploadButton videos={uploadedVideos} fileMap={fileMap}/>
+          </section>
+          <section className="flex flex-col w-full h-[35%] bg-panel border-1 border-line rounded-xl overflow-hidden">
+            <VideoHeader videos={processedVideos} title='Processed Videos'/>
+            <ProcessedVideoList processedVideos={processedVideos} onRemove={removeProcessedVideo}/>
+          </section>
         </section>
       </main>
     </>
