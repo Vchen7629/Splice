@@ -1,20 +1,33 @@
 import { CheckCheck, Loader, Video, X } from "lucide-react"
 import type { JobStatus, UploadedVideo } from "../types/video"
 import { formatSize, truncateName } from "../utils/fileDisplay"
+import { useVideoQueueStore } from "../state/videoQueue"
 
 interface UploadVideoListProps {
     videos: UploadedVideo[]
     onRemove: (id: number) => void
-    onSetResolution: (id: number, resolution: string) => void
 }
 
 const RESOLUTIONS = ['480p', '720p', '1080p']
 
-const UploadVideoList = ({ videos, onRemove, onSetResolution }: UploadVideoListProps) => {
+const UploadVideoList = ({ videos, onRemove }: UploadVideoListProps) => {
+    const { uploadedVideos, resetVideo, setResolution } = useVideoQueueStore()
+
     function StatusIcon({ status }: { status: JobStatus }) {
         if (status === 'processing') return <Loader size={18} className="text-accent shrink-0 animate-spin" />
         if (status === 'complete') return <CheckCheck size={18} className="text-green-400 shrink-0" />
+        if (status === 'error') return <X size={18} className="text-red-400 shrink-0"/>
         return <Video size={18} className="text-accent shrink-0" />
+    }
+
+    function handleSetResolution(id: number, resolution: string) {
+        const video = uploadedVideos.find(v => v.id === id)
+
+        if (video?.status === "error") {
+            resetVideo(id)
+        }
+        
+        setResolution(id, resolution)
     }
 
     return (
@@ -22,9 +35,9 @@ const UploadVideoList = ({ videos, onRemove, onSetResolution }: UploadVideoListP
             {videos.map(video => (
                 <li
                     key={video.id}
-                    className={`flex flex-col px-3 py-2 shrink-0 rounded-lg
-                        bg-panel border-1 border-y-line border-x-2 ${video.status === "error" ? "border-x-accent" : "border-x-black"}
-                        transition-[transform,box-shadow,background] duration-150 hover:[transform:scaleX(1.015)] hover:bg-[#2a2a2e] hover:shadow-[0_0_12px_var(--accent-glow),rgba(0,0,0,0.35)_0_2px_8px_-2px]`}
+                    className={`flex flex-col px-3 py-2 shrink-0 rounded-lg border-1 border-x-2
+                        bg-panel ${video.status === "error" ? "border-x-red-500/60 border-y-red-900/40" : "border-x-accent border-y-cyan-800/40"}
+                        transition-[transform,background] duration-200 hover:[transform:scaleX(1.01)] hover:bg-[#2a2a2e]`}
                 >
                 <div className="flex items-center gap-3 h-[40px]">
                     <StatusIcon status={video.status} />
@@ -39,8 +52,7 @@ const UploadVideoList = ({ videos, onRemove, onSetResolution }: UploadVideoListP
 
                     <select
                         value={video.resolution}
-                        disabled={video.status !== 'pending'}
-                        onChange={e => onSetResolution(video.id, e.target.value)}
+                        onChange={e => handleSetResolution(video.id, e.target.value)}
                         className="resolution-select text-xs text-[11px] font-mono rounded-md outline-none shrink-0 w-[72px] h-[28px] pl-[8px] bg-input-bg border-1 border-zinc-700"
                     >
                         {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}

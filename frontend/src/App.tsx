@@ -1,7 +1,6 @@
 import { useRef } from 'react'
 import FileUploadDropZone from './components/fileUploadDropZone'
 import Header from './components/header'
-import VideoUploadQueue from './components/videoUploadQueue'
 import { Toaster } from 'sonner'
 import { useVideoQueueStore } from './state/videoQueue'
 import { useUploadQueue } from './hooks/useUploadQueue'
@@ -15,7 +14,7 @@ import ProcessedVideoList from './components/processedVideoList'
 let nextId = 0
 
 function App() {
-  const { uploadedVideos, processedVideos, addVideos, removeProcessedVideo, setResolution } = useVideoQueueStore()
+  const { uploadedVideos, processedVideos, addVideos, removeProcessedVideo } = useVideoQueueStore()
   const { removeUploadedVideo, startVideoUploads } = useUploadQueue()
   const fileMap = useRef<Map<number, File>>(new Map())
   useJobPolling()
@@ -51,7 +50,7 @@ function App() {
         <section className='flex flex-col flex-1 aspect-square justify-between'>
           <section className="flex flex-col w-full h-[60%] bg-panel border-1 border-line rounded-xl overflow-hidden">
             <VideoHeader videos={uploadedVideos} title='Processing Queue'/>
-            <UploadVideoList videos={uploadedVideos} onRemove={handleRemove} onSetResolution={setResolution}/>
+            <UploadVideoList videos={uploadedVideos} onRemove={handleRemove}/>
             <VideoUploadButton videos={uploadedVideos} onStartUploads={() => startVideoUploads(fileMap.current)}/>
           </section>
           <section className="flex flex-col w-full h-[35%] bg-panel border-1 border-line rounded-xl overflow-hidden">

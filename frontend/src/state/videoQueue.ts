@@ -10,6 +10,7 @@ interface VideoQueueStore {
     removeUploadedVideo: (id: number) => void
     removeProcessedVideo: (id: number) => void
     markComplete: (video: UploadedVideo) => void
+    resetVideo: (id: number) => void
 }
 
 const completingIds = new Set<number>()
@@ -36,6 +37,13 @@ export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
 
     removeProcessedVideo: (id) =>
         set(state => ({ processedVideos: state.processedVideos.filter(v => v.id !== id) })),
+
+    resetVideo: (id) =>
+        set(state => ({
+            uploadedVideos: state.uploadedVideos.map(v =>
+                v.id === id ? { ...v, status: 'pending', error: undefined, uploadProgress: 0 } : v
+            )
+        })),
 
     markComplete: (video) => {
         if (completingIds.has(video.id)) return
