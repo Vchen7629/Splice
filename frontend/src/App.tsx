@@ -15,7 +15,7 @@ let nextId = 0
 
 function App() {
   const { uploadedVideos, processedVideos, addVideos, removeProcessedVideo } = useVideoQueueStore()
-  const { removeUploadedVideo, startVideoUploads } = useUploadQueue()
+  const { removeUploadedVideo } = useUploadQueue()
   const fileMap = useRef<Map<number, File>>(new Map())
   useJobPolling()
 
@@ -51,7 +51,7 @@ function App() {
           <section className="flex flex-col w-full h-[60%] bg-panel border-1 border-line rounded-xl overflow-hidden">
             <VideoHeader videos={uploadedVideos} title='Processing Queue'/>
             <UploadVideoList videos={uploadedVideos} onRemove={handleRemove}/>
-            <VideoUploadButton videos={uploadedVideos} onStartUploads={() => startVideoUploads(fileMap.current)}/>
+            <VideoUploadButton videos={uploadedVideos} fileMap={fileMap}/>
           </section>
           <section className="flex flex-col w-full h-[35%] bg-panel border-1 border-line rounded-xl overflow-hidden">
             <VideoHeader videos={processedVideos} title='Processed Videos'/>
