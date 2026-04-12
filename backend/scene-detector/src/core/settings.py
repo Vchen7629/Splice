@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     MAX_DELIVER_ATTEMPTS: int = 3
     ACK_WAIT_S: int = 30
-    KV_BUCKET_TTL_S: int = 7 * 24 * 60 * 60  # 7 days TTL
+    KV_BUCKET_TTL_S: int = 3 * 60 * 60  # 3 hour TTL
 
     BASE_STORAGE_URL: str = "http://localhost:8888"
 
