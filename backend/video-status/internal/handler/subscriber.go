@@ -110,26 +110,39 @@ func ListenJobComplete(js jetstream.JetStream, kv jetstream.KeyValue, logger *sl
 		err := json.Unmarshal(msg.Data(), &payload)
 		if err != nil {
 			logger.Error("failed to unmarshal jobs.complete message", "err", err)
-			msg.Nak()
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("failed to nak the msg on unmarshal", "err", err)
+			}
 			return
 		}
 
 		status, err := json.Marshal(JobStatus{State: StateComplete})
 		if err != nil {
 			logger.Error("failed to marshal complete status", "err", err)
-			msg.Nak()
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("failed to nak the msg on marshal", "err", err)
+			}
 			return
 		}
 
 		_, err = kv.Put(context.Background(), payload.JobID, status)
 		if err != nil {
 			logger.Error("failed to write complete status to kv", "job_id", payload.JobID, "err", err)
-			msg.Nak()
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("failed to nak the msg on keyvalue put", "err", err)
+			}
 			return
 		}
 
 		logger.Debug("job marked as complete", "job_id", payload.JobID)
-		msg.Ack()
+		err = msg.Ack()
+		if err != nil {
+			logger.Error("failed to ack message after put kv", "err", err)
+			return
+		}
 	})
 
 	return consCtx, err
