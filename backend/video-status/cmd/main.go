@@ -74,7 +74,10 @@ func main() {
 
 	<-quit
 
-	advisorySub.Unsubscribe()
+	err = advisorySub.Unsubscribe()
+	if err != nil {
+		logger.Error("failed to unsub advisory", "err", err)
+	}
 	jobCompleteSub.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
