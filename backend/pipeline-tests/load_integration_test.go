@@ -16,7 +16,7 @@ func TestConcurrentJobs(t *testing.T) {
 	const numJobs = 5
 	const numWorkers = 3
 
-	baseURL, _ := helpers.SetupPipeline(t, numWorkers, sharedFilerURL)
+	baseURL, statusURL, _ := helpers.SetupPipeline(t, numWorkers, sharedFilerURL)
 
 	jobIDs := make([]string, numJobs)
 	var wg sync.WaitGroup
@@ -33,7 +33,7 @@ func TestConcurrentJobs(t *testing.T) {
 	wg.Wait()
 
 	for _, id := range jobIDs {
-		helpers.WaitForJobComplete(t, baseURL, id, 5*time.Minute)
-		assert.Equal(t, "COMPLETE", helpers.PollJobStatus(t, baseURL, id))
+		helpers.WaitForJobComplete(t, statusURL, id, 5*time.Minute)
+		assert.Equal(t, "COMPLETE", helpers.PollJobStatus(t, statusURL, id))
 	}
 }

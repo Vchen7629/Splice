@@ -1,5 +1,5 @@
 import { AxiosError } from "axios"
-import { api } from "../lib/basePath"
+import { VideoApi, StatusApi } from "../lib/basePath"
 
 export const VideoService = {
     // upload with XHR to show upload progress
@@ -41,7 +41,7 @@ export const VideoService = {
 
     status: async(id: string) => {
         try {
-            const response = await api.get(`/jobs/${id}/status`)
+            const response = await StatusApi.get(`/jobs/${id}/status`)
             return response.data
         } catch (error) {
             if (error instanceof AxiosError) {
@@ -59,7 +59,7 @@ export const VideoService = {
 
     download: async(jobId: string, fileName: string) => {
         try {
-            const response = await api.post(`/jobs/download`, { job_id: jobId, file_name: fileName }, { responseType: 'blob' })
+            const response = await VideoApi.post(`/jobs/download`, { job_id: jobId, file_name: fileName }, { responseType: 'blob' })
             return response.data as Blob
         } catch (error) {
             if (error instanceof AxiosError) {

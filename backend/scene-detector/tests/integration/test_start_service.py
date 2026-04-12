@@ -7,6 +7,7 @@ from src.core.settings import settings
 import asyncio
 import json
 import pytest
+import uuid
 
 
 @pytest.mark.asyncio
@@ -25,16 +26,17 @@ async def test_full_flow_publishes_chunks_downstream(
     )
     nc.drain = AsyncMock()
 
+    job_id = str(uuid.uuid4())
     fake_chunks = [
         VideoChunkMessage(
-            job_id="1",
+            job_id=job_id,
             chunk_index=0,
             total_chunks=2,
             storage_url="/fake/chunk-001.mp4",
             target_resolution="480p",
         ),
         VideoChunkMessage(
-            job_id="1",
+            job_id=job_id,
             chunk_index=1,
             total_chunks=2,
             storage_url="/fake/chunk-002.mp4",
@@ -53,7 +55,7 @@ async def test_full_flow_publishes_chunks_downstream(
         task = asyncio.create_task(start_service())
         payload = json.dumps(
             {
-                "job_id": "1",
+                "job_id": job_id,
                 "storage_url": "/fake/video.mp4",
                 "target_resolution": "480p",
             }
@@ -68,14 +70,14 @@ async def test_full_flow_publishes_chunks_downstream(
 
     assert len(nats_video_chunks_subscriber) == 2
     assert nats_video_chunks_subscriber[0] == {
-        "job_id": "1",
+        "job_id": job_id,
         "chunk_index": 0,
         "total_chunks": 2,
         "storage_url": "/fake/chunk-001.mp4",
         "target_resolution": "480p",
     }
     assert nats_video_chunks_subscriber[1] == {
-        "job_id": "1",
+        "job_id": job_id,
         "chunk_index": 1,
         "total_chunks": 2,
         "storage_url": "/fake/chunk-002.mp4",
@@ -118,7 +120,7 @@ async def test_drain_called_in_finally_when_raw_videos_raises(
 
     nc.drain = spy_drain
 
-    async def failing_raw_videos(_js: JetStreamContext) -> None:
+    async def failing_raw_videos(_js: JetStreamContext, _kv: Any) -> None:
         raise RuntimeError("subscriber failed unexpectedly")
 
     with (
@@ -147,7 +149,7 @@ async def test_drain_called_in_finally_on_cancellation(
 
     nc.drain = spy_drain
 
-    async def hanging_raw_videos(_js: JetStreamContext) -> None:
+    async def hanging_raw_videos(_js: JetStreamContext, _kv: Any) -> None:
         await asyncio.sleep(30)
 
     with (
@@ -198,7 +200,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
         task = asyncio.create_task(start_service())
         payload = json.dumps(
             {
-                "job_id": "1",
+                "job_id": str(uuid.uuid4()),
                 "storage_url": "/fake/video.mp4",
                 "target_resolution": "480p",
             }
