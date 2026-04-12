@@ -19,7 +19,9 @@ const subSubject = "jobs.video.chunks"
 var removeAll = os.RemoveAll
 
 // consume video chunk from nats jetstream and process it
-func ConsumeVideoChunk(baseStorageURL string, js jetstream.JetStream, logger *slog.Logger) (jetstream.ConsumeContext, error) {
+func ConsumeVideoChunk(
+	baseStorageURL string, js jetstream.JetStream, kv jetstream.KeyValue, logger *slog.Logger,
+) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
 	streamName, err := js.StreamNameBySubject(ctx, subSubject)
@@ -55,6 +57,22 @@ func ConsumeVideoChunk(baseStorageURL string, js jetstream.JetStream, logger *sl
 			err := msg.Nak()
 			if err != nil {
 				logger.Error("error naking msg", "err", err)
+				return
+			}
+			return
+		}
+
+		exists, err := service.CheckChunkProcessed(kv, payload.JobID, payload.ChunkIndex)
+		if err != nil {
+			logger.Error("failed to check chunk processed", "err", err)
+			return
+		}
+
+		if exists {
+			logger.Debug("message already processed, skipping")
+			err := msg.Ack()
+			if err != nil {
+				logger.Error("error acking msg", "err", err)
 				return
 			}
 			return
@@ -112,6 +130,12 @@ func ConsumeVideoChunk(baseStorageURL string, js jetstream.JetStream, logger *sl
 		err = msg.Ack()
 		if err != nil {
 			logger.Error("error acking msg", "err", err)
+			return
+		}
+
+		err = service.AddChunkProcessed(kv, payload.JobID, payload.ChunkIndex)
+		if err != nil {
+			logger.Error("err", err)
 			return
 		}
 
