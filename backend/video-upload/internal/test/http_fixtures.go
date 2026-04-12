@@ -7,12 +7,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
-	"video-upload/internal/handler"
-	"video-upload/internal/service"
 
 	"github.com/stretchr/testify/require"
 )
@@ -59,14 +56,4 @@ func NewDownloadRequest(t *testing.T, jobID, fileName string) *http.Request {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	return req
-}
-
-func NewTestServer(tracker *service.CompletedJobs) *httptest.Server {
-	h := &handler.JobStatusHandler{
-		Logger:  slog.Default(),
-		Tracker: tracker,
-	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /jobs/{id}", h.PollJobStatus)
-	return httptest.NewServer(mux)
 }

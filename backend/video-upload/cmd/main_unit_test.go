@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"video-upload/internal/service"
 	"video-upload/internal/test"
 
 	"github.com/stretchr/testify/assert"
@@ -37,7 +37,7 @@ func startTestServer(t *testing.T) (*http.Server, *Config) {
 	fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	t.Cleanup(fakeSrv.Close)
 	cfg := &Config{HTTPPort: freePort(t), StorageURL: fakeSrv.URL}
-	server := startHttpApi(test.SilentLogger(), &test.MockJS{}, service.NewCompletedJobs(), cfg)
+	server := startHttpApi(test.SilentLogger(), &test.MockJS{}, &test.MockKV{}, cfg)
 	t.Cleanup(func() { server.Shutdown(context.Background()) }) //nolint:errcheck
 	return server, cfg
 }
@@ -137,5 +137,21 @@ func TestMainFunc(t *testing.T) {
 		var exitErr *exec.ExitError
 		require.ErrorAs(t, err, &exitErr)
 		assert.Equal(t, 1, exitErr.ExitCode())
+	})
+
+	t.Run("returns 500 when KV.Put fails during upload", func(t *testing.T) {
+		fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		t.Cleanup(fakeSrv.Close)
+		cfg := &Config{HTTPPort: freePort(t), StorageURL: fakeSrv.URL}
+		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
+		server := startHttpApi(test.SilentLogger(), &test.MockJS{}, kv, cfg)
+		t.Cleanup(func() { server.Shutdown(context.Background()) }) //nolint:errcheck
+
+		req := test.NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p")
+		w := httptest.NewRecorder()
+		server.Handler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "failed to record job status")
 	})
 }
