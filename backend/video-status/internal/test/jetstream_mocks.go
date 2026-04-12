@@ -101,3 +101,25 @@ type MockConsumeCtx struct {
 }
 
 func (m *MockConsumeCtx) Stop() { m.Stopped = true }
+
+// MockMsg stubs jetstream.Msg for unit-testing the Consume handler.
+type MockMsg struct {
+	jetstream.Msg
+	Payload   []byte
+	AckErr    error
+	NakErr    error
+	AckCalled bool
+	NakCalled bool
+}
+
+func (m *MockMsg) Data() []byte { return m.Payload }
+
+func (m *MockMsg) Ack() error {
+	m.AckCalled = true
+	return m.AckErr
+}
+
+func (m *MockMsg) Nak() error {
+	m.NakCalled = true
+	return m.NakErr
+}
