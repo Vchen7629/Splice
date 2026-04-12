@@ -135,7 +135,7 @@ func ConsumeVideoChunk(
 
 		err = service.AddChunkProcessed(kv, payload.JobID, payload.ChunkIndex)
 		if err != nil {
-			logger.Error("err", err)
+			logger.Error("failed to mark job chunk as processed", "err", err)
 			return
 		}
 

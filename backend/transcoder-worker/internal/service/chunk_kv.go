@@ -19,7 +19,7 @@ func CheckChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) (b
 		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to check chunk processed: %w", err)
+		return false, fmt.Errorf("failed: %w", err)
 	}
 
 	return true, nil
@@ -32,7 +32,7 @@ func AddChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) erro
 
 	_, err := kv.Put(ctx, fmt.Sprintf("%s.%d", jobID, chunkIndex), []byte("processed"))
 	if err != nil {
-		return fmt.Errorf("failed to mark job chunk as processed: %w", err)
+		return fmt.Errorf("failed: %w", err)
 	}
 
 	return nil
