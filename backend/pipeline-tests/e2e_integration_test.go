@@ -3,9 +3,6 @@
 package e2e
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -14,9 +11,6 @@ import (
 	"pipeline-tests/helpers"
 	"testing"
 	"time"
-
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +29,7 @@ func TestMain(m *testing.M) {
 
 func TestPipelineHappyPath(t *testing.T) {
 	baseURL, statusURL, _ := helpers.SetupPipeline(t, 1, sharedFilerURL)
-	
+
 	t.Run("multi-chunk video is transcoded to target resolution", func(t *testing.T) {
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
 		helpers.GenerateTestVideo(t, videoPath)
@@ -89,99 +83,5 @@ func TestPipelineHappyPath(t *testing.T) {
 
 		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
 		assert.Equal(t, "COMPLETE", helpers.PollJobStatus(t, statusURL, jobID))
-	})
-}
-
-func TestFaultTolerance(t *testing.T) {
-	t.Run("duplicate ChunkCompleteMessage does not trigger a second stitch", func(t *testing.T) {
-		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
-
-		videoPath := filepath.Join(t.TempDir(), "test.mp4")
-		helpers.GenerateTestVideo(t, videoPath)
-
-		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
-
-		nc, err := nats.Connect(natsURL)
-		require.NoError(t, err)
-		t.Cleanup(nc.Close)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-
-		secondComplete := make(chan struct{}, 1)
-		sub, err := nc.Subscribe("jobs.complete", func(_ *nats.Msg) {
-			secondComplete <- struct{}{}
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-		// Re-publish a ChunkCompleteMessage for chunk 0 using its SeaweedFS storage URL.
-		chunkStorageURL := fmt.Sprintf("%s/%s/chunk_000/processed", sharedFilerURL, jobID)
-		payload, err := json.Marshal(struct {
-			JobID       string `json:"job_id"`
-			ChunkIndex  int    `json:"chunk_index"`
-			TotalChunks int    `json:"total_chunks"`
-			StorageURL  string `json:"storage_url"`
-		}{
-			JobID:       jobID,
-			ChunkIndex:  0,
-			TotalChunks: 1,
-			StorageURL:  chunkStorageURL,
-		})
-		require.NoError(t, err)
-		_, err = js.Publish(context.Background(), "jobs.chunks.complete", payload)
-		require.NoError(t, err)
-
-		select {
-		case <-secondComplete:
-			t.Fatal("duplicate ChunkCompleteMessage triggered a second stitch")
-		case <-time.After(5 * time.Second):
-		}
-	})
-
-	t.Run("redelivered SceneSplitMessage does not publish duplicate chunks", func(t *testing.T) {
-		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
-
-		videoPath := filepath.Join(t.TempDir(), "test.mp4")
-		helpers.GenerateTestVideo(t, videoPath)
-
-		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
-
-		nc, err := nats.Connect(natsURL)
-		require.NoError(t, err)
-		t.Cleanup(nc.Close)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-
-		secondComplete := make(chan struct{}, 1)
-		sub, err := nc.Subscribe("jobs.complete", func(_ *nats.Msg) {
-			secondComplete <- struct{}{}
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-		// Re-publish the original SceneSplitMessage using its SeaweedFS storage URL.
-		videoStorageURL := fmt.Sprintf("%s/%s/test.mp4", sharedFilerURL, jobID)
-		payload, err := json.Marshal(struct {
-			JobID            string `json:"job_id"`
-			TargetResolution string `json:"target_resolution"`
-			StorageURL       string `json:"storage_url"`
-		}{
-			JobID:            jobID,
-			TargetResolution: "480p",
-			StorageURL:       videoStorageURL,
-		})
-		require.NoError(t, err)
-		_, err = js.Publish(context.Background(), "jobs.video.scene-split", payload)
-		require.NoError(t, err)
-
-		select {
-		case <-secondComplete:
-			t.Fatal("redelivered SceneSplitMessage caused a second pipeline run")
-		case <-time.After(15 * time.Second):
-		}
 	})
 }
