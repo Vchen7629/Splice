@@ -16,7 +16,7 @@ import (
 type VideoHandler struct {
 	Logger         *slog.Logger
 	JS             jetstream.JetStream
-	KV			   jetstream.KeyValue
+	KV             jetstream.KeyValue
 	StorageURL     string
 	MaxUploadBytes int64
 }

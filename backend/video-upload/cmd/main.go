@@ -54,7 +54,7 @@ func main() {
 	}
 
 	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket: 	 "job-status",
+		Bucket:      "job-status",
 		Description: "tracks job state across the pipeline",
 	})
 	if err != nil {

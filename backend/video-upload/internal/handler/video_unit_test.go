@@ -17,6 +17,7 @@ func newVideoHandler(StorageURL string, js *test.MockJS) *handler.VideoHandler {
 	return &handler.VideoHandler{
 		Logger:         test.SilentLogger(),
 		JS:             js,
+		KV:             &test.MockKV{},
 		StorageURL:     StorageURL,
 		MaxUploadBytes: 0,
 	}
