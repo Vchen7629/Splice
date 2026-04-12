@@ -16,13 +16,14 @@ import (
 )
 
 
-func BuildBinaries(t *testing.T, binDir string) (videoUpload, transcoderWorker, videoRecombiner string) {
+func BuildBinaries(t *testing.T, binDir string) (videoUpload, transcoderWorker, videoRecombiner, videoStatus string) {
 	t.Helper()
 
 	services := []struct{ src, name string }{
 		{"../video-upload", "video-upload"},
 		{"../transcoder-worker", "transcoder-worker"},
 		{"../video-recombiner", "video-recombiner"},
+		{"../video-status", "video-status"},
 	}
 
 	bins := make([]string, len(services))
@@ -35,7 +36,7 @@ func BuildBinaries(t *testing.T, binDir string) (videoUpload, transcoderWorker, 
 		bins[i] = dest
 	}
 
-	return bins[0], bins[1], bins[2]
+	return bins[0], bins[1], bins[2], bins[3]
 }
 
 func StartGoService(t *testing.T, binary, cwd string, env map[string]string) {
@@ -76,7 +77,7 @@ func StartSceneDetector(t *testing.T, cwd, natsURL, filerURL string) {
 	})
 }
 
-// SetupPipeline starts all services and returns the video-upload base URL, nats URL, and filer URL.
+// SetupPipeline starts all services and returns the video-upload base URL, video-status base URL, and nats URL.
 // numTranscoderWorkers controls how many competing worker instances are started.
 //
 // Directory layout under t.TempDir():
@@ -88,7 +89,8 @@ func StartSceneDetector(t *testing.T, cwd, natsURL, filerURL string) {
 //	  scene-detector/
 //	  transcoder-worker-{n}/    one CWD per worker instance
 //	  video-recombiner/
-func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (string, string) {
+//	  video-status/
+func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (string, string, string) {
 	t.Helper()
 
 	tmp := t.TempDir()
@@ -100,6 +102,7 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 		filepath.Join(servicesDir, "video-upload"),
 		filepath.Join(servicesDir, "scene-detector"),
 		filepath.Join(servicesDir, "video-recombiner"),
+		filepath.Join(servicesDir, "video-status"),
 	}
 	for i := range numTranscoderWorkers {
 		cwds = append(cwds, filepath.Join(servicesDir, fmt.Sprintf("transcoder-worker-%d", i)))
@@ -110,7 +113,7 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 	require.NoError(t, os.WriteFile(filepath.Join(servicesDir, ".env"), nil, 0o644))
 
 	natsURL, _ := StartNats(t)
-	uploadBin, transcoderBin, recombinerBin := BuildBinaries(t, binDir)
+	uploadBin, transcoderBin, recombinerBin, statusBin := BuildBinaries(t, binDir)
 
 	sharedEnv := map[string]string{
 		"NATS_URL":         natsURL,
@@ -128,16 +131,24 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 		StartGoService(t, transcoderBin, cwd, sharedEnv)
 	}
 
-	port := FreePort(t)
+	uploadPort := FreePort(t)
 	StartGoService(t, uploadBin, filepath.Join(servicesDir, "video-upload"), map[string]string{
 		"NATS_URL":    natsURL,
 		"STORAGE_URL": filerURL,
-		"HTTP_PORT":   fmt.Sprintf("%d", port),
+		"HTTP_PORT":   fmt.Sprintf("%d", uploadPort),
 	})
 
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	WaitForHTTP(t, baseURL+"/jobs/probe/status", 10*time.Second)
-	return baseURL, natsURL
+	statusPort := FreePort(t)
+	StartGoService(t, statusBin, filepath.Join(servicesDir, "video-status"), map[string]string{
+		"NATS_URL":  natsURL,
+		"HTTP_PORT": fmt.Sprintf("%d", statusPort),
+	})
+
+	uploadURL := fmt.Sprintf("http://127.0.0.1:%d", uploadPort)
+	statusURL := fmt.Sprintf("http://127.0.0.1:%d", statusPort)
+	WaitForHTTP(t, uploadURL+"/jobs/probe/status", 10*time.Second)
+	WaitForHTTP(t, statusURL+"/jobs/probe/status", 10*time.Second)
+	return uploadURL, statusURL, natsURL
 }
 
 func PollJobStatus(t *testing.T, baseURL, jobID string) string {

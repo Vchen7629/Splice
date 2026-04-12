@@ -34,14 +34,14 @@ func TestMain(m *testing.M) {
 }
 
 func TestPipelineHappyPath(t *testing.T) {
-	baseURL, _ := helpers.SetupPipeline(t, 1, sharedFilerURL)
+	baseURL, statusURL, _ := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 	t.Run("multi-chunk video is transcoded to target resolution", func(t *testing.T) {
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
 		helpers.GenerateTestVideo(t, videoPath)
 
 		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
 
 		resp, err := helpers.DownloadVideo(t, baseURL, jobID, "output.mp4")
 		require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestPipelineHappyPath(t *testing.T) {
 		helpers.GenerateSingleSceneVideo(t, videoPath)
 
 		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
 
 		resp, err := helpers.DownloadVideo(t, baseURL, jobID, "output.mp4")
 		require.NoError(t, err)
@@ -85,10 +85,10 @@ func TestPipelineHappyPath(t *testing.T) {
 		helpers.GenerateTestVideo(t, videoPath)
 
 		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		assert.Equal(t, "PROCESSING", helpers.PollJobStatus(t, baseURL, jobID))
+		assert.Equal(t, "PROCESSING", helpers.PollJobStatus(t, statusURL, jobID))
 
-		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
-		assert.Equal(t, "COMPLETE", helpers.PollJobStatus(t, baseURL, jobID))
+		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
+		assert.Equal(t, "COMPLETE", helpers.PollJobStatus(t, statusURL, jobID))
 	})
 }
 
@@ -96,13 +96,13 @@ func TestFaultTolerance(t *testing.T) {
 	t.Run("duplicate ChunkCompleteMessage does not trigger a second stitch", func(t *testing.T) {
 		t.Skip("TODO: video-recombiner JobTracker does not deduplicate chunk indices")
 
-		baseURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
+		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
 		helpers.GenerateTestVideo(t, videoPath)
 
 		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
 
 		nc, err := nats.Connect(natsURL)
 		require.NoError(t, err)
@@ -145,13 +145,13 @@ func TestFaultTolerance(t *testing.T) {
 	t.Run("redelivered SceneSplitMessage does not publish duplicate chunks", func(t *testing.T) {
 		t.Skip("TODO: scene-detector has no idempotency check on redelivery")
 
-		baseURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
+		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
 		helpers.GenerateTestVideo(t, videoPath)
 
 		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
-		helpers.WaitForJobComplete(t, baseURL, jobID, 3*time.Minute)
+		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
 
 		nc, err := nats.Connect(natsURL)
 		require.NoError(t, err)
