@@ -24,6 +24,8 @@ type Config struct {
 	HTTPPort string `envconfig:"HTTP_PORT" default:"8081"`
 }
 
+var osExit = os.Exit
+
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -35,13 +37,13 @@ func main() {
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
 		logger.Error("unable to connect to nats", "err", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Error("unable to connect to jetstream", "err", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
@@ -50,19 +52,19 @@ func main() {
 	})
 	if err != nil {
 		logger.Error("failed to create job-status kv bucket", "err", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	advisorySub, err := handler.ListenAdvisoriesFailure(nc, js, kv, logger)
 	if err != nil {
 		logger.Error("failed to subscribe to advisories", "err", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	jobCompleteSub, err := handler.ListenJobComplete(js, kv, logger)
 	if err != nil {
 		logger.Error("failed to subscribe to job complete stream", "err", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	quit := make(chan os.Signal, 1)
@@ -112,7 +114,7 @@ func startHttpApi(logger *slog.Logger, kv jetstream.KeyValue, cfg *Config) *http
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			logger.Error("http server error", "err", err)
-			os.Exit(1)
+			osExit(1)
 		}
 	}()
 
