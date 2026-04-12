@@ -7,6 +7,7 @@ dev:
 	(cd backend/transcoder-worker && go run ./cmd/main.go) & \
 	(cd backend/video-recombiner && go run ./cmd/main.go) & \
 	(cd backend/video-upload && go run ./cmd/main.go) & \
+	(cd backend/video-status && go run ./cmd/main.go) & \
 	(cd frontend && npm run dev) & \
 	wait
 
@@ -16,5 +17,6 @@ reset:
 	pkill -f "transcoder-worker" 2>/dev/null || true
 	pkill -f "video-recombiner" 2>/dev/null || true
 	pkill -f "video-upload" 2>/dev/null || true
+	pkill -f "video-status" 2>/dev/null || true
 	pkill -f "npm run dev" 2>/dev/null || true
 	pkill -f "vite" 2>/dev/null || true

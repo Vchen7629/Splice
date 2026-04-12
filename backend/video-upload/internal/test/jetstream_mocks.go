@@ -65,3 +65,15 @@ type MockConsumeCtx struct {
 }
 
 func (m *MockConsumeCtx) Stop() { m.Stopped = true }
+
+// MockKV stubs jetstream.KeyValue. PutErr is returned by Put if set.
+type MockKV struct {
+	jetstream.KeyValue
+	PutErr    error
+	PutCalled bool
+}
+
+func (m *MockKV) Put(_ context.Context, _ string, _ []byte) (uint64, error) {
+	m.PutCalled = true
+	return 0, m.PutErr
+}

@@ -12,7 +12,6 @@ import (
 	"time"
 	"video-upload/internal/handler"
 	"video-upload/internal/middleware"
-	"video-upload/internal/service"
 	"video-upload/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -54,9 +53,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	tracker, consCtx, err := handler.SubscribeJobCompletion(js, logger)
+	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket:      "job-status",
+		Description: "tracks job state across the pipeline",
+	})
 	if err != nil {
-		logger.Error("failed to subscribe to job completion subject", "err", err)
+		logger.Error("failed to ccreate job-status kv bucket", "err", err)
 		os.Exit(1)
 	}
 
@@ -65,11 +67,9 @@ func main() {
 
 	logger.Debug("starting service...")
 
-	server := startHttpApi(logger, js, tracker, cfg)
+	server := startHttpApi(logger, js, kv, cfg)
 
 	<-quit
-
-	consCtx.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -82,14 +82,12 @@ func main() {
 	}
 }
 
-func startHttpApi(logger *slog.Logger, js jetstream.JetStream, tracker *service.CompletedJobs, cfg *Config) *http.Server {
+func startHttpApi(logger *slog.Logger, js jetstream.JetStream, kv jetstream.KeyValue, cfg *Config) *http.Server {
 	router := http.NewServeMux()
 
-	vh := &handler.VideoHandler{Logger: logger, JS: js, StorageURL: cfg.StorageURL}
-	jh := &handler.JobStatusHandler{Logger: logger, Tracker: tracker}
+	vh := &handler.VideoHandler{Logger: logger, JS: js, KV: kv, StorageURL: cfg.StorageURL}
 
 	router.HandleFunc("POST /jobs/upload", vh.UploadVideo)
-	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 	router.HandleFunc("POST /jobs/download", vh.DownloadVideo)
 
 	server := &http.Server{

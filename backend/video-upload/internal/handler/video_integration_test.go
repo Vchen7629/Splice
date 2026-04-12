@@ -35,10 +35,11 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func newUploadHandler(js jetstream.JetStream, filerURL string) *handler.VideoHandler {
+func newUploadHandler(js jetstream.JetStream, kv jetstream.KeyValue, filerURL string) *handler.VideoHandler {
 	return &handler.VideoHandler{
 		Logger:     test.SilentLogger(),
 		JS:         js,
+		KV:         kv,
 		StorageURL: filerURL,
 	}
 }
@@ -57,7 +58,8 @@ func newDownloadVideoServer(t *testing.T, storageURL string) *httptest.Server {
 // covers the full upload pipeline: multipart form → SeaweedFS → NATS → response.
 func TestUploadVideoFlow(t *testing.T) {
 	js, nc := test.SetupNats(t)
-	h := newUploadHandler(js, sharedFilerUrl)
+	kv := test.SetupKV(t, js)
+	h := newUploadHandler(js, kv, sharedFilerUrl)
 
 	t.Run("Rejects uploads exceeding MaxUploadBytes", func(t *testing.T) {
 		h.MaxUploadBytes = 100
@@ -179,7 +181,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("Returns 500 when NATS publish fails after successful storage save", func(t *testing.T) {
-		h := newUploadHandler(&test.MockJS{PublishErr: errors.New("nats unavailable")}, sharedFilerUrl)
+		h := newUploadHandler(&test.MockJS{PublishErr: errors.New("nats unavailable")}, &test.MockKV{}, sharedFilerUrl)
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 

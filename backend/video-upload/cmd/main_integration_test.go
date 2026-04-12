@@ -11,14 +11,13 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"video-upload/internal/handler"
+	"video-upload/internal/service"
 	"video-upload/internal/test"
 
-	"github.com/nats-io/nats.go"
+	nats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
 var sharedStorageURL string
@@ -32,31 +31,27 @@ func TestMain(m *testing.M) {
 }
 
 type serverEnv struct {
-	url        string
-	server     *http.Server
-	js         jetstream.JetStream
-	storageURL string
+	url    string
+	server *http.Server
+	js     jetstream.JetStream
+	nc     *nats.Conn
 }
 
-// starts a NATS container, wires up the job-completion subscriber
 func setupServer(t *testing.T) *serverEnv {
 	t.Helper()
-	js, _ := test.SetupNats(t)
-
-	tracker, consCtx, err := handler.SubscribeJobCompletion(js, test.SilentLogger())
-	require.NoError(t, err)
+	js, nc := test.SetupNats(t)
+	kv := test.SetupKV(t, js)
 
 	cfg := &Config{HTTPPort: test.FreePort(t), StorageURL: sharedStorageURL}
 
 	url := "http://localhost:" + cfg.HTTPPort
-	server := startHttpApi(test.SilentLogger(), js, tracker, cfg)
+	server := startHttpApi(test.SilentLogger(), js, kv, cfg)
 	t.Cleanup(func() {
-		consCtx.Stop()
 		server.Shutdown(context.Background()) //nolint:errcheck
 	})
 
 	require.Eventually(t, func() bool {
-		resp, err := http.Get(url + "/jobs/_probe/status")
+		resp, err := http.Post(url+"/jobs/upload", "text/plain", nil)
 		if err != nil {
 			return false
 		}
@@ -64,33 +59,17 @@ func setupServer(t *testing.T) *serverEnv {
 		return true
 	}, 5*time.Second, 10*time.Millisecond, "server did not start in time")
 
-	return &serverEnv{
-		url:        url,
-		server:     server,
-		js:         js,
-		storageURL: sharedStorageURL,
-	}
+	return &serverEnv{url: url, server: server, js: js, nc: nc}
 }
 
 func TestMainErrors(t *testing.T) {
-	t.Run("no stream returns error", func(t *testing.T) {
-		ctx := context.Background()
-
-		container, err := natstc.Run(ctx, "nats:2.10-alpine")
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-		url, err := container.ConnectionString(ctx)
-		require.NoError(t, err)
-
-		nc, err := nats.Connect(url)
-		require.NoError(t, err)
-		t.Cleanup(nc.Close)
+	t.Run("CreateOrUpdateKeyValue fails when JetStream is not enabled", func(t *testing.T) {
+		nc := test.SetupNatsNoJetStream(t)
 
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
 
-		_, _, err = handler.SubscribeJobCompletion(js, test.SilentLogger())
+		_, err = js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{Bucket: "job-status"})
 
 		assert.Error(t, err)
 	})
@@ -115,15 +94,7 @@ func TestStartHttpApi(t *testing.T) {
 			wantStatus: http.StatusCreated,
 		},
 		{
-			name: "GET /jobs/{id}/status is wired to the job status handler",
-			buildReq: func() *http.Request {
-				req, _ := http.NewRequest(http.MethodGet, env.url+"/jobs/any-job/status", nil)
-				return req
-			},
-			wantStatus: http.StatusOK,
-		},
-		{
-			name: "GET /jobs/download is wired to the download handler",
+			name: "POST /jobs/download is wired to the download handler",
 			buildReq: func() *http.Request {
 				body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, seedJobID, seedFileName)
 				req, _ := http.NewRequest(http.MethodPost, env.url+"/jobs/download", strings.NewReader(body))
@@ -144,36 +115,78 @@ func TestStartHttpApi(t *testing.T) {
 	}
 }
 
-func TestJobCompletionFlow(t *testing.T) {
+func TestUploadPipeline(t *testing.T) {
 	env := setupServer(t)
 
-	t.Run("job transitions from PROCESSING to COMPLETE after completion message is received", func(t *testing.T) {
+	t.Run("upload writes PROCESSING state to KV and publishes scene-split message", func(t *testing.T) {
+		received := make(chan []byte, 1)
+		sub, err := env.nc.Subscribe("jobs.video.scene-split", func(msg *nats.Msg) {
+			received <- msg.Data
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
 		req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", []byte("data"), "720p")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
+		defer resp.Body.Close()
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
-		var upload struct {
+
+		var uploadResp struct {
 			JobID string `json:"job_id"`
 		}
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&upload))
-		resp.Body.Close()
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&uploadResp))
+		require.NotEmpty(t, uploadResp.JobID)
 
-		test.PublishJobComplete(t, env.js, upload.JobID)
+		// Verify KV has PROCESSING state
+		kv := test.SetupKV(t, env.js)
+		entry, err := kv.Get(context.Background(), uploadResp.JobID)
+		require.NoError(t, err)
+		var status struct {
+			State string `json:"state"`
+		}
+		require.NoError(t, json.Unmarshal(entry.Value(), &status))
+		assert.Equal(t, "PROCESSING", status.State)
 
-		assert.Eventually(t, func() bool {
-			r, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", env.url, upload.JobID))
-			if err != nil {
-				return false
+		// Verify NATS scene-split message was published
+		select {
+		case data := <-received:
+			var msg service.SceneSplitMessage
+			require.NoError(t, json.Unmarshal(data, &msg))
+			assert.Equal(t, uploadResp.JobID, msg.JobID)
+			assert.Equal(t, "720p", msg.TargetResolution)
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for NATS message")
+		}
+	})
+
+	t.Run("multiple uploads each get their own PROCESSING entry in KV", func(t *testing.T) {
+		kv := test.SetupKV(t, env.js)
+		jobIDs := make([]string, 3)
+
+		for i := range jobIDs {
+			req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", []byte("data"), "1080p")
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+			var uploadResp struct {
+				JobID string `json:"job_id"`
 			}
-			defer r.Body.Close()
-			var body struct {
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&uploadResp))
+			jobIDs[i] = uploadResp.JobID
+		}
+
+		for _, jobID := range jobIDs {
+			entry, err := kv.Get(context.Background(), jobID)
+			require.NoError(t, err, "KV entry missing for job %s", jobID)
+			var status struct {
 				State string `json:"state"`
 			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				return false
-			}
-			return body.State == "COMPLETE"
-		}, 5*time.Second, 100*time.Millisecond)
+			require.NoError(t, json.Unmarshal(entry.Value(), &status))
+			assert.Equal(t, "PROCESSING", status.State)
+		}
 	})
 }
 
@@ -181,16 +194,15 @@ func TestGracefulShutdown(t *testing.T) {
 	t.Run("server stops accepting connections after Shutdown", func(t *testing.T) {
 		env := setupServer(t)
 
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/any/status", env.url))
+		resp, err := http.Post(env.url+"/jobs/upload", "text/plain", nil)
 		require.NoError(t, err)
 		resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		require.NoError(t, env.server.Shutdown(ctx))
 
-		_, err = http.Get(fmt.Sprintf("%s/jobs/any/status", env.url))
+		_, err = http.Post(env.url+"/jobs/upload", "text/plain", nil)
 		assert.Error(t, err, "expected connection refused after server shutdown")
 	})
 
