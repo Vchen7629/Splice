@@ -1,6 +1,6 @@
 //go:build integration
 
-package handler_test
+package handler
 
 import (
 	"context"
@@ -10,10 +10,8 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
-	"video-status/internal/handler"
 	"video-status/internal/test"
 
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,21 +22,21 @@ type statusResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-func newTestServer(t *testing.T, kv jetstream.KeyValue) *httptest.Server {
+func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
-	h := &handler.JobStatusHandler{Logger: test.SilentLogger(), KV: kv}
+	h := &JobStatusHandler{Logger: test.SilentLogger(), KV: sharedKV}
 	mux.HandleFunc("GET /jobs/{id}/status", h.PollJobStatus)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts
 }
 
-func seedStatus(t *testing.T, kv jetstream.KeyValue, jobID string, status handler.JobStatus) {
+func seedStatus(t *testing.T, jobID string, status JobStatus) {
 	t.Helper()
 	b, err := json.Marshal(status)
 	require.NoError(t, err)
-	_, err = kv.Put(context.Background(), jobID, b)
+	_, err = sharedKV.Put(context.Background(), jobID, b)
 	require.NoError(t, err)
 }
 
@@ -46,7 +44,7 @@ func TestResponse(t *testing.T) {
 	tests := []struct {
 		name      string
 		jobID     string
-		status    handler.JobStatus
+		status    JobStatus
 		wantCode  int
 		wantState string
 		wantErr   string
@@ -54,21 +52,21 @@ func TestResponse(t *testing.T) {
 		{
 			name:      "PROCESSING job returns 200 with correct state",
 			jobID:     "job-processing",
-			status:    handler.JobStatus{State: handler.StateProcessing},
+			status:    JobStatus{State: StateProcessing},
 			wantCode:  http.StatusOK,
 			wantState: "PROCESSING",
 		},
 		{
 			name:      "COMPLETE job returns 200 with correct state",
 			jobID:     "job-complete",
-			status:    handler.JobStatus{State: handler.StateComplete},
+			status:    JobStatus{State: StateComplete},
 			wantCode:  http.StatusOK,
 			wantState: "COMPLETE",
 		},
 		{
 			name:      "FAILED job returns 200 with error field populated",
 			jobID:     "job-failed",
-			status:    handler.JobStatus{State: handler.StateFailed, Error: "pipeline failed at stage: transcoder-worker"},
+			status:    JobStatus{State: StateFailed, Error: "pipeline failed at stage: transcoder-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "FAILED",
 			wantErr:   "pipeline failed at stage: transcoder-worker",
@@ -77,10 +75,8 @@ func TestResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			js, _ := test.SetupNats(t)
-			kv := test.SetupKV(t, js)
-			seedStatus(t, kv, tc.jobID, tc.status)
-			ts := newTestServer(t, kv)
+			seedStatus(t, tc.jobID, tc.status)
+			ts := newTestServer(t)
 
 			resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", ts.URL, tc.jobID))
 			require.NoError(t, err)
@@ -98,9 +94,7 @@ func TestResponse(t *testing.T) {
 
 func TestResponse_NotFound(t *testing.T) {
 	t.Run("unknown job ID returns 404", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js)
-		ts := newTestServer(t, kv)
+		ts := newTestServer(t)
 
 		resp, err := http.Get(fmt.Sprintf("%s/jobs/nonexistent-job/status", ts.URL))
 		require.NoError(t, err)
@@ -110,9 +104,7 @@ func TestResponse_NotFound(t *testing.T) {
 	})
 
 	t.Run("mux returns 404 when no ID segment is in the path", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js)
-		ts := newTestServer(t, kv)
+		ts := newTestServer(t)
 
 		// GET /jobs/{id}/status requires a non-empty segment — mux won't route /jobs//status
 		resp, err := http.Get(fmt.Sprintf("%s/jobs/", ts.URL))
@@ -126,26 +118,24 @@ func TestResponse_NotFound(t *testing.T) {
 func TestConnectionDrop(t *testing.T) {
 	tests := []struct {
 		name   string
-		status handler.JobStatus
+		jobID  string
+		status JobStatus
 	}{
-		{"does not panic on dropped connection (PROCESSING)", handler.JobStatus{State: handler.StateProcessing}},
-		{"does not panic on dropped connection (COMPLETE)", handler.JobStatus{State: handler.StateComplete}},
-		{"does not panic on dropped connection (FAILED)", handler.JobStatus{State: handler.StateFailed, Error: "something broke"}},
-		{"does not panic on dropped connection (not found)", handler.JobStatus{}},
+		{"does not panic on dropped connection (PROCESSING)", "drop-processing", JobStatus{State: StateProcessing}},
+		{"does not panic on dropped connection (COMPLETE)", "drop-complete", JobStatus{State: StateComplete}},
+		{"does not panic on dropped connection (FAILED)", "drop-failed", JobStatus{State: StateFailed, Error: "something broke"}},
+		{"does not panic on dropped connection (not found)", "drop-notfound", JobStatus{}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			js, _ := test.SetupNats(t)
-			kv := test.SetupKV(t, js)
-
 			if tc.status.State != "" {
-				seedStatus(t, kv, "job-1", tc.status)
+				seedStatus(t, tc.jobID, tc.status)
 			}
 
-			h := &handler.JobStatusHandler{Logger: test.SilentLogger(), KV: kv}
-			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
+			h := &JobStatusHandler{Logger: test.SilentLogger(), KV: sharedKV}
+			req := httptest.NewRequest(http.MethodGet, "/jobs/"+tc.jobID+"/status", nil)
+			req.SetPathValue("id", tc.jobID)
 
 			assert.NotPanics(t, func() {
 				h.PollJobStatus(test.NewDroppedConnectionWriter(), req)
@@ -156,10 +146,8 @@ func TestConnectionDrop(t *testing.T) {
 
 func TestConcurrentRequests(t *testing.T) {
 	t.Run("concurrent requests for a completed job return consistent state", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js)
-		seedStatus(t, kv, "concurrent-job", handler.JobStatus{State: handler.StateComplete})
-		ts := newTestServer(t, kv)
+		seedStatus(t, "concurrent-job", JobStatus{State: StateComplete})
+		ts := newTestServer(t)
 
 		const goroutines = 20
 		results := make([]string, goroutines)
@@ -189,9 +177,7 @@ func TestConcurrentRequests(t *testing.T) {
 	})
 
 	t.Run("concurrent requests for a missing job all return 404", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js)
-		ts := newTestServer(t, kv)
+		ts := newTestServer(t)
 
 		const goroutines = 20
 		codes := make([]int, goroutines)
@@ -220,16 +206,14 @@ func TestConcurrentRequests(t *testing.T) {
 
 func TestServerContinuesAfterDisconnect(t *testing.T) {
 	t.Run("server continues serving requests after a client disconnects", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js)
-		seedStatus(t, kv, "job-1", handler.JobStatus{State: handler.StateProcessing})
-		ts := newTestServer(t, kv)
+		seedStatus(t, "reconnect-job", JobStatus{State: StateProcessing})
+		ts := newTestServer(t)
 
-		firstResp, err := http.Get(fmt.Sprintf("%s/jobs/job-1/status", ts.URL))
+		firstResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
 		require.NoError(t, err)
 		firstResp.Body.Close()
 
-		secondResp, err := http.Get(fmt.Sprintf("%s/jobs/job-1/status", ts.URL))
+		secondResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
 		require.NoError(t, err)
 		defer secondResp.Body.Close()
 
