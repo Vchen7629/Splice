@@ -1,3 +1,4 @@
+from nats.js.api import KeyValueConfig
 from .nats.subscriber import raw_videos
 from .nats.connection import nats_connect
 from .storage.check_health import check_storage_health
@@ -26,8 +27,20 @@ async def start_service() -> None:
         raise RuntimeError(
             f"No stream found for video chunks subject `{settings.VIDEO_CHUNKS_SUBJECT}`"
         )
+
     try:
-        await raw_videos(js)
+        kv = await js.create_key_value(
+            config=KeyValueConfig(
+                bucket="scene-split-processed",
+                description="key value bucket for scene detector to check if the job_id already processed for idempotency",
+                ttl=settings.KV_BUCKET_TTL_S,
+            )
+        )
+    except js_errors.APIError as e:
+        raise RuntimeError(f"failed to create scene-split-processed KV bucket: {e}")
+
+    try:
+        await raw_videos(js, kv)
     finally:
         await nc.drain()
 
