@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 
 func TestPipelineHappyPath(t *testing.T) {
 	baseURL, statusURL, _ := helpers.SetupPipeline(t, 1, sharedFilerURL)
-
+	
 	t.Run("multi-chunk video is transcoded to target resolution", func(t *testing.T) {
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
 		helpers.GenerateTestVideo(t, videoPath)
@@ -94,8 +94,6 @@ func TestPipelineHappyPath(t *testing.T) {
 
 func TestFaultTolerance(t *testing.T) {
 	t.Run("duplicate ChunkCompleteMessage does not trigger a second stitch", func(t *testing.T) {
-		t.Skip("TODO: video-recombiner JobTracker does not deduplicate chunk indices")
-
 		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
@@ -143,8 +141,6 @@ func TestFaultTolerance(t *testing.T) {
 	})
 
 	t.Run("redelivered SceneSplitMessage does not publish duplicate chunks", func(t *testing.T) {
-		t.Skip("TODO: scene-detector has no idempotency check on redelivery")
-
 		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 
 		videoPath := filepath.Join(t.TempDir(), "test.mp4")
