@@ -32,7 +32,7 @@ func AddChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) erro
 
 	_, err := kv.Put(ctx, fmt.Sprintf("%s.%d", jobID, chunkIndex), []byte("processed"))
 	if err != nil {
-		return fmt.Errorf("failed to mark job chunk as processed", "err", err)
+		return fmt.Errorf("failed to mark job chunk as processed: %w", err)
 	}
 
 	return nil
