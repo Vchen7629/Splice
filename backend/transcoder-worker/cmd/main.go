@@ -64,7 +64,7 @@ func main() {
 	})
 	if err != nil {
 		logger.Error("failed to ccreate transcode-chunk-job-processed kv bucket", "err", err)
-		os.Exit(1)
+		osExit(1)
 	}
 
 	quit := make(chan os.Signal, 1)

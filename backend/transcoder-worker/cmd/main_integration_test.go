@@ -36,11 +36,12 @@ func TestMain(m *testing.M) {
 func TestRunProcessingI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, js, nc, test.SilentLogger(), quit)
+			done <- runProcessing(sharedFilerURL, js, nc, kv, test.SilentLogger(), quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -60,6 +61,7 @@ func TestRunProcessingI(t *testing.T) {
 		}
 
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
@@ -82,7 +84,7 @@ func TestRunProcessingI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, js, nc, test.SilentLogger(), quit)
+			done <- runProcessing(sharedFilerURL, js, nc, kv, test.SilentLogger(), quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -138,7 +140,20 @@ func TestRunProcessingI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runProcessing(sharedFilerURL, js, nc, test.SilentLogger(), quit)
+		err = runProcessing(sharedFilerURL, js, nc, &test.MockKV{}, test.SilentLogger(), quit)
+
+		assert.Error(t, err)
+	})
+}
+
+func TestKVSetup(t *testing.T) {
+	t.Run("CreateOrUpdateKeyValue fails when JetStream is not enabled", func(t *testing.T) {
+		nc := test.SetupNatsNoJetStream(t)
+
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
+
+		_, err = js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{Bucket: "transcode-chunk-job-processed"})
 
 		assert.Error(t, err)
 	})

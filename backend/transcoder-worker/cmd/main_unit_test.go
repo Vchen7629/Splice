@@ -20,6 +20,10 @@ func okJS() *test.MockJS {
 	return &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{}}}
 }
 
+func okKV() *test.MockKV {
+	return &test.MockKV{}
+}
+
 func TestNewLogger(t *testing.T) {
 	t.Run("dev mode enables debug level", func(t *testing.T) {
 		logger := newLogger(&Config{ProdMode: false})
@@ -41,7 +45,7 @@ func TestRunProcessing(t *testing.T) {
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runProcessing("http://storage", js, nc, test.SilentLogger(), quit)
+		err := runProcessing("http://storage", js, nc, okKV(), test.SilentLogger(), quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -52,7 +56,7 @@ func TestRunProcessing(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing("http://storage", okJS(), &test.MockDrainer{}, test.SilentLogger(), quit)
+			done <- runProcessing("http://storage", okJS(), &test.MockDrainer{}, okKV(), test.SilentLogger(), quit)
 		}()
 
 		select {
@@ -77,7 +81,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", js, &test.MockDrainer{}, test.SilentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", js, &test.MockDrainer{}, okKV(), test.SilentLogger(), quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -88,7 +92,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", okJS(), nc, test.SilentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", okJS(), nc, okKV(), test.SilentLogger(), quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -98,7 +102,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runProcessing("http://storage", okJS(), nc, test.SilentLogger(), quit)
+		err := runProcessing("http://storage", okJS(), nc, okKV(), test.SilentLogger(), quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
