@@ -29,7 +29,11 @@ func TestPublishVideoMetadata(t *testing.T) {
 		url, err := container.ConnectionString(ctx)
 		require.NoError(t, err)
 
-		nc, err := nats.Connect(url)
+		nc, err := nats.Connect(url,
+			nats.RetryOnFailedConnect(true),
+			nats.MaxReconnects(10),
+			nats.ReconnectWait(200*time.Millisecond),
+		)
 		require.NoError(t, err)
 		t.Cleanup(nc.Close)
 
