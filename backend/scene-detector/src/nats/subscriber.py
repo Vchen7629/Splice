@@ -1,3 +1,4 @@
+from nats.js.api import ConsumerConfig
 from ..core.logging import logger
 from ..core.settings import settings
 from ..processing.job import process_job
@@ -12,6 +13,9 @@ async def raw_videos(js: JetStreamContext) -> None:
         subject=settings.SCENE_SPLIT_SUBJECT,
         durable=settings.NATS_SUB_QUEUE_NAME,
         queue=settings.NATS_SUB_QUEUE_NAME,
+        config=ConsumerConfig(
+            max_deliver=settings.MAX_DELIVER_ATTEMPTS, ack_wait=settings.ACK_WAIT_S
+        ),
     )
     async for msg in sub.messages:
         try:
