@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 	"video-recombiner/internal/service"
 	"video-recombiner/internal/storage"
@@ -15,10 +14,10 @@ import (
 
 const subSubject = "jobs.chunks.complete"
 
-var removeAll = os.RemoveAll
-
 // recombines video chunks back into one video
-func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, baseStorageURL string) (jetstream.ConsumeContext, error) {
+func RecombineVideo(
+	js jetstream.JetStream, kv jetstream.KeyValue, logger *slog.Logger, baseStorageURL string,
+) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
 	streamName, err := js.StreamNameBySubject(ctx, subSubject)
@@ -59,11 +58,33 @@ func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, baseStorageURL 
 			return
 		}
 
+		recieved, err := service.CheckChunkRecieved(kv, payload.JobID, payload.ChunkIndex)
+		if err != nil {
+			logger.Error("failed to check chunk recieved", "err", err)
+			return
+		}
+
+		if recieved {
+			logger.Debug("message already recieved, skipping")
+			err := msg.Ack()
+			if err != nil {
+				logger.Error("error acking msg", "err", err)
+				return
+			}
+			return
+		}
+
 		ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.StorageURL, payload.TotalChunks)
 
 		err = msg.Ack()
 		if err != nil {
 			logger.Error("error acking msg", "err", err)
+			return
+		}
+
+		err = service.AddChunkRecieved(kv, payload.JobID, payload.ChunkIndex)
+		if err != nil {
+			logger.Error("failed to mark job chunk as recieved", "err", err)
 			return
 		}
 
@@ -96,15 +117,7 @@ func RecombineVideo(js jetstream.JetStream, logger *slog.Logger, baseStorageURL 
 				return
 			}
 
-			err = removeAll("/tmp/processed_chunk-" + payload.JobID)
-			if err != nil {
-				logger.Warn("failed to clean up chunk temp dir", "job_id", payload.JobID, "err", err)
-			}
-
-			err = removeAll("/tmp/jobs/" + payload.JobID)
-			if err != nil {
-				logger.Warn("failed to clean up job temp dir", "job_id", payload.JobID, "err", err)
-			}
+			service.CleanUpTempFolders(payload.JobID, logger)
 
 			logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
 			err = PublishVideoProcessingComplete(js, service.VideoProcessingCompleteMessage{JobID: payload.JobID})

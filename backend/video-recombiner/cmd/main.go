@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 	"video-recombiner/internal/handler"
+	"video-recombiner/internal/observability"
 	"video-recombiner/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -30,7 +33,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := newLogger(cfg)
+	logger := observability.StructuredLogger(cfg.ProdMode)
 
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {
@@ -53,10 +56,20 @@ func main() {
 		return
 	}
 
+	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket:      "recombine-chunk-recieved",
+		Description: "tracks video chunk for the jobID is already recieved for idempotency",
+		TTL:         3 * time.Hour,
+	})
+	if err != nil {
+		logger.Error("failed to create recombine-chunk-recieved kv bucket", "err", err)
+		osExit(1)
+	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runCombiner(js, nc, logger, cfg.BaseStorageURL, quit)
+	err = runCombiner(js, nc, kv, logger, cfg.BaseStorageURL, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -66,10 +79,17 @@ type ncDrainer interface {
 	Drain() error
 }
 
-func runCombiner(js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, baseStorageURL string, quit <-chan os.Signal) error {
+func runCombiner(
+	js jetstream.JetStream,
+	nc ncDrainer,
+	kv jetstream.KeyValue,
+	logger *slog.Logger,
+	baseStorageURL string,
+	quit <-chan os.Signal,
+) error {
 	logger.Debug("starting service...")
 
-	consCtx, err := handler.RecombineVideo(js, logger, baseStorageURL)
+	consCtx, err := handler.RecombineVideo(js, kv, logger, baseStorageURL)
 	if err != nil {
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
 	}
@@ -78,16 +98,6 @@ func runCombiner(js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, base
 
 	consCtx.Stop()
 	return nc.Drain()
-}
-
-func newLogger(cfg *Config) *slog.Logger {
-	level := slog.LevelDebug
-	if cfg.ProdMode {
-		level = slog.LevelInfo
-	}
-	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-
-	return slog.New(h).With("service", "video-recombiner")
 }
 
 func loadConfig() (*Config, error) {
