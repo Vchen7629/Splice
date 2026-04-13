@@ -1,6 +1,6 @@
 test_all: integration unit
 
-PKGS := . ../internal/handler/... ../internal/service/... ../internal/storage/...
+PKGS := . ../internal/handler/... ../internal/observability/... ../internal/service/... ../internal/storage/...
 
 format: 
 	go fmt ${PKGS} .
@@ -17,6 +17,5 @@ integration:
 	go test -tags integration ${PKGS}
 
 unit:
-	go test -tags unit .
-	go test -tags unit ../internal/handler/...
+	go test -tags unit ${PKGS}
 	go test -race -tags unit ../internal/service/...

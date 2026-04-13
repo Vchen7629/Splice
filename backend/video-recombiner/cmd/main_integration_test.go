@@ -36,11 +36,12 @@ func TestMain(m *testing.M) {
 func TestRunCombinerI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, test.SilentLogger(), sharedFilerURL, quit)
+			done <- runCombiner(js, nc, kv, test.SilentLogger(), sharedFilerURL, quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -72,15 +73,19 @@ func TestRunCombinerI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runCombiner(js, nc, test.SilentLogger(), sharedFilerURL, quit)
+		err = runCombiner(js, nc, nil, test.SilentLogger(), sharedFilerURL, quit)
 
 		assert.Error(t, err)
 	})
 
 	t.Run("full flow: receive chunks, combine, publish downstream", func(t *testing.T) {
-		if _, err := exec.LookPath("ffmpeg"); err != nil {
+		_, err := exec.LookPath("ffmpeg")
+		if err != nil {
 			t.Skip("ffmpeg not available")
 		}
+
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
@@ -94,8 +99,6 @@ func TestRunCombinerI(t *testing.T) {
 		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-0.mp4", videoData)
 		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-1.mp4", videoData)
 
-		js, nc := test.SetupNats(t)
-
 		received := make(chan []byte, 1)
 		sub, err := nc.Subscribe("jobs.complete", func(msg *nats.Msg) {
 			received <- msg.Data
@@ -107,7 +110,7 @@ func TestRunCombinerI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, test.SilentLogger(), sharedFilerURL, quit)
+			done <- runCombiner(js, nc, kv, test.SilentLogger(), sharedFilerURL, quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -143,6 +146,19 @@ func TestRunCombinerI(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("runCombiner did not exit after quit signal")
 		}
+	})
+}
+
+func TestKVSetup(t *testing.T) {
+	t.Run("CreateOrUpdateKeyValue fails when JetStream is not enabled", func(t *testing.T) {
+		nc := test.SetupNatsNoJetStream(t)
+
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
+
+		_, err = js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{Bucket: "recombine-chunk-recieved"})
+
+		assert.Error(t, err)
 	})
 }
 

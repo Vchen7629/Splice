@@ -66,6 +66,50 @@ func TestTranscoderWorker(t *testing.T) {
 }
 
 func TestVideoRecombiner(t *testing.T) {
+	t.Run("duplicate chunk message in a multi-chunk job is dropped", func(t *testing.T) {
+		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
+
+		nc, err := nats.Connect(natsURL)
+		require.NoError(t, err)
+		t.Cleanup(nc.Close)
+
+		js, err := jetstream.New(nc)
+		require.NoError(t, err)
+
+		// Capture ChunkCompleteMessages so we can replay one after the job completes.
+		capturedChunkMsgs := make(chan []byte, 10)
+		captureSub, err := nc.Subscribe("jobs.chunks.complete", func(m *nats.Msg) {
+			capturedChunkMsgs <- m.Data
+		})
+		require.NoError(t, err)
+
+		// GenerateTestVideo produces a red→blue cut so scene-detector emits 2+ chunks.
+		videoPath := filepath.Join(t.TempDir(), "test.mp4")
+		helpers.GenerateTestVideo(t, videoPath)
+
+		jobID := helpers.UploadVideo(t, baseURL, videoPath, "480p")
+		helpers.WaitForJobComplete(t, statusURL, jobID, 3*time.Minute)
+		require.NoError(t, captureSub.Unsubscribe())
+
+		secondComplete := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.complete", func(_ *nats.Msg) {
+			secondComplete <- struct{}{}
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		// Replay one captured chunk — idempotency should ack and drop it.
+		payload := <-capturedChunkMsgs
+		_, err = js.Publish(context.Background(), "jobs.chunks.complete", payload)
+		require.NoError(t, err)
+
+		select {
+		case <-secondComplete:
+			t.Fatal("duplicate chunk message was not dropped: triggered a jobs.complete")
+		case <-time.After(5 * time.Second):
+		}
+	})
+
 	t.Run("redelivered ChunkCompleteMessage does not trigger a second stitch", func(t *testing.T) {
 		baseURL, statusURL, natsURL := helpers.SetupPipeline(t, 1, sharedFilerURL)
 

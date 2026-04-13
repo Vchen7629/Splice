@@ -5,6 +5,7 @@ package handler_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"video-recombiner/internal/handler"
 	"video-recombiner/internal/service"
@@ -26,6 +27,18 @@ type mockMsg struct {
 func (m *mockMsg) Data() []byte { return m.data }
 func (m *mockMsg) Nak() error   { m.nakCalled = true; return nil }
 func (m *mockMsg) Ack() error   { m.ackCalled = true; return m.ackErr }
+
+func validPayload(t *testing.T, jobID string) []byte {
+	t.Helper()
+	data, err := json.Marshal(service.ChunkCompleteMessage{
+		JobID:       jobID,
+		ChunkIndex:  0,
+		TotalChunks: 2, // not ready — combine never runs
+		StorageURL:  "http://localhost:1/job-1/chunk.mp4",
+	})
+	require.NoError(t, err)
+	return data
+}
 
 func TestReturnError(t *testing.T) {
 	streamNameErr := errors.New("no stream")
@@ -62,7 +75,7 @@ func TestReturnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := handler.RecombineVideo(tc.js, test.SilentLogger(), "http://storage")
+			_, err := handler.RecombineVideo(tc.js, &test.MockKV{}, test.SilentLogger(), "http://storage")
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
@@ -76,7 +89,7 @@ func TestMessageHandling(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		consCtx, err := handler.RecombineVideo(js, &test.MockKV{}, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -98,7 +111,7 @@ func TestMessageHandling(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		consCtx, err := handler.RecombineVideo(js, &test.MockKV{}, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -121,7 +134,7 @@ func TestMessageHandling(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		consCtx, err := handler.RecombineVideo(js, &test.MockKV{}, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -129,7 +142,7 @@ func TestMessageHandling(t *testing.T) {
 		assert.False(t, msg.nakCalled)
 	})
 
-	t.Run("ack failure does not trigger combine", func(t *testing.T) {
+	t.Run("ack failure does not trigger combine or write kv", func(t *testing.T) {
 		// When Ack returns an error the handler returns early before downloading chunks.
 		payload, err := json.Marshal(service.ChunkCompleteMessage{
 			JobID:       "job-1",
@@ -142,12 +155,81 @@ func TestMessageHandling(t *testing.T) {
 		msg := &mockMsg{data: payload, ackErr: errors.New("ack failed")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		kv := &test.MockKV{}
 
-		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		consCtx, err := handler.RecombineVideo(js, kv, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
 		assert.True(t, msg.ackCalled)
 		assert.False(t, msg.nakCalled)
+		assert.Empty(t, kv.PutKey)
+	})
+}
+
+func TestIdempotency(t *testing.T) {
+	t.Run("already processed chunk acks and skips processing", func(t *testing.T) {
+		msg := &mockMsg{data: validPayload(t, "job-1")}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		kv := &test.MockKV{GetFound: true}
+
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), "http://storage")
+
+		require.NoError(t, err)
+		assert.True(t, msg.ackCalled)
+		assert.False(t, msg.nakCalled)
+	})
+
+	t.Run("already processed chunk does not write to kv again", func(t *testing.T) {
+		msg := &mockMsg{data: validPayload(t, "job-1")}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		kv := &test.MockKV{GetFound: true}
+
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), "http://storage")
+
+		require.NoError(t, err)
+		assert.Empty(t, kv.PutKey)
+	})
+
+	t.Run("kv check error does not ack or nak", func(t *testing.T) {
+		msg := &mockMsg{data: validPayload(t, "job-1")}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		kv := &test.MockKV{GetErr: errors.New("kv unavailable")}
+
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), "http://storage")
+
+		require.NoError(t, err)
+		assert.False(t, msg.ackCalled)
+		assert.False(t, msg.nakCalled)
+	})
+
+	t.Run("writes kv with correct key after ack", func(t *testing.T) {
+		payload, err := json.Marshal(service.ChunkCompleteMessage{
+			JobID:       "job-abc",
+			ChunkIndex:  2,
+			TotalChunks: 3, // not ready — combine never runs, but KV write still happens
+			StorageURL:  "http://localhost:1/job-abc/chunk.mp4",
+		})
+		require.NoError(t, err)
+
+		msg := &mockMsg{data: payload}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		kv := &test.MockKV{}
+
+		_, err = handler.RecombineVideo(js, kv, test.SilentLogger(), "http://storage")
+
+		require.NoError(t, err)
+		assert.Equal(t, "job-abc.2", kv.PutKey)
+	})
+
+	t.Run("kv key format is job_id.chunk_index", func(t *testing.T) {
+		jobID := "abc-123"
+		chunkIndex := 3
+		expected := fmt.Sprintf("%s.%d", jobID, chunkIndex)
+		assert.Equal(t, "abc-123.3", expected)
 	})
 }

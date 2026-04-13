@@ -50,15 +50,16 @@ func TestRecombineVideo(t *testing.T) {
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
 
-		_, err = handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		_, err = handler.RecombineVideo(js, nil, test.SilentLogger(), t.TempDir())
 
 		assert.Error(t, err)
 	})
 
 	t.Run("returns consume context", func(t *testing.T) {
 		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		consCtx, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		consCtx, err := handler.RecombineVideo(js, kv, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -67,8 +68,9 @@ func TestRecombineVideo(t *testing.T) {
 	t.Run("creates consumer with correct config", func(t *testing.T) {
 		ctx := context.Background()
 		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
@@ -93,8 +95,9 @@ func TestRecombineVideo(t *testing.T) {
 func TestMessageHandlingI(t *testing.T) {
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -116,8 +119,9 @@ func TestMessageHandlingI(t *testing.T) {
 
 	t.Run("partial chunk does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		_, err := handler.RecombineVideo(js, test.SilentLogger(), t.TempDir())
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -127,9 +131,8 @@ func TestMessageHandlingI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		// Only the first of two chunks arrives — tracker not ready, no downstream publish.
 		payload, err := json.Marshal(service.ChunkCompleteMessage{
-			JobID:       "job-1",
+			JobID:       "job-partial",
 			ChunkIndex:  0,
 			TotalChunks: 2,
 			StorageURL:  "http://storage/chunk-0.mp4",
@@ -148,15 +151,16 @@ func TestMessageHandlingI(t *testing.T) {
 
 	t.Run("all chunks received triggers combine", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
 		videoFile := test.OpenTestVideo(t)
 		videoData, err := os.ReadFile(videoFile.Name())
 		require.NoError(t, err)
 
-		test.SeedProcessedVideo(t, sharedFilerURL, "job-1", "chunk-0.mp4", videoData)
-		test.SeedProcessedVideo(t, sharedFilerURL, "job-1", "chunk-1.mp4", videoData)
+		test.SeedProcessedVideo(t, sharedFilerURL, "job-combine", "chunk-0.mp4", videoData)
+		test.SeedProcessedVideo(t, sharedFilerURL, "job-combine", "chunk-1.mp4", videoData)
 
-		_, err = handler.RecombineVideo(js, test.SilentLogger(), sharedFilerURL)
+		_, err = handler.RecombineVideo(js, kv, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -168,9 +172,9 @@ func TestMessageHandlingI(t *testing.T) {
 
 		ctx := context.Background()
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
-			storageURL := fmt.Sprintf("%s/job-1/%s/processed", sharedFilerURL, fileName)
+			storageURL := fmt.Sprintf("%s/job-combine/%s/processed", sharedFilerURL, fileName)
 			payload, err := json.Marshal(service.ChunkCompleteMessage{
-				JobID:       "job-1",
+				JobID:       "job-combine",
 				ChunkIndex:  i,
 				TotalChunks: 2,
 				StorageURL:  storageURL,
@@ -185,5 +189,70 @@ func TestMessageHandlingI(t *testing.T) {
 		case <-time.After(30 * time.Second):
 			t.Fatal("jobs.complete not published after all chunks received")
 		}
+	})
+}
+
+func TestRecombineVideoIdempotency(t *testing.T) {
+	t.Run("already received chunk is acked and skipped", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
+
+		jobID := "job-idempotency-skip"
+
+		// Pre-seed the KV as if this chunk was already received.
+		_, err := kv.Put(context.Background(), fmt.Sprintf("%s.%d", jobID, 0), []byte("received"))
+		require.NoError(t, err)
+
+		_, err = handler.RecombineVideo(js, kv, test.SilentLogger(), sharedFilerURL)
+		require.NoError(t, err)
+
+		secondComplete := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.complete", func(_ *nats.Msg) {
+			secondComplete <- struct{}{}
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		payload, err := json.Marshal(service.ChunkCompleteMessage{
+			JobID:       jobID,
+			ChunkIndex:  0,
+			TotalChunks: 1,
+			StorageURL:  "http://storage/fake",
+		})
+		require.NoError(t, err)
+		_, err = js.Publish(context.Background(), "jobs.chunks.complete", payload)
+		require.NoError(t, err)
+
+		select {
+		case <-secondComplete:
+			t.Fatal("already received chunk triggered a downstream publish")
+		case <-time.After(2 * time.Second):
+		}
+	})
+
+	t.Run("kv entry is written after chunk is acked", func(t *testing.T) {
+		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
+
+		jobID := "job-idempotency-write"
+
+		_, err := handler.RecombineVideo(js, kv, test.SilentLogger(), sharedFilerURL)
+		require.NoError(t, err)
+
+		// Partial chunk (TotalChunks:2) so combine never fires — KV write still happens after ack.
+		payload, err := json.Marshal(service.ChunkCompleteMessage{
+			JobID:       jobID,
+			ChunkIndex:  0,
+			TotalChunks: 2,
+			StorageURL:  "http://storage/chunk-0.mp4",
+		})
+		require.NoError(t, err)
+		_, err = js.Publish(context.Background(), "jobs.chunks.complete", payload)
+		require.NoError(t, err)
+
+		require.Eventually(t, func() bool {
+			_, err := kv.Get(context.Background(), fmt.Sprintf("%s.%d", jobID, 0))
+			return err == nil
+		}, 10*time.Second, 200*time.Millisecond, "kv entry for received chunk was never written")
 	})
 }

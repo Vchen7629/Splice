@@ -81,6 +81,11 @@ func ConsumeVideoChunk(
 		filePath, err := storage.GetUnprocessedVideoChunk(payload.StorageURL, payload.JobID)
 		if err != nil {
 			logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
+			err := msg.Nak()
+			if err != nil {
+				logger.Error("error naking msg for get unprocessed video chunk", "err", err)
+				return
+			}
 			return
 		}
 
