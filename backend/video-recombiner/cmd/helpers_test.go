@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"video-recombiner/internal/test"
 
 	"github.com/stretchr/testify/require"
 )
@@ -32,4 +33,13 @@ func writeEnvFile(t *testing.T, content string) {
 	path := filepath.Join("..", ".env")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
 	t.Cleanup(func() { _ = os.Remove(path) })
+}
+
+// okJS returns a mock JetStream that succeeds through the full consumer setup.
+func okJS() *test.MockJS {
+	return &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{}}}
+}
+
+func okKV() *test.MockKV {
+	return &test.MockKV{}
 }

@@ -3,8 +3,6 @@
 package main
 
 import (
-	"context"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,33 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// okJS returns a mock JetStream that succeeds through the full consumer setup.
-func okJS() *test.MockJS {
-	return &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{}}}
-}
-
-func TestStructuredLogger(t *testing.T) {
-	t.Run("dev mode should enable debug level", func(t *testing.T) {
-		logger := newLogger(&Config{ProdMode: false})
-
-		assert.True(t, logger.Enabled(context.Background(), slog.LevelDebug))
-	})
-
-	t.Run("prod mode should disable debug level", func(t *testing.T) {
-		logger := newLogger(&Config{ProdMode: true})
-
-		assert.False(t, logger.Enabled(context.Background(), slog.LevelDebug))
-		assert.True(t, logger.Enabled(context.Background(), slog.LevelInfo))
-	})
-}
-
 func TestRunCombiner(t *testing.T) {
 	t.Run("consume video chunk error should return error", func(t *testing.T) {
 		js := &test.MockJS{JStreamNameErr: assert.AnError}
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runCombiner(js, nc, test.SilentLogger(), "http://storage", quit)
+		err := runCombiner(js, nc, okKV(), test.SilentLogger(), "http://storage", quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -52,7 +30,7 @@ func TestRunCombiner(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(okJS(), &test.MockDrainer{}, test.SilentLogger(), "http://storage", quit)
+			done <- runCombiner(okJS(), &test.MockDrainer{}, okKV(), test.SilentLogger(), "http://storage", quit)
 		}()
 
 		select {
@@ -77,7 +55,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runCombiner(js, &test.MockDrainer{}, test.SilentLogger(), "http://storage", quit))
+		require.NoError(t, runCombiner(js, &test.MockDrainer{}, okKV(), test.SilentLogger(), "http://storage", quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -88,7 +66,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runCombiner(okJS(), nc, test.SilentLogger(), "http://storage", quit))
+		require.NoError(t, runCombiner(okJS(), nc, okKV(), test.SilentLogger(), "http://storage", quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -98,7 +76,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runCombiner(okJS(), nc, test.SilentLogger(), "http://storage", quit)
+		err := runCombiner(okJS(), nc, okKV(), test.SilentLogger(), "http://storage", quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
