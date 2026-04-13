@@ -31,7 +31,7 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
 		assert.Equal(t, false, cfg.ProdMode)
-		assert.Equal(t, "8081", cfg.HTTPPort)
+		assert.Equal(t, "8085", cfg.HTTPPort)
 	})
 
 	t.Run("env var overrides", func(t *testing.T) {

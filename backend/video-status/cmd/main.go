@@ -21,7 +21,7 @@ import (
 type Config struct {
 	NatsURL  string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
 	ProdMode bool   `envconfig:"PROD_MODE" default:"false"`
-	HTTPPort string `envconfig:"HTTP_PORT" default:"8081"`
+	HTTPPort string `envconfig:"HTTP_PORT" default:"8085"`
 }
 
 var osExit = os.Exit
@@ -43,6 +43,12 @@ func main() {
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Error("unable to connect to jetstream", "err", err)
+		osExit(1)
+	}
+
+	err = handler.PreCreatePipelineConsumer(js)
+	if err != nil {
+		logger.Error("unable to precreate durable pipeline consumers", "err", err)
 		osExit(1)
 	}
 
