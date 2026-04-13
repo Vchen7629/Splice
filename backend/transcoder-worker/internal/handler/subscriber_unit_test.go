@@ -113,7 +113,7 @@ func TestAckAndNacking(t *testing.T) {
 		assert.True(t, msg.nakCalled)
 	})
 
-	t.Run("fetch failure does not nak or ack", func(t *testing.T) {
+	t.Run("fetch failure naks", func(t *testing.T) {
 		msg := &mockMsg{data: validPayload(t, "job-1")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
@@ -121,8 +121,7 @@ func TestAckAndNacking(t *testing.T) {
 		_, err := handler.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, test.SilentLogger())
 
 		require.NoError(t, err)
-		assert.False(t, msg.nakCalled)
-		assert.False(t, msg.ackCalled)
+		assert.True(t, msg.nakCalled)
 	})
 }
 
