@@ -48,16 +48,18 @@ func TestConsumeVideoChunk(t *testing.T) {
 
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
+		kv := test.SetupKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 
 		assert.Error(t, err)
 	})
 
 	t.Run("returns non-nil consume context", func(t *testing.T) {
 		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		consCtx, err := ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		consCtx, err := ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -66,8 +68,9 @@ func TestConsumeVideoChunk(t *testing.T) {
 	t.Run("consumer is created with correct config", func(t *testing.T) {
 		ctx := context.Background()
 		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
@@ -87,8 +90,9 @@ func TestConsumeVideoChunk(t *testing.T) {
 
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -110,6 +114,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 
 	t.Run("valid message publishes chunk complete and acks", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
@@ -126,7 +131,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 		require.NoError(t, err)
 
 		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
@@ -176,6 +181,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			js, _ := test.SetupNats(t)
+			kv := test.SetupKV(t, js)
 			jobID := "job-nak-" + tc.fileName
 			t.Cleanup(func() {
 				os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
@@ -184,7 +190,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 
 			storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, tc.fileName, tc.videoContent(t))
 
-			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, test.SilentLogger())
+			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, kv, test.SilentLogger())
 			require.NoError(t, err)
 
 			test.PublishVideoChunk(t, js, service.VideoChunkMessage{
@@ -221,6 +227,8 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		})
 		require.NoError(t, err)
 
+		kv := test.SetupKV(t, js)
+
 		jobID := "job-publish-fail"
 		t.Cleanup(func() {
 			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
@@ -231,7 +239,7 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 		require.NoError(t, err)
 
 		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
@@ -247,12 +255,13 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 	seedAndConsume := func(t *testing.T, jobID string) (jetstream.JetStream, <-chan struct{}) {
 		t.Helper()
 		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
 
 		videoContent, err := os.ReadFile("../test/test_video.mp4")
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -305,4 +314,92 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 			assert.Equal(t, tc.failOnCall, calls)
 		})
 	}
+}
+
+func TestConsumeVideoChunkIdempotency(t *testing.T) {
+	t.Run("already processed chunk is acked and skipped", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
+
+		jobID := "job-idempotency-skip"
+
+		// Pre-seed the KV as if this chunk was already processed.
+		_, err := kv.Put(context.Background(), fmt.Sprintf("%s.%d", jobID, 0), []byte("processed"))
+		require.NoError(t, err)
+
+		received := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) { received <- struct{}{} })
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
+		require.NoError(t, err)
+
+		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: "http://storage/fake", TargetResolution: "480p",
+		})
+
+		select {
+		case <-received:
+			t.Fatal("already processed chunk triggered a downstream publish")
+		case <-time.After(2 * time.Second):
+		}
+	})
+
+	t.Run("kv entry is written after successful processing", func(t *testing.T) {
+		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
+
+		jobID := "job-idempotency-write"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+			os.RemoveAll("/tmp/temp-processed-" + jobID)
+		})
+
+		videoContent, err := os.ReadFile("../test/test_video.mp4")
+		require.NoError(t, err)
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
+		require.NoError(t, err)
+
+		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p",
+		})
+
+		// Wait for processing to complete then verify KV entry exists.
+		require.Eventually(t, func() bool {
+			_, err := kv.Get(context.Background(), fmt.Sprintf("%s.%d", jobID, 0))
+			return err == nil
+		}, 30*time.Second, 200*time.Millisecond, "kv entry for processed chunk was never written")
+	})
+
+	t.Run("kv entry is not written when processing fails", func(t *testing.T) {
+		js, _ := test.SetupNats(t)
+		kv := test.SetupKV(t, js)
+
+		jobID := "job-idempotency-no-write-on-fail"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+			os.RemoveAll("/tmp/temp-processed-" + jobID)
+		})
+
+		// Seed invalid video so transcoding fails.
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "bad.mp4", []byte("not a video"))
+
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, test.SilentLogger())
+		require.NoError(t, err)
+
+		test.PublishVideoChunk(t, js, service.VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p",
+		})
+
+		time.Sleep(2 * time.Second)
+
+		_, err = kv.Get(context.Background(), fmt.Sprintf("%s.%d", jobID, 0))
+		assert.ErrorIs(t, err, jetstream.ErrKeyNotFound, "kv entry should not exist after failed processing")
+	})
 }

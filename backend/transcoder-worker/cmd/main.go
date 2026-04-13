@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"transcoder-worker/internal/handler"
 	"transcoder-worker/internal/storage"
@@ -55,10 +57,20 @@ func main() {
 		return
 	}
 
+	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket:      "transcode-chunk-job-processed",
+		Description: "tracks already completed video chunk for the jobID is already processed for idempotency",
+		TTL:         3 * time.Hour,
+	})
+	if err != nil {
+		logger.Error("failed to ccreate transcode-chunk-job-processed kv bucket", "err", err)
+		osExit(1)
+	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(cfg.BaseStorageURL, js, nc, logger, quit)
+	err = runProcessing(cfg.BaseStorageURL, js, nc, kv, logger, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -69,10 +81,17 @@ type ncDrainer interface {
 }
 
 // run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
-func runProcessing(baseStorageURL string, js jetstream.JetStream, nc ncDrainer, logger *slog.Logger, quit <-chan os.Signal) error {
+func runProcessing(
+	baseStorageURL string,
+	js jetstream.JetStream,
+	nc ncDrainer,
+	kv jetstream.KeyValue,
+	logger *slog.Logger,
+	quit <-chan os.Signal,
+) error {
 	logger.Debug("starting service")
 
-	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, logger)
+	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, kv, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
