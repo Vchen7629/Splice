@@ -56,6 +56,7 @@ func main() {
 	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
 		Bucket:      "job-status",
 		Description: "tracks job state across the pipeline",
+		TTL:         3 * time.Hour,
 	})
 	if err != nil {
 		logger.Error("failed to ccreate job-status kv bucket", "err", err)
