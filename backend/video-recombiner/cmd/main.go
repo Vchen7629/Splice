@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +24,7 @@ import (
 var osExit = os.Exit
 
 type Config struct {
+	HTTPPort	   string `envconfig:"HTTP_PORT" default:"9090"`
 	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
 	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
 	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
@@ -56,20 +59,13 @@ func main() {
 		return
 	}
 
-	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket:      "recombine-chunk-recieved",
-		Description: "tracks video chunk for the jobID is already recieved for idempotency",
-		TTL:         3 * time.Hour,
-	})
-	if err != nil {
-		logger.Error("failed to create recombine-chunk-recieved kv bucket", "err", err)
-		osExit(1)
-	}
+	msgRecievedKV := handler.CreateMsgRecievedKV(js, logger)
+	jobStatusKV := handler.ConnectJobStatusKV(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
-	err = runCombiner(js, nc, kv, logger, cfg.BaseStorageURL, quit)
+	
+	err = runCombiner(js, nc, msgRecievedKV, jobStatusKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -82,22 +78,57 @@ type ncDrainer interface {
 func runCombiner(
 	js jetstream.JetStream,
 	nc ncDrainer,
-	kv jetstream.KeyValue,
+	msgRecievedKV, jobStatusKV jetstream.KeyValue,
 	logger *slog.Logger,
-	baseStorageURL string,
+	baseStorageURL, httpPort string,
 	quit <-chan os.Signal,
 ) error {
 	logger.Debug("starting service...")
 
-	consCtx, err := handler.RecombineVideo(js, kv, logger, baseStorageURL)
+	server := startHttpServer(logger, httpPort)
+
+	consCtx, err := handler.RecombineVideo(js, msgRecievedKV, jobStatusKV, logger, baseStorageURL)
 	if err != nil {
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
 	}
 
 	<-quit
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = server.Shutdown(ctx)
+	if err != nil {
+		logger.Error("error shutting down http server", "err", err)
+	}
+
 	consCtx.Stop()
 	return nc.Drain()
+}
+
+func startHttpServer(logger *slog.Logger, httpPort string) *http.Server {
+	router := http.NewServeMux()
+
+	router.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "Healthy"})
+	})
+
+	server := &http.Server{
+		Addr:    ":" + httpPort,
+		Handler: router,
+	}
+
+	go func() {
+		fmt.Printf("server running on http://localhost:%s\n", httpPort)
+
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			logger.Error("http server error", "err", err)
+			osExit(1)
+		}
+	}()
+
+	return server
 }
 
 func loadConfig() (*Config, error) {
