@@ -53,15 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket:      "job-status",
-		Description: "tracks job state across the pipeline",
-		TTL:         3 * time.Hour,
-	})
-	if err != nil {
-		logger.Error("failed to ccreate job-status kv bucket", "err", err)
-		os.Exit(1)
-	}
+	kv := handler.ConnectJobStatusKV(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -98,7 +90,8 @@ func startHttpApi(logger *slog.Logger, js jetstream.JetStream, kv jetstream.KeyV
 
 	go func() {
 		fmt.Printf("server running on http://localhost:%s\n", cfg.HTTPPort)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http server error: %v", err)
 		}
 	}()

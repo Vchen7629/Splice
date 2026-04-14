@@ -81,19 +81,9 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := json.Marshal(struct {
-		State string `json:"state"`
-	}{State: "PROCESSING"})
+	err = updateJobStatusKV(r.Context(), result.JobID, v.KV, v.Logger)
 	if err != nil {
-		http.Error(w, "failed to build job status", http.StatusInternalServerError)
-		v.Logger.Error("error marshalling PROCESSING text", "err", err)
-		return
-	}
-
-	_, err = v.KV.Put(r.Context(), result.JobID, status)
-	if err != nil {
-		http.Error(w, "failed to record job status", http.StatusInternalServerError)
-		v.Logger.Error("failed to write job status to jetstream kv", "job_id", result.JobID, "err", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
