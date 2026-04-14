@@ -1,13 +1,32 @@
-package service
+package handler
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
+
+// Create the Msg Recieved KV store for idempotency
+func CreateMsgRecievedKV(js jetstream.JetStream, logger *slog.Logger) jetstream.KeyValue {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket:      "recombine-chunk-recieved",
+		Description: "tracks video chunk for the jobID is already recieved for idempotency",
+		TTL:         3 * time.Hour,
+	})
+	if err != nil {
+		logger.Error("failed to create recombine-chunk-recieved kv bucket", "err", err)
+		osExit(1)
+	}
+
+	return kv
+}
 
 // check if a jobID chunk already is recieved, returns a bool based on if it exists in the KV
 func CheckChunkRecieved(kv jetstream.KeyValue, jobID string, chunkIndex int) (bool, error) {
