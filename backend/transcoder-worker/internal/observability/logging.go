@@ -13,5 +13,5 @@ func StructuredLogger(prodMode bool) *slog.Logger {
 	}
 	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 
-	return slog.New(h).With("service", "video-recombiner")
+	return slog.New(h).With("service", "transcoder-worker")
 }
