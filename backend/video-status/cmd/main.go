@@ -19,9 +19,12 @@ import (
 )
 
 type Config struct {
-	NatsURL  string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode bool   `envconfig:"PROD_MODE" default:"false"`
-	HTTPPort string `envconfig:"HTTP_PORT" default:"8085"`
+	NatsURL  		 string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	ProdMode 		 bool   `envconfig:"PROD_MODE" default:"false"`
+	HTTPPort 		 string `envconfig:"HTTP_PORT" default:"8085"`
+	SceneDetectorURL string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
+	TranscoderURL	 string `envconfig:"TRANSCODER_URL" default:"http://localhost:9095"`
+	RecombinerURL	 string `envconfig:"RECOMBINER_URL" default:"http://localhost:9090"`
 }
 
 var osExit = os.Exit
@@ -46,28 +49,15 @@ func main() {
 		osExit(1)
 	}
 
-	err = handler.PreCreatePipelineConsumer(js)
-	if err != nil {
-		logger.Error("unable to precreate durable pipeline consumers", "err", err)
-		osExit(1)
-	}
+	jobStatusKV := handler.CreateJobStatusKV(js, logger)
 
-	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket:      "job-status",
-		Description: "tracks job state across the pipeline",
-	})
-	if err != nil {
-		logger.Error("failed to create job-status kv bucket", "err", err)
-		osExit(1)
-	}
-
-	advisorySub, err := handler.ListenAdvisoriesFailure(nc, js, kv, logger)
+	advisorySub, err := handler.ListenAdvisoriesFailure(nc, js, jobStatusKV, logger)
 	if err != nil {
 		logger.Error("failed to subscribe to advisories", "err", err)
 		osExit(1)
 	}
 
-	jobCompleteSub, err := handler.ListenJobComplete(js, kv, logger)
+	jobCompleteSub, err := handler.ListenJobComplete(js, jobStatusKV, logger)
 	if err != nil {
 		logger.Error("failed to subscribe to job complete stream", "err", err)
 		osExit(1)
@@ -78,7 +68,7 @@ func main() {
 
 	logger.Debug("starting service...")
 
-	server := startHttpApi(logger, kv, cfg)
+	server := startHttpApi(logger, jobStatusKV, cfg)
 
 	<-quit
 
@@ -102,10 +92,18 @@ func main() {
 	}
 }
 
-func startHttpApi(logger *slog.Logger, kv jetstream.KeyValue, cfg *Config) *http.Server {
+func startHttpApi(logger *slog.Logger, jobStatusKV jetstream.KeyValue, cfg *Config) *http.Server {
 	router := http.NewServeMux()
 
-	jh := &handler.JobStatusHandler{Logger: logger, KV: kv}
+	jh := &handler.JobStatusHandler{
+		Logger: logger, 
+		KV: 	jobStatusKV,
+		URLs: 	handler.ServiceURLs{
+			SceneDetector: cfg.SceneDetectorURL,
+			Transcoder:    cfg.TranscoderURL,
+			Recombiner:    cfg.RecombinerURL,
+		},
+	}
 
 	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 
