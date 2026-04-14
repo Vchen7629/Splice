@@ -14,8 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newHandler(kv *test.MockKV) *JobStatusHandler {
-	return &JobStatusHandler{Logger: test.SilentLogger(), KV: kv}
+func newHandler(kv *test.MockKV, urls ...ServiceURLs) *JobStatusHandler {
+	var u ServiceURLs
+	if len(urls) > 0 {
+		u = urls[0]
+	}
+	return &JobStatusHandler{Logger: test.SilentLogger(), KV: kv, URLs: u}
 }
 
 func mustMarshalStatus(t *testing.T, status JobStatus) []byte {
@@ -105,24 +109,30 @@ func TestPollJobStatus_States(t *testing.T) {
 	}{
 		{
 			name:      "PROCESSING state",
-			status:    JobStatus{State: StateProcessing},
+			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
 			wantState: StateProcessing,
 		},
 		{
 			name:      "COMPLETE state",
-			status:    JobStatus{State: StateComplete},
+			status:    JobStatus{State: StateComplete, Stage: "scene-detector"},
 			wantState: StateComplete,
 		},
 		{
 			name:       "FAILED state includes error message",
-			status:     JobStatus{State: StateFailed, Error: "pipeline failed at stage: transcoder-worker"},
+			status:     JobStatus{State: StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: transcoder-worker"},
 			wantState:  StateFailed,
 			wantErrMsg: "pipeline failed at stage: transcoder-worker",
 		},
 		{
 			name:      "FAILED with empty error field",
-			status:    JobStatus{State: StateFailed},
+			status:    JobStatus{State: StateFailed, Stage: "transcoder"},
 			wantState: StateFailed,
+		},
+		{
+			name:       "DEGRADED state includes error message",
+			status:     JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			wantState:  StateDegraded,
+			wantErrMsg: "service unavailable at stage: transcoder",
 		},
 	}
 
@@ -149,11 +159,12 @@ func TestPollJobStatus_States(t *testing.T) {
 
 func TestPollJobStatus_ResponseShape(t *testing.T) {
 	tests := []struct {
-		name  string
-		jobID string
+		name      string
+		jobID     string
+		wantStage string
 	}{
-		{"echoes job_id in response", "my-specific-job"},
-		{"echoes different job_id", "another-job-456"},
+		{"echoes job_id in response", "my-specific-job", ""},
+		{"echoes different job_id", "another-job-456", ""},
 	}
 
 	for _, tc := range tests {
@@ -174,6 +185,7 @@ func TestPollJobStatus_ResponseShape(t *testing.T) {
 			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 			assert.Equal(t, tc.jobID, resp.JobID)
 			assert.NotEmpty(t, resp.State)
+			assert.Equal(t, tc.wantStage, resp.Stage)
 		})
 	}
 }
@@ -183,9 +195,9 @@ func TestPollJobStatus_DroppedConnection(t *testing.T) {
 		name   string
 		status JobStatus
 	}{
-		{"does not panic on dropped connection (PROCESSING)", JobStatus{State: StateProcessing}},
-		{"does not panic on dropped connection (COMPLETE)", JobStatus{State: StateComplete}},
-		{"does not panic on dropped connection (FAILED)", JobStatus{State: StateFailed, Error: "something broke"}},
+		{"does not panic on dropped connection (PROCESSING)", JobStatus{State: StateProcessing, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (COMPLETE)", JobStatus{State: StateComplete, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (FAILED)", JobStatus{State: StateFailed, Stage: "transcoder", Error: "something broke"}},
 	}
 
 	for _, tc := range tests {
@@ -202,4 +214,84 @@ func TestPollJobStatus_DroppedConnection(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestPollJobStatus_HealthCheck(t *testing.T) {
+	healthySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer healthySrv.Close()
+
+	tests := []struct {
+		name      string
+		status    JobStatus
+		urls      ServiceURLs
+		wantState JobState
+	}{
+		{
+			name:      "PROCESSING with service down becomes DEGRADED",
+			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
+			urls:      ServiceURLs{Transcoder: "http://localhost:19999"},
+			wantState: StateDegraded,
+		},
+		{
+			name:      "PROCESSING with service up stays PROCESSING",
+			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
+			urls:      ServiceURLs{Transcoder: healthySrv.URL},
+			wantState: StateProcessing,
+		},
+		{
+			name:      "DEGRADED with service recovered returns PROCESSING",
+			status:    JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			urls:      ServiceURLs{Transcoder: healthySrv.URL},
+			wantState: StateProcessing,
+		},
+		{
+			name:      "COMPLETE skips health check",
+			status:    JobStatus{State: StateComplete},
+			urls:      ServiceURLs{},
+			wantState: StateComplete,
+		},
+		{
+			name:      "FAILED skips health check",
+			status:    JobStatus{State: StateFailed, Error: "pipeline failed"},
+			urls:      ServiceURLs{},
+			wantState: StateFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			kv := test.NewMockKV()
+			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
+			h := &JobStatusHandler{Logger: test.SilentLogger(), KV: kv, URLs: tc.urls}
+
+			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
+			req.SetPathValue("id", "job-1")
+			rec := httptest.NewRecorder()
+
+			h.PollJobStatus(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+			var resp jobStatusResponse
+			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+			assert.Equal(t, tc.wantState, resp.State)
+		})
+	}
+
+	t.Run("updateJobStatusKV failure during health check returns early", func(t *testing.T) {
+		kv := test.NewMockKV()
+		kv.Seed("job-1", mustMarshalStatus(t, JobStatus{State: StateProcessing, Stage: "scene-detector"}))
+		kv.PutErr = errors.New("kv unavailable")
+		h := &JobStatusHandler{Logger: test.SilentLogger(), KV: kv, URLs: ServiceURLs{Transcoder: "http://localhost:19999"}}
+
+		req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
+		req.SetPathValue("id", "job-1")
+		rec := httptest.NewRecorder()
+
+		h.PollJobStatus(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Empty(t, rec.Body.String())
+	})
 }
