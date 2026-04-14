@@ -15,7 +15,7 @@ const (
 	StateProcessing JobState = "PROCESSING"
 	StateComplete   JobState = "COMPLETE"
 	StateFailed     JobState = "FAILED"
-	StateDegraded 	JobState = "DEGRADED"
+	StateDegraded   JobState = "DEGRADED"
 )
 
 type JobStatus struct {
@@ -62,8 +62,12 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	if status.State == StateProcessing || status.State == StateDegraded {
-		status = checkServiceHealth(status, j.URLs)
-		kh.updateJobStatusKV(r.Context(), jobID, status)
+		status = checkServiceHealth(status, j.URLs, kh.logger)
+		err := kh.updateJobStatusKV(r.Context(), jobID, status)
+		if err != nil {
+			j.Logger.Error("failed to update job status KV", "job_id", jobID, "err", err)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -73,16 +77,16 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func checkServiceHealth(status JobStatus, urls ServiceURLs) JobStatus {
+func checkServiceHealth(status JobStatus, urls ServiceURLs, logger *slog.Logger) JobStatus {
 	serviceURL, ok := urls.forStage(status.Stage)
 	if !ok {
 		return status
 	}
 
-	if isServiceHealthy(serviceURL) {
+	if isServiceHealthy(serviceURL, logger) {
 		status.State = StateProcessing
 		status.Error = ""
-	} else { 
+	} else {
 		status.State = StateDegraded
 		status.Error = fmt.Sprintf("service unavailable at stage: %s", nextService[status.Stage])
 	}

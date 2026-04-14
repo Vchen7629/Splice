@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -9,15 +10,15 @@ import (
 // from the current processing stage and used for the
 // error msg
 var nextService = map[string]string{
-	"upload":	      "scene-detector",
+	"upload":         "scene-detector",
 	"scene-detector": "transcoder",
-	"transcoder":	  "video-recombiner",
+	"transcoder":     "video-recombiner",
 }
 
 type ServiceURLs struct {
 	SceneDetector string
-	Transcoder	  string
-	Recombiner 	  string
+	Transcoder    string
+	Recombiner    string
 }
 
 func (s ServiceURLs) forStage(stage string) (string, bool) {
@@ -27,23 +28,31 @@ func (s ServiceURLs) forStage(stage string) (string, bool) {
 	}
 
 	urls := map[string]string{
-		"scene-detector": 	s.SceneDetector,
-		"transcoder":	  	s.Transcoder,
+		"scene-detector":   s.SceneDetector,
+		"transcoder":       s.Transcoder,
 		"video-recombiner": s.Recombiner,
 	}
 
 	url, ok := urls[next]
-	return url, ok
+	if !ok || url == "" {
+		return "", false
+	}
+	return url, true
 }
 
-func isServiceHealthy(baseURL string) bool {
+func isServiceHealthy(baseURL string, logger *slog.Logger) bool {
 	c := http.Client{Timeout: 3 * time.Second}
 
 	resp, err := c.Get(baseURL + "/health")
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			logger.Error("error closing resp body", "err", err)
+		}
+	}()
 
 	return resp.StatusCode == http.StatusOK
 }
