@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"transcoder-worker/internal/handler"
+	"transcoder-worker/internal/observability"
 	"transcoder-worker/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -26,6 +29,7 @@ type Config struct {
 	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
 	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
 	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
+	HTTPPort	   string `envconfig:"HTTP_PORT" default:"9095"`
 }
 
 func main() {
@@ -34,7 +38,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := newLogger(cfg)
+	logger := observability.StructuredLogger(cfg.ProdMode)
 
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {
@@ -57,20 +61,13 @@ func main() {
 		return
 	}
 
-	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket:      "transcode-chunk-job-processed",
-		Description: "tracks already completed video chunk for the jobID is already processed for idempotency",
-		TTL:         3 * time.Hour,
-	})
-	if err != nil {
-		logger.Error("failed to ccreate transcode-chunk-job-processed kv bucket", "err", err)
-		osExit(1)
-	}
+	processedKV := handler.CreateMsgProcessedKV(js, logger)
+	jobStatusKV := handler.ConnectJobStatusKV(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(cfg.BaseStorageURL, js, nc, kv, logger, quit)
+	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobStatusKV, js, nc, logger, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -82,34 +79,60 @@ type ncDrainer interface {
 
 // run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
 func runProcessing(
-	baseStorageURL string,
+	baseStorageURL, httpPort string,
+	processedKV, jobStatusKV jetstream.KeyValue,
 	js jetstream.JetStream,
 	nc ncDrainer,
-	kv jetstream.KeyValue,
 	logger *slog.Logger,
 	quit <-chan os.Signal,
 ) error {
 	logger.Debug("starting service")
 
-	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, kv, logger)
+	server := startHttpServer(logger, httpPort)
+
+	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobStatusKV, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
 
 	<-quit
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = server.Shutdown(ctx)
+	if err != nil {
+		logger.Error("error shutting down http server", "err", err)
+	}
+
 	consCtx.Stop() // stop recieving new msgs from jetstream
 	return nc.Drain()
 }
 
-func newLogger(cfg *Config) *slog.Logger {
-	level := slog.LevelDebug
-	if cfg.ProdMode {
-		level = slog.LevelInfo
-	}
-	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+func startHttpServer(logger *slog.Logger, httpPort string) *http.Server {
+	router := http.NewServeMux()
 
-	return slog.New(h).With("service", "transcoder-worker")
+	router.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "Healthy"})
+	})
+
+	server := &http.Server{
+		Addr:    ":" + httpPort,
+		Handler: router,
+	}
+
+	go func() {
+		fmt.Printf("server running on http://localhost:%s\n", httpPort)
+
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			logger.Error("http server error", "err", err)
+			osExit(1)
+		}
+	}()
+
+	return server
 }
 
 func loadConfig() (*Config, error) {
