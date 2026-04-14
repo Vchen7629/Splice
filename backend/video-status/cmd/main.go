@@ -19,12 +19,12 @@ import (
 )
 
 type Config struct {
-	NatsURL  		 string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode 		 bool   `envconfig:"PROD_MODE" default:"false"`
-	HTTPPort 		 string `envconfig:"HTTP_PORT" default:"8085"`
+	NatsURL          string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	ProdMode         bool   `envconfig:"PROD_MODE" default:"false"`
+	HTTPPort         string `envconfig:"HTTP_PORT" default:"8085"`
 	SceneDetectorURL string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
-	TranscoderURL	 string `envconfig:"TRANSCODER_URL" default:"http://localhost:9095"`
-	RecombinerURL	 string `envconfig:"RECOMBINER_URL" default:"http://localhost:9090"`
+	TranscoderURL    string `envconfig:"TRANSCODER_URL" default:"http://localhost:9095"`
+	RecombinerURL    string `envconfig:"RECOMBINER_URL" default:"http://localhost:9090"`
 }
 
 var osExit = os.Exit
@@ -96,9 +96,9 @@ func startHttpApi(logger *slog.Logger, jobStatusKV jetstream.KeyValue, cfg *Conf
 	router := http.NewServeMux()
 
 	jh := &handler.JobStatusHandler{
-		Logger: logger, 
-		KV: 	jobStatusKV,
-		URLs: 	handler.ServiceURLs{
+		Logger: logger,
+		KV:     jobStatusKV,
+		URLs: handler.ServiceURLs{
 			SceneDetector: cfg.SceneDetectorURL,
 			Transcoder:    cfg.TranscoderURL,
 			Recombiner:    cfg.RecombinerURL,
