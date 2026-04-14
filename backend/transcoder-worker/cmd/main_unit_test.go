@@ -3,10 +3,10 @@
 package main
 
 import (
-	"context"
-	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 	"transcoder-worker/internal/test"
@@ -20,32 +20,13 @@ func okJS() *test.MockJS {
 	return &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{}}}
 }
 
-func okKV() *test.MockKV {
-	return &test.MockKV{}
-}
-
-func TestNewLogger(t *testing.T) {
-	t.Run("dev mode enables debug level", func(t *testing.T) {
-		logger := newLogger(&Config{ProdMode: false})
-
-		assert.True(t, logger.Enabled(context.Background(), slog.LevelDebug))
-	})
-
-	t.Run("prod mode disables debug level", func(t *testing.T) {
-		logger := newLogger(&Config{ProdMode: true})
-
-		assert.False(t, logger.Enabled(context.Background(), slog.LevelDebug))
-		assert.True(t, logger.Enabled(context.Background(), slog.LevelInfo))
-	})
-}
-
 func TestRunProcessing(t *testing.T) {
 	t.Run("consumer setup error returns error", func(t *testing.T) {
 		js := &test.MockJS{JStreamNameErr: assert.AnError}
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runProcessing("http://storage", js, nc, okKV(), test.SilentLogger(), quit)
+		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, js, nc, test.SilentLogger(), quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -56,7 +37,7 @@ func TestRunProcessing(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing("http://storage", okJS(), &test.MockDrainer{}, okKV(), test.SilentLogger(), quit)
+			done <- runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), &test.MockDrainer{}, test.SilentLogger(), quit)
 		}()
 
 		select {
@@ -81,7 +62,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", js, &test.MockDrainer{}, okKV(), test.SilentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, js, &test.MockDrainer{}, test.SilentLogger(), quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -92,9 +73,26 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", okJS(), nc, okKV(), test.SilentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), nc, test.SilentLogger(), quit))
 
 		assert.True(t, nc.DrainCalled)
+	})
+
+	t.Run("server shuts down when consumer setup fails", func(t *testing.T) {
+		ln, err := net.Listen("tcp", ":0")
+		require.NoError(t, err)
+		port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+		ln.Close()
+
+		js := &test.MockJS{JStreamNameErr: assert.AnError}
+		quit := make(chan os.Signal, 1)
+
+		runProcessing("http://storage", port, &test.MockKV{}, &test.MockKV{}, js, &test.MockDrainer{}, test.SilentLogger(), quit) //nolint:errcheck
+
+		// If server was properly shut down, the port should be free to bind again.
+		ln2, err := net.Listen("tcp", ":"+port)
+		require.NoError(t, err, "port should be free after server shutdown")
+		ln2.Close()
 	})
 
 	t.Run("drain error is returned", func(t *testing.T) {
@@ -102,7 +100,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runProcessing("http://storage", okJS(), nc, okKV(), test.SilentLogger(), quit)
+		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), nc, test.SilentLogger(), quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
@@ -144,7 +142,7 @@ func TestLoadConfig(t *testing.T) {
 
 func TestMainFunc(t *testing.T) {
 	t.Run("exits on storage health check failure", func(t *testing.T) {
-		code := patchExit(t)
+		code := patchOsExit(t)
 		writeEnvFile(t, "BASE_STORAGE_URL=http://localhost:1\n")
 
 		main()

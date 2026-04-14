@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
+	"strconv"
 	"testing"
 	"time"
 	"transcoder-worker/internal/service"
@@ -44,4 +46,14 @@ func AssertNacked(t *testing.T, js jetstream.JetStream, msg string) {
 		}
 		return info.NumAckPending > 0
 	}, 30*time.Second, 200*time.Millisecond, msg)
+}
+
+func FreePort(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+	err = ln.Close()
+	require.NoError(t, err)
+	return port
 }

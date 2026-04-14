@@ -37,11 +37,12 @@ func TestRunProcessingI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js)
+		jobStatusKV := test.SetupJobStatusKV(t, js)
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, js, nc, kv, test.SilentLogger(), quit)
+			done <- runProcessing(sharedFilerURL, "0", kv, jobStatusKV, js, nc, test.SilentLogger(), quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -82,9 +83,10 @@ func TestRunProcessingI(t *testing.T) {
 
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
+		jobStatusKV := test.SetupJobStatusKV(t, js)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, js, nc, kv, test.SilentLogger(), quit)
+			done <- runProcessing(sharedFilerURL, "0", kv, jobStatusKV, js, nc, test.SilentLogger(), quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -140,7 +142,9 @@ func TestRunProcessingI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runProcessing(sharedFilerURL, js, nc, &test.MockKV{}, test.SilentLogger(), quit)
+		jobStatusKV := test.SetupJobStatusKV(t, js)
+
+		err = runProcessing(sharedFilerURL, "0", &test.MockKV{}, jobStatusKV, js, nc, test.SilentLogger(), quit)
 
 		assert.Error(t, err)
 	})
@@ -161,8 +165,8 @@ func TestKVSetup(t *testing.T) {
 
 func TestMainI(t *testing.T) {
 	t.Run("exits on NATS connect error", func(t *testing.T) {
-		code := patchExit(t)
-		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\n", sharedFilerURL))
+		code := patchOsExit(t)
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\nHTTP_PORT=0\n", sharedFilerURL))
 
 		main()
 
@@ -178,9 +182,17 @@ func TestMainI(t *testing.T) {
 		natsURL, err := container.ConnectionString(ctx)
 		require.NoError(t, err)
 
-		// No stream configured — ConsumeVideoChunk fails, main() logs the error and returns (no os.Exit)
-		code := patchExit(t)
-		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\n", sharedFilerURL, natsURL))
+		// Pre-create job-status bucket (video-status would have done this in prod).
+		// No stream configured — ConsumeVideoChunk fails, main() logs error and returns without osExit.
+		setupNC, err := nats.Connect(natsURL)
+		require.NoError(t, err)
+		defer setupNC.Close()
+		setupJS, err := jetstream.New(setupNC)
+		require.NoError(t, err)
+		test.SetupJobStatusKV(t, setupJS)
+
+		code := patchOsExit(t)
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\nHTTP_PORT=0\n", sharedFilerURL, natsURL))
 
 		main()
 
