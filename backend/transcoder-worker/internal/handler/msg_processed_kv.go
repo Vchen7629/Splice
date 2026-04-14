@@ -26,6 +26,7 @@ func CreateMsgProcessedKV(js jetstream.JetStream, logger *slog.Logger) jetstream
 	if err != nil {
 		logger.Error("failed to create transcode-chunk-job-processed kv bucket", "err", err)
 		osExit(1)
+		return nil
 	}
 
 	return kv

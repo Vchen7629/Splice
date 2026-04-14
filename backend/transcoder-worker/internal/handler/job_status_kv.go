@@ -18,6 +18,7 @@ func ConnectJobStatusKV(js jetstream.JetStream, logger *slog.Logger) jetstream.K
 	if err != nil {
 		logger.Error("failed to create recombine-chunk-recieved kv bucket", "err", err)
 		osExit(1)
+		return nil
 	}
 
 	return kv
