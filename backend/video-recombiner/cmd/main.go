@@ -1,16 +1,12 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 	"video-recombiner/internal/handler"
 	"video-recombiner/internal/observability"
 	"video-recombiner/internal/storage"
@@ -24,7 +20,7 @@ import (
 var osExit = os.Exit
 
 type Config struct {
-	HTTPPort	   string `envconfig:"HTTP_PORT" default:"9090"`
+	HTTPPort       string `envconfig:"HTTP_PORT" default:"9090"`
 	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
 	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
 	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
@@ -64,7 +60,7 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	
+
 	err = runCombiner(js, nc, msgRecievedKV, jobStatusKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
@@ -85,50 +81,20 @@ func runCombiner(
 ) error {
 	logger.Debug("starting service...")
 
-	server := startHttpServer(logger, httpPort)
+	server := handler.StartHttpServer(logger, httpPort)
 
 	consCtx, err := handler.RecombineVideo(js, msgRecievedKV, jobStatusKV, logger, baseStorageURL)
 	if err != nil {
+		handler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
 	}
 
 	<-quit
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	err = server.Shutdown(ctx)
-	if err != nil {
-		logger.Error("error shutting down http server", "err", err)
-	}
+	handler.ShutdownHttpServer(server, logger)
 
 	consCtx.Stop()
 	return nc.Drain()
-}
-
-func startHttpServer(logger *slog.Logger, httpPort string) *http.Server {
-	router := http.NewServeMux()
-
-	router.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "Healthy"})
-	})
-
-	server := &http.Server{
-		Addr:    ":" + httpPort,
-		Handler: router,
-	}
-
-	go func() {
-		fmt.Printf("server running on http://localhost:%s\n", httpPort)
-
-		err := server.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			logger.Error("http server error", "err", err)
-			osExit(1)
-		}
-	}()
-
-	return server
 }
 
 func loadConfig() (*Config, error) {
