@@ -83,7 +83,7 @@ func (v *VideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 
 	err = updateJobStatusKV(r.Context(), result.JobID, v.KV, v.Logger)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to record job status", http.StatusInternalServerError)
 		return
 	}
 
