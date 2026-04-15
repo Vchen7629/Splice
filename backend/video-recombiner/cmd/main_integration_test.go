@@ -37,11 +37,12 @@ func TestRunCombinerI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js)
+		jobStatusKV := test.SetupJobStatusKV(t, js)
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, kv, test.SilentLogger(), sharedFilerURL, quit)
+			done <- runCombiner(js, nc, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL, "0", quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -73,7 +74,7 @@ func TestRunCombinerI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runCombiner(js, nc, nil, test.SilentLogger(), sharedFilerURL, quit)
+		err = runCombiner(js, nc, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), sharedFilerURL, "0", quit)
 
 		assert.Error(t, err)
 	})
@@ -86,6 +87,7 @@ func TestRunCombinerI(t *testing.T) {
 
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js)
+		jobStatusKV := test.SetupJobStatusKV(t, js)
 
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
@@ -110,7 +112,7 @@ func TestRunCombinerI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, kv, test.SilentLogger(), sharedFilerURL, quit)
+			done <- runCombiner(js, nc, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL, "0", quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -181,7 +183,7 @@ func TestMainI(t *testing.T) {
 		assert.Equal(t, 1, *code)
 	})
 
-	t.Run("no stream logs error and returns", func(t *testing.T) {
+	t.Run("reaches runCombiner and logs error on no stream", func(t *testing.T) {
 		ctx := context.Background()
 		container, err := natstc.Run(ctx, "nats:2.10-alpine")
 		require.NoError(t, err)
@@ -190,8 +192,16 @@ func TestMainI(t *testing.T) {
 		natsURL, err := container.ConnectionString(ctx)
 		require.NoError(t, err)
 
+		// Pre-create job-status bucket
+		setupNC, err := nats.Connect(natsURL)
+		require.NoError(t, err)
+		defer setupNC.Close()
+		setupJS, err := jetstream.New(setupNC)
+		require.NoError(t, err)
+		test.SetupJobStatusKV(t, setupJS)
+
 		code := patchExit(t)
-		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\n", sharedFilerURL, natsURL))
+		writeEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\nHTTP_PORT=0\n", sharedFilerURL, natsURL))
 
 		main()
 

@@ -123,3 +123,15 @@ func (m *MockDrainer) Drain() error {
 	m.DrainCalled = true
 	return m.DrainErr
 }
+
+type MockMsg struct {
+	jetstream.Msg
+	Payload   []byte
+	AckErr    error
+	NakCalled bool
+	AckCalled bool
+}
+
+func (m *MockMsg) Data() []byte { return m.Payload }
+func (m *MockMsg) Nak() error   { m.NakCalled = true; return nil }
+func (m *MockMsg) Ack() error   { m.AckCalled = true; return m.AckErr }

@@ -78,3 +78,12 @@ func SetupKV(t *testing.T, js jetstream.JetStream) jetstream.KeyValue {
 	require.NoError(t, err)
 	return kv
 }
+
+func SetupJobStatusKV(t *testing.T, js jetstream.JetStream) jetstream.KeyValue {
+	t.Helper()
+	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
+		Bucket: "job-status",
+	})
+	require.NoError(t, err)
+	return kv
+}
