@@ -20,6 +20,7 @@ jobs:
         transcoder_worker: ${{ steps.changes.outputs.transcoder_worker }}
         video_recombiner: ${{ steps.changes.outputs.video_recombiner }}
         video_upload: ${{ steps.changes.outputs.video_upload }}
+        video_status: ${{ steps.changes.outputs.video_status }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
