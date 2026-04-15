@@ -1,9 +1,8 @@
-import threading
-import json
 from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
 import threading
 import json
+
 
 class HealthEnpointHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
@@ -16,6 +15,7 @@ class HealthEnpointHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+
 
 def start_health_server(port: int) -> HTTPServer:
     server = HTTPServer(("", port), HealthEnpointHandler)

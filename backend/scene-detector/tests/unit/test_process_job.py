@@ -1,7 +1,7 @@
 from scenedetect import VideoOpenFailure
 from unittest.mock import patch
 from src.processing.job import process_job
-from src.nats.messages import SceneSplitMessage, VideoChunkMessage
+from src.handler.messages import SceneSplitMessage, VideoChunkMessage
 import pytest
 
 METADATA = SceneSplitMessage(

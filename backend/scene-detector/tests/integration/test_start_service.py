@@ -1,8 +1,9 @@
-from unittest.mock import patch, AsyncMock
-from nats.js import JetStreamContext
 from typing import Any
+from unittest.mock import patch
+from unittest.mock import AsyncMock
+from nats.js import JetStreamContext
 from src.service import start_service
-from src.nats.messages import VideoChunkMessage
+from src.handler.messages import VideoChunkMessage
 from src.core.settings import settings
 import asyncio
 import json
@@ -12,17 +13,18 @@ import uuid
 
 @pytest.mark.asyncio
 async def test_full_flow_publishes_chunks_downstream(
-    js_context: tuple[Any, JetStreamContext],
+    patched_start_service: tuple[Any, JetStreamContext],
     nats_video_chunks_subscriber: list[Any],
     monkeypatch: Any,
 ) -> None:
     """Publishes to upstream topic -> process_job runs -> chunks appear on downstream topic"""
-    nc, js = js_context
+    nc, js = patched_start_service
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.SCENE_SPLIT_SUBJECT", settings.SCENE_SPLIT_SUBJECT
+        "src.handler.subscriber.settings.SCENE_SPLIT_SUBJECT",
+        settings.SCENE_SPLIT_SUBJECT,
     )
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.NATS_SUB_QUEUE_NAME", "test-full-flow-worker"
+        "src.handler.subscriber.settings.NATS_SUB_QUEUE_NAME", "test-full-flow-worker"
     )
     nc.drain = AsyncMock()
 
@@ -47,20 +49,18 @@ async def test_full_flow_publishes_chunks_downstream(
     async def fake_process_job(_metadata: Any) -> list[VideoChunkMessage]:
         return fake_chunks
 
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.nats_connect", return_value=(nc, js)),
-        patch("src.nats.subscriber.process_job", side_effect=fake_process_job),
-    ):
+    with patch("src.handler.subscriber.process_job", side_effect=fake_process_job):
         task = asyncio.create_task(start_service())
-        payload = json.dumps(
-            {
-                "job_id": job_id,
-                "storage_url": "/fake/video.mp4",
-                "target_resolution": "480p",
-            }
-        ).encode()
-        await nc.publish(settings.SCENE_SPLIT_SUBJECT, payload)
+        await nc.publish(
+            settings.SCENE_SPLIT_SUBJECT,
+            json.dumps(
+                {
+                    "job_id": job_id,
+                    "storage_url": "/fake/video.mp4",
+                    "target_resolution": "480p",
+                }
+            ).encode(),
+        )
         await asyncio.sleep(0.5)
         task.cancel()
         try:
@@ -87,76 +87,58 @@ async def test_full_flow_publishes_chunks_downstream(
 
 @pytest.mark.asyncio
 async def test_raises_runtime_error_when_video_chunks_stream_not_found(
-    js_context: tuple[Any, JetStreamContext],
+    patched_start_service: tuple[Any, JetStreamContext],
     monkeypatch: Any,
 ) -> None:
     """Raises RuntimeError when no NATS stream covers the downstream chunks subject"""
-    nc, js = js_context
+    nc, js = patched_start_service
     monkeypatch.setattr(
         "src.service.settings.VIDEO_CHUNKS_SUBJECT", "nonexistent.subject.xyz"
     )
     nc.drain = AsyncMock()
 
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.nats_connect", return_value=(nc, js)),
-        pytest.raises(RuntimeError, match="No stream found for video chunks"),
-    ):
+    with pytest.raises(RuntimeError, match="No stream found for video chunks"):
         await start_service()
 
 
 @pytest.mark.asyncio
 async def test_drain_called_in_finally_when_raw_videos_raises(
-    js_context: tuple[Any, JetStreamContext],
+    patched_start_service: tuple[Any, JetStreamContext],
+    spy_drain: tuple[Any, list[bool]],
 ) -> None:
     """nc.drain() is called in the finally block even when raw_videos raises"""
-    nc, js = js_context
-    drain_called = False
+    nc, js = patched_start_service  # this isnt used? maybe we dont need it
+    _, called = spy_drain
 
-    async def spy_drain() -> None:
-        nonlocal drain_called
-        drain_called = True
-        # Don't call the real drain — the connection is shared with the fixture
-
-    nc.drain = spy_drain
-
-    async def failing_raw_videos(_js: JetStreamContext, _kv: Any) -> None:
+    async def failing_raw_videos(
+        _js: JetStreamContext, _kv: Any, _job_status_kv: Any
+    ) -> None:
         raise RuntimeError("subscriber failed unexpectedly")
 
     with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.nats_connect", return_value=(nc, js)),
         patch("src.service.raw_videos", side_effect=failing_raw_videos),
         pytest.raises(RuntimeError, match="subscriber failed unexpectedly"),
     ):
         await start_service()
 
-    assert drain_called
+    assert called
 
 
 @pytest.mark.asyncio
 async def test_drain_called_in_finally_on_cancellation(
-    js_context: tuple[Any, JetStreamContext],
+    patched_start_service: tuple[Any, JetStreamContext],
+    spy_drain: tuple[Any, list[bool]],
 ) -> None:
     """nc.drain() is called in the finally block when the service task is cancelled"""
-    nc, js = js_context
-    drain_called = False
+    nc, js = patched_start_service  # this isnt used? maybe we dont need it
+    _, called = spy_drain
 
-    async def spy_drain() -> None:
-        nonlocal drain_called
-        drain_called = True
-        # Don't call the real drain — the connection is shared with the fixture
-
-    nc.drain = spy_drain
-
-    async def hanging_raw_videos(_js: JetStreamContext, _kv: Any) -> None:
+    async def hanging_raw_videos(
+        _js: JetStreamContext, _kv: Any, _job_status_kv: Any
+    ) -> None:
         await asyncio.sleep(30)
 
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.nats_connect", return_value=(nc, js)),
-        patch("src.service.raw_videos", side_effect=hanging_raw_videos),
-    ):
+    with patch("src.service.raw_videos", side_effect=hanging_raw_videos):
         task = asyncio.create_task(start_service())
         await asyncio.sleep(0.05)
         task.cancel()
@@ -165,24 +147,25 @@ async def test_drain_called_in_finally_on_cancellation(
         except asyncio.CancelledError:
             pass
 
-    assert drain_called
+    assert called
 
 
 @pytest.mark.asyncio
 async def test_service_can_be_cancelled_while_process_job_is_running(
-    js_context: tuple[Any, JetStreamContext],
+    patched_start_service: tuple[Any, JetStreamContext],
     monkeypatch: Any,
 ) -> None:
     """Service cancels promptly mid-processing, proving process_job does not block the event loop"""
-    nc, js = js_context
+    nc, _ = patched_start_service
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.SCENE_SPLIT_SUBJECT", settings.SCENE_SPLIT_SUBJECT
+        "src.handler.subscriber.settings.SCENE_SPLIT_SUBJECT",
+        settings.SCENE_SPLIT_SUBJECT,
     )
     # Unique consumer name: prevents unacked messages from leaking into other tests' durable consumers
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.NATS_SUB_QUEUE_NAME", "test-cancellation-worker"
+        "src.handler.subscriber.settings.NATS_SUB_QUEUE_NAME",
+        "test-cancellation-worker",
     )
-    # No-op drain: prevents start_service's finally block from closing the shared fixture connection
     nc.drain = AsyncMock()
 
     processing_started = asyncio.Event()
@@ -192,11 +175,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
         await asyncio.sleep(30)
         return []
 
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.nats_connect", return_value=(nc, js)),
-        patch("src.nats.subscriber.process_job", side_effect=slow_process_job),
-    ):
+    with patch("src.handler.subscriber.process_job", side_effect=slow_process_job):
         task = asyncio.create_task(start_service())
         payload = json.dumps(
             {
@@ -212,7 +191,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
         try:
             await asyncio.wait_for(task, timeout=2.0)
         except asyncio.CancelledError:
-            pass  # expected — task was properly cancelled
+            pass
         except asyncio.TimeoutError:
             pytest.fail(
                 "Service did not cancel within 2 seconds — process_job may be blocking the event loop"
@@ -221,11 +200,9 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
 @pytest.mark.asyncio
 async def test_raises_before_nats_when_storage_unreachable(
-    js_context: tuple[Any, JetStreamContext],
     monkeypatch: Any,
 ) -> None:
     """Service raises and never connects to NATS when SeaweedFS is unreachable"""
-    nc, js = js_context
     monkeypatch.setattr(
         "src.storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
     )

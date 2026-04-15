@@ -41,10 +41,12 @@ async def start_service() -> None:
     except js_errors.APIError as e:
         raise RuntimeError(f"failed to create scene-split-processed KV bucket: {e}")
 
-    try: 
+    try:
         job_status_kv = await js.key_value("job-status")
     except js_errors.NotFoundError:
-        raise RuntimeError("job-status KV bucket not found, check video-status is running")
+        raise RuntimeError(
+            "job-status KV bucket not found, check video-status is running"
+        )
 
     try:
         await raw_videos(js, msg_processed_kv, job_status_kv)
