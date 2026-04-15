@@ -16,7 +16,7 @@ const subSubject = "jobs.chunks.complete"
 
 // recombines video chunks back into one video
 func RecombineVideo(
-	js jetstream.JetStream, kv jetstream.KeyValue, logger *slog.Logger, baseStorageURL string,
+	js jetstream.JetStream, msgRecievedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
@@ -58,7 +58,7 @@ func RecombineVideo(
 			return
 		}
 
-		recieved, err := service.CheckChunkRecieved(kv, payload.JobID, payload.ChunkIndex)
+		recieved, err := CheckChunkRecieved(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk recieved", "err", err)
 			return
@@ -74,6 +74,11 @@ func RecombineVideo(
 			return
 		}
 
+		err = UpdateJobStatusKV(jobStatusKV, payload.JobID, logger)
+		if err != nil {
+			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
+		}
+
 		ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.StorageURL, payload.TotalChunks)
 
 		err = msg.Ack()
@@ -82,7 +87,7 @@ func RecombineVideo(
 			return
 		}
 
-		err = service.AddChunkRecieved(kv, payload.JobID, payload.ChunkIndex)
+		err = AddChunkRecieved(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as recieved", "err", err)
 			return

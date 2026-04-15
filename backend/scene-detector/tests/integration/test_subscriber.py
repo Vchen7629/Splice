@@ -1,13 +1,44 @@
 from typing import Any
 from unittest.mock import patch
-from nats.js.client import JetStreamContext
+from nats.js.kv import KeyValue
 from nats.js.api import KeyValueConfig
-from src.nats.subscriber import raw_videos
-from src.nats.messages import SceneSplitMessage
+from nats.js.client import JetStreamContext
+from src.handler.subscriber import raw_videos
+from src.handler.messages import SceneSplitMessage
 import json
 import pytest
 import asyncio
 import uuid
+
+
+async def _run_subscriber(
+    nc: Any,
+    js: JetStreamContext,
+    kv: KeyValue,
+    job_status_kv: KeyValue,
+    payload: bytes,
+) -> list[Any]:
+    """
+    Launch raw_videos as a task, pub one msg, wait, then cancel
+    returrns all processed jobs as a side effect of the process_job
+    """
+    processed_job: list[Any] = []
+
+    async def fake_process_job(metadata: Any) -> list[Any]:
+        processed_job.append(metadata)
+        return []
+
+    with patch("src.handler.subscriber.process_job", side_effect=fake_process_job):
+        task = asyncio.create_task(raw_videos(js, kv, job_status_kv))
+        await nc.publish("jobs.video.scene-split", payload)
+        await asyncio.sleep(0.5)  # let the subscriber process the message
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    return processed_job
 
 
 @pytest.mark.asyncio
@@ -16,14 +47,19 @@ async def test_processes_published_message(
 ) -> None:
     """Verifies subscriber receives a message and calls process_job with correct data"""
     nc, js = js_context
+
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.SCENE_SPLIT_SUBJECT", "jobs.video.scene-split"
+        "src.handler.subscriber.settings.SCENE_SPLIT_SUBJECT", "jobs.video.scene-split"
     )
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.NATS_SUB_QUEUE_NAME", "scene-detector-workers"
+        "src.handler.subscriber.settings.NATS_SUB_QUEUE_NAME", "scene-detector-workers"
     )
+
     kv = await js.create_key_value(
         config=KeyValueConfig(bucket="test-scene-split-status-1")
+    )
+    job_status_kv = await js.create_key_value(
+        config=KeyValueConfig(bucket="test-job-status-sub-1")
     )
 
     job_id = str(uuid.uuid4())
@@ -34,24 +70,11 @@ async def test_processes_published_message(
             "target_resolution": "480p",
         }
     ).encode()
-    received: list[Any] = []
 
-    async def fake_process_job(metadata: Any) -> list[Any]:
-        received.append(metadata)
-        return []
+    recieved = await _run_subscriber(nc, js, kv, job_status_kv, payload)
 
-    with patch("src.nats.subscriber.process_job", side_effect=fake_process_job):
-        task = asyncio.create_task(raw_videos(js, kv))
-        await nc.publish("jobs.video.scene-split", payload)
-        await asyncio.sleep(0.5)  # let the subscriber process the message
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-    assert len(received) == 1
-    assert received[0] == SceneSplitMessage(
+    assert len(recieved) == 1
+    assert recieved[0] == SceneSplitMessage(
         job_id=job_id, storage_url="/fake/video.mp4", target_resolution="480p"
     )
 
@@ -62,15 +85,20 @@ async def test_skips_redelivered_message_for_already_processed_job(
 ) -> None:
     """Verifies subscriber acks and skips processing when job_id already exists in KV"""
     nc, js = js_context
+
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.SCENE_SPLIT_SUBJECT", "jobs.video.scene-split"
+        "src.handler.subscriber.settings.SCENE_SPLIT_SUBJECT", "jobs.video.scene-split"
     )
     monkeypatch.setattr(
-        "src.nats.subscriber.settings.NATS_SUB_QUEUE_NAME",
+        "src.handler.subscriber.settings.NATS_SUB_QUEUE_NAME",
         "scene-detector-workers-idempotency",
     )
+
     kv = await js.create_key_value(
         config=KeyValueConfig(bucket="test-scene-split-status-2")
+    )
+    job_status_kv = await js.create_key_value(
+        config=KeyValueConfig(bucket="test-job-status-sub-2")
     )
     await kv.put("job-already-done", b"done")
 
@@ -81,20 +109,7 @@ async def test_skips_redelivered_message_for_already_processed_job(
             "target_resolution": "480p",
         }
     ).encode()
-    process_calls: list[Any] = []
 
-    async def fake_process_job(metadata: Any) -> list[Any]:
-        process_calls.append(metadata)
-        return []
-
-    with patch("src.nats.subscriber.process_job", side_effect=fake_process_job):
-        task = asyncio.create_task(raw_videos(js, kv))
-        await nc.publish("jobs.video.scene-split", payload)
-        await asyncio.sleep(0.5)
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    process_calls = await _run_subscriber(nc, js, kv, job_status_kv, payload)
 
     assert len(process_calls) == 0

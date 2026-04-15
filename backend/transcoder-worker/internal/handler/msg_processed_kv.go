@@ -1,13 +1,36 @@
-package service
+package handler
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
+
+var osExit = os.Exit
+
+// Create the Msg Processed KV store for idempotency
+func CreateMsgProcessedKV(js jetstream.JetStream, logger *slog.Logger) jetstream.KeyValue {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket:      "transcode-chunk-job-processed",
+		Description: "tracks already completed video chunk for the jobID is already processed for idempotency",
+		TTL:         3 * time.Hour,
+	})
+	if err != nil {
+		logger.Error("failed to create transcode-chunk-job-processed kv bucket", "err", err)
+		osExit(1)
+		return nil
+	}
+
+	return kv
+}
 
 // check if a jobID chunk already is processed, returns a bool based on if it exists in the KV
 func CheckChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) (bool, error) {

@@ -1,7 +1,7 @@
 from typing import Any
 from nats.js.client import JetStreamContext
-from src.nats.messages import VideoChunkMessage
-from src.nats.publisher import scene_video_chunks
+from src.handler.messages import VideoChunkMessage
+from src.handler.publisher import scene_video_chunks
 import pytest
 
 

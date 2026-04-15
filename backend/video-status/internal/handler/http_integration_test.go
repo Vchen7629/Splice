@@ -22,10 +22,14 @@ type statusResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-func newTestServer(t *testing.T) *httptest.Server {
+func newTestServer(t *testing.T, urls ...ServiceURLs) *httptest.Server {
 	t.Helper()
+	var u ServiceURLs
+	if len(urls) > 0 {
+		u = urls[0]
+	}
 	mux := http.NewServeMux()
-	h := &JobStatusHandler{Logger: test.SilentLogger(), KV: sharedKV}
+	h := &JobStatusHandler{Logger: test.SilentLogger(), KV: sharedKV, URLs: u}
 	mux.HandleFunc("GET /jobs/{id}/status", h.PollJobStatus)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
@@ -52,24 +56,32 @@ func TestResponse(t *testing.T) {
 		{
 			name:      "PROCESSING job returns 200 with correct state",
 			jobID:     "job-processing",
-			status:    JobStatus{State: StateProcessing},
+			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
 			wantCode:  http.StatusOK,
 			wantState: "PROCESSING",
 		},
 		{
 			name:      "COMPLETE job returns 200 with correct state",
 			jobID:     "job-complete",
-			status:    JobStatus{State: StateComplete},
+			status:    JobStatus{State: StateComplete, Stage: "transcoder"},
 			wantCode:  http.StatusOK,
 			wantState: "COMPLETE",
 		},
 		{
 			name:      "FAILED job returns 200 with error field populated",
 			jobID:     "job-failed",
-			status:    JobStatus{State: StateFailed, Error: "pipeline failed at stage: transcoder-worker"},
+			status:    JobStatus{State: StateFailed, Stage: "transcoder", Error: "pipeline failed at stage: transcoder-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "FAILED",
 			wantErr:   "pipeline failed at stage: transcoder-worker",
+		},
+		{
+			name:      "DEGRADED job returns 200 with error field and stage",
+			jobID:     "job-degraded",
+			status:    JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			wantCode:  http.StatusOK,
+			wantState: "DEGRADED",
+			wantErr:   "service unavailable at stage: transcoder",
 		},
 	}
 
@@ -121,9 +133,9 @@ func TestConnectionDrop(t *testing.T) {
 		jobID  string
 		status JobStatus
 	}{
-		{"does not panic on dropped connection (PROCESSING)", "drop-processing", JobStatus{State: StateProcessing}},
-		{"does not panic on dropped connection (COMPLETE)", "drop-complete", JobStatus{State: StateComplete}},
-		{"does not panic on dropped connection (FAILED)", "drop-failed", JobStatus{State: StateFailed, Error: "something broke"}},
+		{"does not panic on dropped connection (PROCESSING)", "drop-processing", JobStatus{State: StateProcessing, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (COMPLETE)", "drop-complete", JobStatus{State: StateComplete, Stage: "transcoder"}},
+		{"does not panic on dropped connection (FAILED)", "drop-failed", JobStatus{State: StateFailed, Stage: "transcoder", Error: "something broke"}},
 		{"does not panic on dropped connection (not found)", "drop-notfound", JobStatus{}},
 	}
 
@@ -146,7 +158,7 @@ func TestConnectionDrop(t *testing.T) {
 
 func TestConcurrentRequests(t *testing.T) {
 	t.Run("concurrent requests for a completed job return consistent state", func(t *testing.T) {
-		seedStatus(t, "concurrent-job", JobStatus{State: StateComplete})
+		seedStatus(t, "concurrent-job", JobStatus{State: StateComplete, Stage: "transcoder"})
 		ts := newTestServer(t)
 
 		const goroutines = 20
@@ -204,19 +216,38 @@ func TestConcurrentRequests(t *testing.T) {
 	})
 }
 
+// continues serving requests after a client disconnects
 func TestServerContinuesAfterDisconnect(t *testing.T) {
-	t.Run("server continues serving requests after a client disconnects", func(t *testing.T) {
-		seedStatus(t, "reconnect-job", JobStatus{State: StateProcessing})
-		ts := newTestServer(t)
+	seedStatus(t, "reconnect-job", JobStatus{State: StateProcessing, Stage: "scene-detector"})
+	ts := newTestServer(t)
 
-		firstResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
-		require.NoError(t, err)
-		firstResp.Body.Close()
+	firstResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
+	require.NoError(t, err)
+	firstResp.Body.Close()
 
-		secondResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
-		require.NoError(t, err)
-		defer secondResp.Body.Close()
+	secondResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
+	require.NoError(t, err)
+	defer secondResp.Body.Close()
 
-		assert.Equal(t, http.StatusOK, secondResp.StatusCode)
-	})
+	assert.Equal(t, http.StatusOK, secondResp.StatusCode)
+}
+
+// degraded job recovers to PROCESSING when service comes back up
+func TestPollJobStatus_DegradedRecovery(t *testing.T) {
+	healthySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer healthySrv.Close()
+
+	seedStatus(t, "job-recovery", JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"})
+	ts := newTestServer(t, ServiceURLs{Transcoder: healthySrv.URL})
+
+	resp, err := http.Get(fmt.Sprintf("%s/jobs/job-recovery/status", ts.URL))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var body statusResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	assert.Equal(t, "PROCESSING", body.State)
+	assert.Empty(t, body.Error)
 }

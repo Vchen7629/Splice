@@ -1,43 +1,54 @@
-from unittest.mock import patch
-from unittest.mock import MagicMock
-from unittest.mock import AsyncMock
+from typing import Any
+from unittest.mock import patch, MagicMock, AsyncMock
 from src.service import start_service
 import pytest
 import nats.js.errors as js_errors
 
 
-@pytest.mark.asyncio
-async def test_raises_on_runtime_error() -> None:
-    """It should raise the RuntimeError when stream is not found"""
-    mock_js = MagicMock()
-    mock_js.find_stream_name_by_subject = AsyncMock(side_effect=js_errors.NotFoundError)
-
-    mock_nc = MagicMock()
-    mock_nc.drain = AsyncMock()
-
+@pytest.fixture
+def service_patches(mock_nats: tuple[MagicMock, MagicMock]) -> Any:
+    mock_nc, mock_js = mock_nats
     with (
         patch("src.service.check_storage_health"),
+        patch("src.service.start_health_server"),
         patch("src.service.nats_connect", return_value=(mock_nc, mock_js)),
-        pytest.raises(RuntimeError),
     ):
-        await start_service()
+        yield mock_nc, mock_js
 
 
 @pytest.mark.asyncio
-async def test_raises_runtime_error_when_kv_creation_fails() -> None:
-    """It should raise RuntimeError when the KV bucket cannot be created"""
-    mock_js = MagicMock()
-    mock_js.find_stream_name_by_subject = AsyncMock()
-    mock_js.create_key_value = AsyncMock(side_effect=js_errors.APIError())
-
-    mock_nc = MagicMock()
-    mock_nc.drain = AsyncMock()
-
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.nats_connect", return_value=(mock_nc, mock_js)),
-        pytest.raises(
-            RuntimeError, match="failed to create scene-split-processed KV bucket"
+@pytest.mark.parametrize(
+    "setup_js,match",
+    [
+        (
+            lambda js: setattr(
+                js,
+                "find_stream_name_by_subject",
+                AsyncMock(side_effect=js_errors.NotFoundError),
+            ),
+            None,
         ),
-    ):
+        (
+            lambda js: setattr(
+                js, "create_key_value", AsyncMock(side_effect=js_errors.APIError())
+            ),
+            "failed to create scene-split-processed KV bucket",
+        ),
+        (
+            lambda js: setattr(
+                js, "key_value", AsyncMock(side_effect=js_errors.NotFoundError)
+            ),
+            "job-status KV bucket not found",
+        ),
+    ],
+    ids=["stream_not_found", "kv_creation_fails", "job_status_kv_not_found"],
+)
+async def test_raises_runtime_error(
+    service_patches: Any,
+    setup_js: Any,
+    match: str | None,
+) -> None:
+    _, mock_js = service_patches
+    setup_js(mock_js)
+    with pytest.raises(RuntimeError, match=match):
         await start_service()

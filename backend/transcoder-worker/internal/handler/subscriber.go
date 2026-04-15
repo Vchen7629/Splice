@@ -20,7 +20,7 @@ var removeAll = os.RemoveAll
 
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(
-	baseStorageURL string, js jetstream.JetStream, kv jetstream.KeyValue, logger *slog.Logger,
+	baseStorageURL string, js jetstream.JetStream, processedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
@@ -62,7 +62,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		exists, err := service.CheckChunkProcessed(kv, payload.JobID, payload.ChunkIndex)
+		exists, err := CheckChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
 			return
@@ -76,6 +76,11 @@ func ConsumeVideoChunk(
 				return
 			}
 			return
+		}
+
+		err = UpdateJobStatusKV(jobStatusKV, payload.JobID, logger)
+		if err != nil {
+			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 		}
 
 		filePath, err := storage.GetUnprocessedVideoChunk(payload.StorageURL, payload.JobID)
@@ -138,7 +143,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = service.AddChunkProcessed(kv, payload.JobID, payload.ChunkIndex)
+		err = AddChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as processed", "err", err)
 			return

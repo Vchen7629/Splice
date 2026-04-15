@@ -7,7 +7,7 @@ from nats.errors import TimeoutError
 from nats.errors import NoServersError
 from nats.errors import AuthorizationError
 from nats.js.client import JetStreamContext
-from src.nats.connection import nats_connect
+from src.handler.connection import nats_connect
 import pytest
 
 
@@ -17,7 +17,7 @@ import pytest
 )
 async def test_connect_raises_on_nats_failure(exc: Any) -> None:
     """It should raise the error when caught"""
-    with patch("src.nats.connection.NATSClient") as mock_client_class:
+    with patch("src.handler.connection.NATSClient") as mock_client_class:
         mock_instance = MagicMock(spec=NATSClient)
         mock_instance.connect = AsyncMock(side_effect=exc)
         mock_client_class.return_value = mock_instance
@@ -32,7 +32,7 @@ async def test_connect_returns_nats_and_jetstream() -> None:
     mock_ns.connect = AsyncMock()
     mock_ns.jetstream.return_value = mock_js
 
-    with patch("src.nats.connection.NATSClient", return_value=mock_ns):
+    with patch("src.handler.connection.NATSClient", return_value=mock_ns):
         nc, js = await nats_connect()
 
     assert nc is mock_ns

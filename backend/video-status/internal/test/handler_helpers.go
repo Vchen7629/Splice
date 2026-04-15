@@ -18,6 +18,7 @@ import (
 // Kept minimal — only the fields needed for assertions.
 type AssertJobStatus struct {
 	State string `json:"state"`
+	Stage string `json:"stage"`
 	Error string `json:"error,omitempty"`
 }
 
@@ -59,4 +60,24 @@ func AssertKVComplete(t *testing.T, kv jetstream.KeyValue, jobID string) {
 		var s AssertJobStatus
 		return json.Unmarshal(entry.Value(), &s) == nil && s.State == "COMPLETE"
 	}, 5*time.Second, 100*time.Millisecond, "KV entry for %q never reached COMPLETE state", jobID)
+}
+
+func AssertKVDegraded(t *testing.T, kv jetstream.KeyValue, jobID, wantErrContains string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		entry, err := kv.Get(context.Background(), jobID)
+		if err != nil {
+			return false
+		}
+
+		var s AssertJobStatus
+		return json.Unmarshal(entry.Value(), &s) == nil && s.State == "DEGRADED"
+	}, 5*time.Second, 100*time.Millisecond, "KV entry for %q never reached DEGRADED state", jobID)
+
+	entry, err := kv.Get(context.Background(), jobID)
+	require.NoError(t, err)
+
+	var s AssertJobStatus
+	require.NoError(t, json.Unmarshal(entry.Value(), &s))
+	assert.Contains(t, s.Error, wantErrContains)
 }

@@ -22,7 +22,7 @@ func patchExit(t *testing.T) *int {
 // writeEnvFile creates ../.env with the given content and removes it on cleanup.
 func writeEnvFile(t *testing.T, content string) {
 	t.Helper()
-	for _, key := range []string{"NATS_URL", "PROD_MODE", "BASE_STORAGE_URL"} {
+	for _, key := range []string{"NATS_URL", "PROD_MODE", "BASE_STORAGE_URL", "HTTP_PORT"} {
 		if old, set := os.LookupEnv(key); set {
 			t.Cleanup(func() { os.Setenv(key, old) })
 		} else {
@@ -38,8 +38,4 @@ func writeEnvFile(t *testing.T, content string) {
 // okJS returns a mock JetStream that succeeds through the full consumer setup.
 func okJS() *test.MockJS {
 	return &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{}}}
-}
-
-func okKV() *test.MockKV {
-	return &test.MockKV{}
 }

@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock
 from nats.errors import TimeoutError
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
-from src.nats.publisher import scene_video_chunks
-from src.nats.messages import VideoChunkMessage
+from src.handler.publisher import scene_video_chunks
+from src.handler.messages import VideoChunkMessage
 import pytest
 
 

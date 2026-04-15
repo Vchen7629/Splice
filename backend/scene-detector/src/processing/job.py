@@ -2,8 +2,8 @@ from ..core.logging import logger
 from ..storage.queries import fetch_video
 from ..storage.queries import upload_video_chunks
 from .video import split_into_chunks
-from ..nats.messages import SceneSplitMessage
-from ..nats.messages import VideoChunkMessage
+from ..handler.messages import SceneSplitMessage
+from ..handler.messages import VideoChunkMessage
 from scenedetect import VideoOpenFailure
 import asyncio
 import shutil

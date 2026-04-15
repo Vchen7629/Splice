@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # general config
     LOG_LEVEL: str = "DEBUG"
     LOG_FORMAT: str = "json"
+    HTTP_PORT: int = 9098
 
     # Nats config
     NATS_URL: str = "nats://localhost:4222"

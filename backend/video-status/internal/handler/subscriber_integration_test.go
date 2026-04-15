@@ -175,7 +175,7 @@ func TestListenAdvisoriesFailure_KVPutFails(t *testing.T) {
 	})
 }
 
-func TestListenJobComplete_NoStream(t *testing.T) {
+func TestListenJobCompleteI(t *testing.T) {
 	t.Run("returns error when no stream covers jobs.complete", func(t *testing.T) {
 		ctx := context.Background()
 
@@ -197,39 +197,37 @@ func TestListenJobComplete_NoStream(t *testing.T) {
 
 		assert.Error(t, err)
 	})
+	t.Run("returns sub", func(t *testing.T) {
+		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.NotNil(t, consCtx)
+		t.Cleanup(consCtx.Stop)
+	})
+	t.Run("Consumer config", func(t *testing.T) {
+		ctx := context.Background()
+
+		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
+		require.NoError(t, err)
+		t.Cleanup(consCtx.Stop)
+
+		stream, err := sharedJS.Stream(ctx, "jobs")
+		require.NoError(t, err)
+		cons, err := stream.Consumer(ctx, "video-status-complete")
+		require.NoError(t, err)
+		info, err := cons.Info(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, "video-status-complete", info.Config.Name)
+		assert.Equal(t, "video-status-complete", info.Config.Durable)
+		assert.Equal(t, "jobs.complete", info.Config.FilterSubject)
+		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
+		assert.Equal(t, 3, info.Config.MaxDeliver)
+		assert.Equal(t, 30*time.Second, info.Config.AckWait)
+	})
 }
 
-func TestListenJobComplete_ReturnsSub(t *testing.T) {
-	consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
-
-	require.NoError(t, err)
-	assert.NotNil(t, consCtx)
-	t.Cleanup(consCtx.Stop)
-}
-
-func TestListenJobComplete_ConsumerConfig(t *testing.T) {
-	ctx := context.Background()
-
-	consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
-	require.NoError(t, err)
-	t.Cleanup(consCtx.Stop)
-
-	stream, err := sharedJS.Stream(ctx, "jobs")
-	require.NoError(t, err)
-	cons, err := stream.Consumer(ctx, "video-status-complete")
-	require.NoError(t, err)
-	info, err := cons.Info(ctx)
-	require.NoError(t, err)
-
-	assert.Equal(t, "video-status-complete", info.Config.Name)
-	assert.Equal(t, "video-status-complete", info.Config.Durable)
-	assert.Equal(t, "jobs.complete", info.Config.FilterSubject)
-	assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
-	assert.Equal(t, 3, info.Config.MaxDeliver)
-	assert.Equal(t, 30*time.Second, info.Config.AckWait)
-}
-
-func TestListenJobComplete_WritesKV(t *testing.T) {
+func TestListenJobComplete(t *testing.T) {
 	t.Run("valid jobs.complete message writes COMPLETE to KV and acks", func(t *testing.T) {
 		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
 		require.NoError(t, err)
@@ -241,9 +239,7 @@ func TestListenJobComplete_WritesKV(t *testing.T) {
 
 		test.AssertKVComplete(t, sharedKV, jobID)
 	})
-}
 
-func TestListenJobComplete_InvalidJSON(t *testing.T) {
 	t.Run("invalid JSON does not write KV", func(t *testing.T) {
 		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
 		require.NoError(t, err)
@@ -254,9 +250,7 @@ func TestListenJobComplete_InvalidJSON(t *testing.T) {
 
 		test.AssertKVEmpty(t, sharedKV, "jc-bad-json")
 	})
-}
 
-func TestListenJobComplete_KVPutFails(t *testing.T) {
 	t.Run("KV Put failure is handled without panic", func(t *testing.T) {
 		mockKV := test.NewMockKV()
 		mockKV.PutErr = errors.New("kv unavailable")
