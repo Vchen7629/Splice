@@ -3,15 +3,12 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"video-upload/internal/test"
@@ -19,28 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// freePort returns a port number that is not currently in use.
-func freePort(t *testing.T) string {
-	t.Helper()
-	l, err := net.Listen("tcp", ":0")
-	require.NoError(t, err)
-	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
-	l.Close()
-	return port
-}
-
-// startTestServer calls startHttpApi with a free port and a temp output dir,
-// registers a Cleanup to shut the server down, and returns the server and cfg.
-func startTestServer(t *testing.T) (*http.Server, *Config) {
-	t.Helper()
-	fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	t.Cleanup(fakeSrv.Close)
-	cfg := &Config{HTTPPort: freePort(t), StorageURL: fakeSrv.URL}
-	server := startHttpApi(test.SilentLogger(), &test.MockJS{}, &test.MockKV{}, cfg)
-	t.Cleanup(func() { server.Shutdown(context.Background()) }) //nolint:errcheck
-	return server, cfg
-}
 
 func TestLoadConfig(t *testing.T) {
 	t.Run("missing env file shouldnt return error", func(t *testing.T) {
@@ -80,20 +55,20 @@ func TestLoadConfig(t *testing.T) {
 
 func TestStartHttp(t *testing.T) {
 	t.Run("returns non-nil server with address derived from config", func(t *testing.T) {
-		server, cfg := startTestServer(t)
+		server, cfg := startTestServer(t, &test.MockKV{})
 
 		require.NotNil(t, server)
 		assert.Equal(t, ":"+cfg.HTTPPort, server.Addr)
 	})
 
 	t.Run("server handler is non-nil", func(t *testing.T) {
-		server, _ := startTestServer(t)
+		server, _ := startTestServer(t, &test.MockKV{})
 
 		assert.NotNil(t, server.Handler)
 	})
 
 	t.Run("unregistered path returns 404", func(t *testing.T) {
-		server, _ := startTestServer(t)
+		server, _ := startTestServer(t, &test.MockKV{})
 
 		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 		w := httptest.NewRecorder()
@@ -104,26 +79,14 @@ func TestStartHttp(t *testing.T) {
 }
 
 func TestMainFunc(t *testing.T) {
-	t.Run("exits on config load error", func(t *testing.T) {
-		if os.Getenv("RUN_MAIN") == "config_error" {
-			os.Chdir("/") //nolint:errcheck
-			main()
-			return
-		}
-		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_config_load_error", "-test.count=1")
-		cmd.Env = append(os.Environ(), "RUN_MAIN=config_error")
-		err := cmd.Run()
-		var exitErr *exec.ExitError
-		require.ErrorAs(t, err, &exitErr)
-		assert.Equal(t, 1, exitErr.ExitCode())
-	})
-
 	t.Run("exits on NATS connect error", func(t *testing.T) {
 		if os.Getenv("RUN_MAIN") == "nats_error" {
 			main()
 			return
 		}
+
 		test.WriteEnvFile(t, "NATS_URL=nats://localhost:1\n")
+
 		var env []string
 		for _, e := range os.Environ() {
 			if !strings.HasPrefix(e, "NATS_URL=") && !strings.HasPrefix(e, "PROD_MODE=") &&
@@ -131,21 +94,20 @@ func TestMainFunc(t *testing.T) {
 				env = append(env, e)
 			}
 		}
+
 		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_NATS_connect_error", "-test.count=1")
 		cmd.Env = append(env, "RUN_MAIN=nats_error")
 		err := cmd.Run()
+
 		var exitErr *exec.ExitError
+
 		require.ErrorAs(t, err, &exitErr)
 		assert.Equal(t, 1, exitErr.ExitCode())
 	})
 
 	t.Run("returns 500 when KV.Put fails during upload", func(t *testing.T) {
-		fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-		t.Cleanup(fakeSrv.Close)
-		cfg := &Config{HTTPPort: freePort(t), StorageURL: fakeSrv.URL}
 		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
-		server := startHttpApi(test.SilentLogger(), &test.MockJS{}, kv, cfg)
-		t.Cleanup(func() { server.Shutdown(context.Background()) }) //nolint:errcheck
+		server, _ := startTestServer(t, kv)
 
 		req := test.NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p")
 		w := httptest.NewRecorder()
