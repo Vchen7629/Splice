@@ -1,3 +1,5 @@
+//go:build unit
+
 package main
 
 import (
@@ -21,7 +23,8 @@ func freePort(t *testing.T) string {
 	require.NoError(t, err)
 	port := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
 
-	l.Close()
+	err = l.Close()
+	require.NoError(t, err)
 
 	return port
 }
