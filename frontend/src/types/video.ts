@@ -1,4 +1,4 @@
-export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error'
+export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error' | 'degraded'
 
 export interface UploadedVideo {
     id: number
@@ -8,5 +8,6 @@ export interface UploadedVideo {
     status: JobStatus
     uploadProgress: number
     jobId: string | null
+    stage?: string
     error?: string
 }

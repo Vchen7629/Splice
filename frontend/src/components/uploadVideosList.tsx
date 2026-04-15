@@ -1,7 +1,8 @@
-import { CheckCheck, Loader, Video, X } from "lucide-react"
+import { CheckCheck, Video, X } from "lucide-react"
 import type { JobStatus, UploadedVideo } from "../types/video"
 import { formatSize, truncateName } from "../utils/fileDisplay"
 import { useVideoQueueStore } from "../state/videoQueue"
+import VideoProgressBar from "./videoProgressBar"
 
 interface UploadVideoListProps {
     videos: UploadedVideo[]
@@ -14,9 +15,8 @@ const UploadVideoList = ({ videos, onRemove }: UploadVideoListProps) => {
     const { uploadedVideos, resetVideo, setResolution } = useVideoQueueStore()
 
     function StatusIcon({ status }: { status: JobStatus }) {
-        if (status === 'processing') return <Loader size={18} className="text-accent shrink-0 animate-spin" />
         if (status === 'complete') return <CheckCheck size={18} className="text-green-400 shrink-0" />
-        if (status === 'error') return <X size={18} className="text-red-400 shrink-0"/>
+        if (status === 'error') return <X size={16} className="text-red-400 shrink-0"/>
         return <Video size={18} className="text-accent shrink-0" />
     }
 
@@ -26,7 +26,7 @@ const UploadVideoList = ({ videos, onRemove }: UploadVideoListProps) => {
         if (video?.status === "error") {
             resetVideo(id)
         }
-        
+
         setResolution(id, resolution)
     }
 
@@ -73,6 +73,10 @@ const UploadVideoList = ({ videos, onRemove }: UploadVideoListProps) => {
                             style={{ width: `${video.uploadProgress}%` }}
                         />
                     </div>
+                )}
+
+                {(video.status === 'processing' || video.status === 'degraded' || video.status === 'error') && (
+                    <VideoProgressBar video={video} />
                 )}
                 </li>
             ))}
