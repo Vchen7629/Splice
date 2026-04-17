@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -29,16 +28,8 @@ func ConsumeVideoChunk(
 	}
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		var payload service.VideoChunkMessage
-
-		err := json.Unmarshal(msg.Data(), &payload)
-		if err != nil {
-			logger.Error("failed to unmarshal msg from jetstream", "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("error naking msg", "err", err)
-				return
-			}
+		payload, ok := handler.UnmarshalJetstreamMsg[service.VideoChunkMessage](msg, logger)
+		if !ok {
 			return
 		}
 

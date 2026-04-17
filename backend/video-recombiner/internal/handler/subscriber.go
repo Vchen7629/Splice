@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -27,14 +26,8 @@ func RecombineVideo(
 	tracker := service.NewJobTracker()
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		var payload handler.ChunkCompleteMessage
-
-		err := json.Unmarshal(msg.Data(), &payload)
-		if err != nil {
-			logger.Error("failed to unmarshal msg from jetstream", "err", err)
-			if err := msg.Nak(); err != nil {
-				logger.Error("error naking msg", "err", err)
-			}
+		payload, ok := handler.UnmarshalJetstreamMsg[handler.ChunkCompleteMessage](msg, logger)
+		if !ok {
 			return
 		}
 

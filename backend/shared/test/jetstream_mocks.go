@@ -64,3 +64,18 @@ type MockStream struct {
 func (m *MockStream) CreateOrUpdateConsumer(_ context.Context, _ jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	return m.Cons, m.ConsumerErr
 }
+
+// MockMsg stubs jetstream.Msg for message-handling tests.
+// It is kept here rather than in internal/test because it is only
+// needed for subscriber behaviour and carries no value elsewhere.
+type MockMsg struct {
+	jetstream.Msg
+	Payload   []byte
+	NakCalled bool
+	AckCalled bool
+	NakErr    error
+}
+
+func (m *MockMsg) Data() []byte { return m.Payload }
+func (m *MockMsg) Nak() error   { m.NakCalled = true; return m.NakErr }
+func (m *MockMsg) Ack() error   { m.AckCalled = true; return nil }

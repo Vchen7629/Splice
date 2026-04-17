@@ -38,43 +38,15 @@ func TestConsumeFailReturnError(t *testing.T) {
 	assert.ErrorIs(t, err, consumeErr)
 }
 
-func TestAckAndNacking(t *testing.T) {
-	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: []byte("not valid json")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+func TestFetchFailureNaks(t *testing.T) {
+	msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
+	consumer := &test.MockConsumerWithMsg{Msg: msg}
+	js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := handler.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
+	_, err := handler.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
 
-		require.NoError(t, err)
-		assert.NotNil(t, consCtx)
-		assert.True(t, msg.NakCalled)
-		assert.False(t, msg.AckCalled)
-	})
-
-	t.Run("invalid JSON with nak error logs and returns", func(t *testing.T) {
-		nakErr := errors.New("nak failed")
-		msg := &test.MockMsg{Payload: []byte("not valid json"), NakErr: nakErr}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-
-		consCtx, err := handler.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
-
-		require.NoError(t, err)
-		assert.NotNil(t, consCtx)
-		assert.True(t, msg.NakCalled)
-	})
-
-	t.Run("fetch failure naks", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-
-		_, err := handler.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
-
-		require.NoError(t, err)
-		assert.True(t, msg.NakCalled)
-	})
+	require.NoError(t, err)
+	assert.True(t, msg.NakCalled)
 }
 
 func TestIdempotency(t *testing.T) {
