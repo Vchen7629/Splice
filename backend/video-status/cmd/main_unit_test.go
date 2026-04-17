@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 	"video-status/internal/test"
@@ -15,72 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestLoadConfig(t *testing.T) {
-	t.Run("defaults when no env vars set", func(t *testing.T) {
-		for _, key := range []string{"NATS_URL", "PROD_MODE", "HTTP_PORT"} {
-			orig, existed := os.LookupEnv(key)
-			os.Unsetenv(key)
-			if existed {
-				t.Cleanup(func() { os.Setenv(key, orig) })
-			}
-		}
-
-		cfg, err := loadConfig()
-
-		require.NoError(t, err)
-		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
-		assert.Equal(t, false, cfg.ProdMode)
-		assert.Equal(t, "8085", cfg.HTTPPort)
-	})
-
-	t.Run("env var overrides", func(t *testing.T) {
-		tests := []struct {
-			name   string
-			envKey string
-			envVal string
-			check  func(t *testing.T, cfg *Config)
-		}{
-			{
-				name:   "NATS_URL overrides default",
-				envKey: "NATS_URL",
-				envVal: "nats://remote:4222",
-				check:  func(t *testing.T, cfg *Config) { assert.Equal(t, "nats://remote:4222", cfg.NatsURL) },
-			},
-			{
-				name:   "HTTP_PORT overrides default",
-				envKey: "HTTP_PORT",
-				envVal: "9090",
-				check:  func(t *testing.T, cfg *Config) { assert.Equal(t, "9090", cfg.HTTPPort) },
-			},
-			{
-				name:   "PROD_MODE=true overrides default",
-				envKey: "PROD_MODE",
-				envVal: "true",
-				check:  func(t *testing.T, cfg *Config) { assert.True(t, cfg.ProdMode) },
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				t.Setenv(tc.envKey, tc.envVal)
-
-				cfg, err := loadConfig()
-
-				require.NoError(t, err)
-				tc.check(t, cfg)
-			})
-		}
-	})
-
-	t.Run("PROD_MODE with non-bool value returns error", func(t *testing.T) {
-		t.Setenv("PROD_MODE", "notabool")
-
-		_, err := loadConfig()
-
-		assert.Error(t, err)
-	})
-}
 
 func TestStartHttpApi(t *testing.T) {
 	t.Run("server addr reflects configured port", func(t *testing.T) {

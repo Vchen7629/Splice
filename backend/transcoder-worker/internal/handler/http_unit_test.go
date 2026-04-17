@@ -5,6 +5,7 @@ package handler_test
 import (
 	"encoding/json"
 	"net/http"
+	shandler "shared/handler"
 	"testing"
 	"time"
 	"transcoder-worker/internal/handler"
@@ -18,7 +19,7 @@ import (
 func TestStartHttpServer(t *testing.T) {
 	port := test.FreePort(t)
 	server := handler.StartHttpServer(test.SilentLogger(), port)
-	t.Cleanup(func() { handler.ShutdownHttpServer(server, test.SilentLogger()) })
+	t.Cleanup(func() { shandler.ShutdownHttpServer(server, test.SilentLogger()) })
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -31,16 +32,4 @@ func TestStartHttpServer(t *testing.T) {
 	var body map[string]string
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
 	assert.Equal(t, "Healthy", body["status"])
-}
-
-// server stops accepting connections after shutdown
-func TestShutdownHttpServer(t *testing.T) {
-	port := test.FreePort(t)
-	server := handler.StartHttpServer(test.SilentLogger(), port)
-	time.Sleep(50 * time.Millisecond)
-
-	handler.ShutdownHttpServer(server, test.SilentLogger())
-
-	_, err := http.Get("http://localhost:" + port + "/health")
-	assert.Error(t, err, "server should no longer accept connections after shutdown")
 }

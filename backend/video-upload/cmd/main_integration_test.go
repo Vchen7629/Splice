@@ -250,4 +250,3 @@ func TestMainFuncLifecycle(t *testing.T) {
 		t.Fatal("main() did not return after SIGINT")
 	}
 }
-

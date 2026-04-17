@@ -79,3 +79,4 @@ type MockMsg struct {
 func (m *MockMsg) Data() []byte { return m.Payload }
 func (m *MockMsg) Nak() error   { m.NakCalled = true; return m.NakErr }
 func (m *MockMsg) Ack() error   { m.AckCalled = true; return nil }
+

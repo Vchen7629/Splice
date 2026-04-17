@@ -8,13 +8,13 @@ import (
 	"os/signal"
 	"shared/kv"
 	"shared/middleware"
+	"shared/service"
 	"syscall"
 
+	shandler "shared/handler"
 	"shared/storage"
 	"transcoder-worker/internal/handler"
 
-	"github.com/joho/godotenv"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -30,7 +30,7 @@ type Config struct {
 }
 
 func main() {
-	cfg, err := loadConfig()
+	cfg, err := service.LoadConfig[Config]()
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
@@ -89,29 +89,14 @@ func runProcessing(
 
 	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobStatusKV, logger)
 	if err != nil {
-		handler.ShutdownHttpServer(server, logger)
+		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
 
 	<-quit
 
-	handler.ShutdownHttpServer(server, logger)
+	shandler.ShutdownHttpServer(server, logger)
 
 	consCtx.Stop() // stop recieving new msgs from jetstream
 	return nc.Drain()
-}
-
-func loadConfig() (*Config, error) {
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Println("missing .env file")
-	}
-	var cfg Config
-
-	err = envconfig.Process("", &cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
 }

@@ -5,7 +5,6 @@ package main
 import (
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 	"video-recombiner/internal/test"
@@ -93,40 +92,6 @@ func TestRunCombiner(t *testing.T) {
 		ln, err := net.Listen("tcp", ":"+port)
 		require.NoError(t, err, "port should be free after server shutdown")
 		ln.Close()
-	})
-}
-
-func TestLoadConfig(t *testing.T) {
-	t.Run("missing env file doesnt return error", func(t *testing.T) {
-		if _, err := os.Stat(filepath.Join("..", ".env")); err == nil {
-			t.Skip(".env already exists")
-		}
-
-		_, err := loadConfig()
-
-		assert.NoError(t, err)
-	})
-
-	t.Run("reads all values from env file", func(t *testing.T) {
-		writeEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nBASE_STORAGE_URL=http://localhost:9333\nHTTP_PORT=9090\n")
-
-		cfg, err := loadConfig()
-
-		require.NoError(t, err)
-		assert.Equal(t, "nats://test:9999", cfg.NatsURL)
-		assert.True(t, cfg.ProdMode)
-		assert.Equal(t, "http://localhost:9333", cfg.BaseStorageURL)
-	})
-
-	t.Run("empty env file uses struct defaults", func(t *testing.T) {
-		writeEnvFile(t, "")
-
-		cfg, err := loadConfig()
-
-		require.NoError(t, err)
-		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
-		assert.False(t, cfg.ProdMode)
-		assert.Equal(t, "http://localhost:8888", cfg.BaseStorageURL)
 	})
 }
 

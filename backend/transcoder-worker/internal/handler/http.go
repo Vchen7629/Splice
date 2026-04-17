@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 )
 
 var osExit = os.Exit
@@ -41,14 +39,4 @@ func StartHttpServer(logger *slog.Logger, httpPort string) *http.Server {
 	}()
 
 	return server
-}
-
-func ShutdownHttpServer(server *http.Server, logger *slog.Logger) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err := server.Shutdown(ctx)
-	if err != nil {
-		logger.Error("error shutting down http server", "err", err)
-	}
 }
