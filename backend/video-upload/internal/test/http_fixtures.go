@@ -1,9 +1,9 @@
 package test
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"io"
 	"log/slog"
 	"net"
@@ -11,7 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
+
+//go:embed testvideo.mp4
+var testVideo []byte
 
 func SilentLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -45,6 +50,13 @@ func FreePort(t *testing.T) string {
 	err = l.Close()
 	require.NoError(t, err)
 	return port
+}
+
+// TestVideoBytes returns the bytes of testvideo.mp4 for use in upload integration tests.
+func TestVideoBytes(t *testing.T) []byte {
+	t.Helper()
+	require.NotEmpty(t, testVideo, "embedded testvideo.mp4 is empty")
+	return testVideo
 }
 
 // NewDownloadRequest builds a GET request with a JSON body containing job_id and file_name.
