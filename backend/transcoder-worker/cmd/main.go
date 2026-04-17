@@ -10,8 +10,8 @@ import (
 	"shared/middleware"
 	"syscall"
 
+	"shared/storage"
 	"transcoder-worker/internal/handler"
-	"transcoder-worker/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"

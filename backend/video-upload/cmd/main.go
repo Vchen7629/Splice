@@ -9,10 +9,10 @@ import (
 	"os"
 	"os/signal"
 	"shared/middleware"
+	"shared/storage"
 	"syscall"
 	"time"
 	"video-upload/internal/handler"
-	"video-upload/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"

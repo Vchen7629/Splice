@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"shared/kv"
+	"shared/storage"
 	"time"
 	"video-recombiner/internal/service"
-	"video-recombiner/internal/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -99,7 +100,9 @@ func RecombineVideo(
 			failed := false
 
 			for idx, storageURL := range chunks {
-				localPath, err := storage.GetProcessedVideoChunk(storageURL, payload.JobID)
+				fileName := fmt.Sprintf("processed_chunk-%s", payload.JobID)
+
+				localPath, err := storage.GetVideoChunk(storageURL, fileName)
 				if err != nil {
 					logger.Error("failed to download chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
 					failed = true
@@ -117,7 +120,10 @@ func RecombineVideo(
 				return
 			}
 
-			_, err = storage.UploadRecombinedVideo(baseStorageURL, outputPath, payload.JobID)
+			fileName := filepath.Base(outputPath)
+			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
+
+			_, err = storage.UploadVideoChunk(url, outputPath)
 			if err != nil {
 				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				return

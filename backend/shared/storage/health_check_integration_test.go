@@ -4,9 +4,9 @@ package storage_test
 
 import (
 	"os"
+	"shared/storage"
+	"shared/test"
 	"testing"
-	"transcoder-worker/internal/storage"
-	"transcoder-worker/internal/test"
 
 	"github.com/stretchr/testify/assert"
 )

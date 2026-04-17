@@ -7,15 +7,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"shared/storage"
+	"shared/test"
 	"testing"
-	"video-recombiner/internal/storage"
-	"video-recombiner/internal/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetProcessedVideoChunkIntegration(t *testing.T) {
+func TestGetVideoChunkIntegration(t *testing.T) {
 	t.Run("fetches video and writes to correct local path with matching content", func(t *testing.T) {
 		jobID := "job-fetch"
 		filename := "testvideo.mp4"
@@ -23,13 +24,13 @@ func TestGetProcessedVideoChunkIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		test.SeedProcessedVideo(t, sharedFilerUrl, jobID, filename, videoContent)
-		storageURL := fmt.Sprintf("%s/%s/%s/processed", sharedFilerUrl, jobID, filename)
-		t.Cleanup(func() { os.RemoveAll("/tmp/processed_chunk-" + jobID) })
+		storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerUrl, jobID, filename)
+		t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 
-		filePath, err := storage.GetProcessedVideoChunk(storageURL, jobID)
+		filePath, err := storage.GetVideoChunk(storageURL, jobID)
 
 		require.NoError(t, err)
-		assert.Equal(t, "/tmp/processed_chunk-"+jobID+"/"+filename, filePath)
+		assert.Equal(t, "/tmp/"+jobID+"/"+filename, filePath)
 		assert.FileExists(t, filePath)
 
 		got, err := os.ReadFile(filePath)
@@ -39,32 +40,31 @@ func TestGetProcessedVideoChunkIntegration(t *testing.T) {
 
 	t.Run("nonexistent file returns error", func(t *testing.T) {
 		jobID := "job-missing"
-		storageURL := sharedFilerUrl + "/" + jobID + "/nonexistent.mp4"
-		t.Cleanup(func() { os.RemoveAll("/tmp/processed_chunk-" + jobID) })
+		storageURL := fmt.Sprintf("%s/%s/processed/nonexistent.mp4", sharedFilerUrl, jobID)
+		t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 
-		filePath, err := storage.GetProcessedVideoChunk(storageURL, jobID)
+		filePath, err := storage.GetVideoChunk(storageURL, jobID)
 
 		require.Error(t, err)
 		assert.Empty(t, filePath)
 	})
 }
 
-func TestUploadRecombinedVideo(t *testing.T) {
+func TestUploadVideoChunk(t *testing.T) {
 	t.Run("uploads file properly", func(t *testing.T) {
 		videoFile := test.OpenTestVideo(t)
+		fileName := filepath.Base(videoFile.Name())
+		uploadURL := fmt.Sprintf("%s/job-upload/processed/%s", sharedFilerUrl, fileName)
 
-		url, err := storage.UploadRecombinedVideo(sharedFilerUrl, videoFile.Name(), "job-upload")
+		url, err := storage.UploadVideoChunk(uploadURL, videoFile.Name())
 
 		require.NoError(t, err)
-
-		expectedURL := fmt.Sprintf("%s/job-upload/testvideo.mp4/processed", sharedFilerUrl)
-		assert.Equal(t, expectedURL, url)
+		assert.Equal(t, uploadURL, url)
 
 		resp, err := http.Get(url)
 		require.NoError(t, err)
 		defer func() {
 			err := resp.Body.Close()
-
 			require.NoError(t, err)
 		}()
 		require.Equal(t, http.StatusOK, resp.StatusCode)

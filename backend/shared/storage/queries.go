@@ -10,14 +10,11 @@ import (
 	"strings"
 )
 
-// save the video chunk transcoded to a target resolution back onto seaweedfs storage
-func SaveTranscodedVideoChunk(baseStorageURL, filePath, jobID string) (string, error) {
-	fileName := filepath.Base(filePath)
-	url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, jobID, fileName)
-
+// save the video chunk to seaweedfs storage
+func UploadVideoChunk(url, filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("error opening transcoded video file: %w", err)
+		return "", fmt.Errorf("error opening video file: %w", err)
 	}
 	defer func() {
 		err := file.Close()
@@ -52,8 +49,8 @@ func SaveTranscodedVideoChunk(baseStorageURL, filePath, jobID string) (string, e
 
 var removeAll = os.RemoveAll
 
-// fetch the unprocessed video chunk seaweedfs storage
-func GetUnprocessedVideoChunk(storageURL, jobID string) (string, error) {
+// fetch the video chunk seaweedfs storage
+func GetVideoChunk(storageURL, fileName string) (string, error) {
 	resp, err := http.Get(storageURL)
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seedweedfs, %w", err)
@@ -75,7 +72,7 @@ func GetUnprocessedVideoChunk(storageURL, jobID string) (string, error) {
 	}
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
-	jobDir := filepath.Join("/tmp/temp-unprocessed-" + jobID)
+	jobDir := filepath.Join("/tmp/" + fileName)
 
 	err = os.MkdirAll(jobDir, 0755)
 	if err != nil {

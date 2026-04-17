@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"shared/kv"
+	"shared/storage"
 	"time"
 	"transcoder-worker/internal/service"
-	"transcoder-worker/internal/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -84,7 +85,9 @@ func ConsumeVideoChunk(
 			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 		}
 
-		filePath, err := storage.GetUnprocessedVideoChunk(payload.StorageURL, payload.JobID)
+		fileName := fmt.Sprintf("temp-unprocessed-%s", payload.JobID)
+
+		filePath, err := storage.GetVideoChunk(payload.StorageURL, fileName)
 		if err != nil {
 			logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
 			err := msg.Nak()
@@ -106,7 +109,10 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		url, err := storage.SaveTranscodedVideoChunk(baseStorageURL, outputPath, payload.JobID)
+		fileName = filepath.Base(outputPath)
+		url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, fileName)
+
+		storageUrl, err := storage.UploadVideoChunk(url, outputPath)
 		if err != nil {
 			logger.Error(
 				"error saving transcoded video chunk to seaweedfs storage",
@@ -126,7 +132,7 @@ func ConsumeVideoChunk(
 			JobID:       payload.JobID,
 			ChunkIndex:  payload.ChunkIndex,
 			TotalChunks: payload.TotalChunks,
-			StorageURL:  url,
+			StorageURL:  storageUrl,
 		})
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)

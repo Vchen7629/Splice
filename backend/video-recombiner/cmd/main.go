@@ -8,9 +8,9 @@ import (
 	"os/signal"
 	"shared/kv"
 	"shared/middleware"
+	"shared/storage"
 	"syscall"
 	"video-recombiner/internal/handler"
-	"video-recombiner/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"

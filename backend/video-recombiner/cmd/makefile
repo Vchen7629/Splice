@@ -1,6 +1,6 @@
 test_all: integration unit
 
-PKGS := . ../internal/handler/... ../internal/observability/... ../internal/service/... ../internal/storage/...
+PKGS := . ../internal/handler/... ../internal/service/...
 
 format: 
 	go fmt ${PKGS} .

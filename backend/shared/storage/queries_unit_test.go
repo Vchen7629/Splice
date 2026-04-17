@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadRecombinedVideoChunkFileErrors(t *testing.T) {
+func TestUploadVideoChunkFileErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -29,7 +29,7 @@ func TestUploadRecombinedVideoChunkFileErrors(t *testing.T) {
 		{
 			name:        "nonexistent file returns error",
 			filePath:    "/nonexistent/path/chunk.mp4",
-			errContains: "error opening transcoded video chunk file",
+			errContains: "error opening video file",
 		},
 		{
 			name:        "directory instead of file returns error",
@@ -40,7 +40,7 @@ func TestUploadRecombinedVideoChunkFileErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := UploadRecombinedVideo(srv.URL, tc.filePath, "job-123")
+			url, err := UploadVideoChunk(srv.URL, tc.filePath)
 
 			require.Error(t, err)
 			assert.Empty(t, url)
@@ -49,7 +49,7 @@ func TestUploadRecombinedVideoChunkFileErrors(t *testing.T) {
 	}
 }
 
-func TestUploadRecombinedVideoChunkHTTPErrors(t *testing.T) {
+func TestUploadVideoChunkHTTPErrors(t *testing.T) {
 	validFile := filepath.Join(t.TempDir(), "chunk.mp4")
 	require.NoError(t, os.WriteFile(validFile, []byte("fake video"), 0644))
 
@@ -90,7 +90,7 @@ func TestUploadRecombinedVideoChunkHTTPErrors(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 
-			url, err := UploadRecombinedVideo(srv.URL, validFile, "job-123")
+			url, err := UploadVideoChunk(srv.URL, validFile)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -104,7 +104,7 @@ func TestUploadRecombinedVideoChunkHTTPErrors(t *testing.T) {
 	}
 }
 
-func TestGetProcessedVideoChunkHTTPErrors(t *testing.T) {
+func TestGetVideoChunkHTTPErrors(t *testing.T) {
 	tests := []struct {
 		name        string
 		status      int
@@ -135,18 +135,18 @@ func TestGetProcessedVideoChunkHTTPErrors(t *testing.T) {
 			t.Cleanup(srv.Close)
 
 			jobID := "job-123"
-			filePath, err := GetProcessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4/processed", jobID)
+			filePath, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 			require.Error(t, err)
 			assert.Empty(t, filePath)
 			assert.Contains(t, err.Error(), tc.errContains)
 
-			t.Cleanup(func() { os.RemoveAll("/tmp/processed_chunk-" + jobID) })
+			t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 		})
 	}
 }
 
-func TestGetProcessedVideoChunkWritesFile(t *testing.T) {
+func TestGetVideoChunkWritesFile(t *testing.T) {
 	videoContent := []byte("fake video content")
 	jobID := "job-write"
 	filename := "chunk_001.mp4"
@@ -156,15 +156,15 @@ func TestGetProcessedVideoChunkWritesFile(t *testing.T) {
 		w.Write(videoContent)
 	}))
 	t.Cleanup(srv.Close)
-	t.Cleanup(func() { os.RemoveAll("/tmp/processed_chunk-" + jobID) })
+	t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 
-	storageURL := srv.URL + "/" + jobID + "/" + filename + "/processed"
+	storageURL := srv.URL + "/" + jobID + "/processed/" + filename
 
-	filePath, err := GetProcessedVideoChunk(storageURL, jobID)
+	filePath, err := GetVideoChunk(storageURL, jobID)
 
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(filePath, filename), "filePath %q should end with %q", filePath, filename)
-	assert.DirExists(t, "/tmp/processed_chunk-"+jobID)
+	assert.DirExists(t, "/tmp/"+jobID)
 	assert.FileExists(t, filePath)
 
 	got, err := os.ReadFile(filePath)
@@ -172,10 +172,10 @@ func TestGetProcessedVideoChunkWritesFile(t *testing.T) {
 	assert.Equal(t, videoContent, got)
 }
 
-func TestGetProcessedVideoChunkIoCopyError(t *testing.T) {
+func TestGetVideoChunkIoCopyError(t *testing.T) {
 	t.Run("io.Copy failure cleans up job dir and returns error", func(t *testing.T) {
 		jobID := "job-copy-err"
-		t.Cleanup(func() { os.RemoveAll("/tmp/processed_chunk-" + jobID) })
+		t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 
 		// Hijack the connection and close it mid-response to force io.Copy to fail
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -188,18 +188,18 @@ func TestGetProcessedVideoChunkIoCopyError(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := GetProcessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4/processed", jobID)
+		_, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error writing video to file")
-		assert.NoDirExists(t, "/tmp/processed_chunk-"+jobID)
+		assert.NoDirExists(t, "/tmp/"+jobID)
 	})
 
 	t.Run("io.Copy failure with removeAll error returns removeAll error", func(t *testing.T) {
 		jobID := "job-copy-removall-err"
 		t.Cleanup(func() {
 			removeAll = os.RemoveAll
-			os.RemoveAll("/tmp/processed_chunk-" + jobID)
+			os.RemoveAll("/tmp/" + jobID)
 		})
 
 		removeAll = func(_ string) error { return errors.New("remove failed") }
@@ -214,7 +214,7 @@ func TestGetProcessedVideoChunkIoCopyError(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := GetProcessedVideoChunk(srv.URL+"/"+jobID+"/chunk.mp4/processed", jobID)
+		_, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error removing all files")
