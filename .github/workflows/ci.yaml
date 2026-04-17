@@ -302,7 +302,7 @@ jobs:
         run: make coverage
       
       - name: Run shared coverage
-        working-directory: ./backend/shared/cmd
+        working-directory: ./backend/shared
         run: make coverage
 
       - name: Upload coverage to Codecov                                                                       
