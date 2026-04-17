@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	shandler "shared/handler"
 	"testing"
 	"video-recombiner/internal/handler"
-	"video-recombiner/internal/service"
 	"video-recombiner/internal/test"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +17,7 @@ import (
 
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
-	data, err := json.Marshal(service.ChunkCompleteMessage{
+	data, err := json.Marshal(shandler.ChunkCompleteMessage{
 		JobID:       jobID,
 		ChunkIndex:  0,
 		TotalChunks: 2, // not ready — combine never runs
@@ -86,7 +86,7 @@ func TestMessageHandling(t *testing.T) {
 
 	t.Run("partial chunk acks without combining", func(t *testing.T) {
 		// Only the first of two chunks arrives — tracker not yet ready.
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 2,
@@ -109,7 +109,7 @@ func TestMessageHandling(t *testing.T) {
 	t.Run("all chunks ready acks and triggers combine even if download fails", func(t *testing.T) {
 		// TotalChunks=1, ChunkIndex=0 — immediately ready.
 		// HTTP download will fail on invalid URL, but msg must be acked before that.
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
@@ -131,7 +131,7 @@ func TestMessageHandling(t *testing.T) {
 
 	t.Run("ack failure does not trigger combine or write kv", func(t *testing.T) {
 		// When Ack returns an error the handler returns early before downloading chunks.
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
@@ -194,7 +194,7 @@ func TestIdempotency(t *testing.T) {
 	})
 
 	t.Run("writes kv with correct key after ack", func(t *testing.T) {
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-abc",
 			ChunkIndex:  2,
 			TotalChunks: 3, // not ready — combine never runs, but KV write still happens

@@ -106,12 +106,14 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = PublishChunkComplete(js)(service.ChunkCompleteMessage{
+		const pubSubject = "jobs.chunks.complete"
+
+		err = handler.PublishJobComplete(js, handler.ChunkCompleteMessage{
 			JobID:       payload.JobID,
 			ChunkIndex:  payload.ChunkIndex,
 			TotalChunks: payload.TotalChunks,
 			StorageURL:  storageUrl,
-		})
+		}, pubSubject)
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 			err := msg.Nak()

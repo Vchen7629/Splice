@@ -1,4 +1,4 @@
-package service
+package handler
 
 type ChunkCompleteMessage struct {
 	JobID       string `json:"job_id"`
@@ -7,6 +7,6 @@ type ChunkCompleteMessage struct {
 	StorageURL  string `json:"storage_url"`
 }
 
-type VideoProcessingCompleteMessage struct {
+type JobCompleteMessage struct {
 	JobID string `json:"job_id"`
 }

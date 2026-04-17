@@ -13,7 +13,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	"video-upload/internal/service"
 	"video-upload/internal/test"
 
 	nats "github.com/nats-io/nats.go"
@@ -129,7 +128,7 @@ func TestUploadVideoFlow(t *testing.T) {
 
 		select {
 		case data := <-received:
-			var msg service.SceneSplitMessage
+			var msg SceneSplitMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, uploadResp.JobID, msg.JobID)
 			assert.Equal(t, "720p", msg.TargetResolution)

@@ -27,7 +27,7 @@ func RecombineVideo(
 	tracker := service.NewJobTracker()
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		var payload service.ChunkCompleteMessage
+		var payload handler.ChunkCompleteMessage
 
 		err := json.Unmarshal(msg.Data(), &payload)
 		if err != nil {
@@ -110,7 +110,9 @@ func RecombineVideo(
 			service.CleanUpTempFolders(payload.JobID, logger)
 
 			logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
-			err = PublishVideoProcessingComplete(js, service.VideoProcessingCompleteMessage{JobID: payload.JobID})
+
+			const pubSubject = "jobs.complete"
+			err = handler.PublishJobComplete(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 			if err != nil {
 				logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
 			}

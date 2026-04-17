@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	shandler "shared/handler"
 	"testing"
 	"time"
 	"transcoder-worker/internal/service"
@@ -112,7 +113,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 
 		select {
 		case data := <-received:
-			var msg service.ChunkCompleteMessage
+			var msg shandler.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 			assert.Equal(t, 0, msg.ChunkIndex)

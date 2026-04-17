@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"shared/handler"
 	"shared/middleware"
-	"video-upload/internal/service"
 	"video-upload/internal/storage"
 
 	"github.com/go-playground/validator/v10"
@@ -50,6 +50,12 @@ type videoHandler struct {
 
 type uploadResponse struct {
 	JobID string `json:"job_id"`
+}
+
+type SceneSplitMessage struct {
+	JobID            string `json:"job_id"`
+	TargetResolution string `json:"target_resolution"`
+	StorageURL       string `json:"storage_url"`
 }
 
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
@@ -97,10 +103,12 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = PublishVideoMetadata(
-		v.js, service.SceneSplitMessage{
+	const pubSubject = "jobs.video.scene-split"
+
+	err = handler.PublishJobComplete(
+		v.js, SceneSplitMessage{
 			JobID: result.JobID, TargetResolution: targetRes, StorageURL: result.StorageURL,
-		},
+		}, pubSubject,
 	)
 	if err != nil {
 		http.Error(w, "unable to send process request msg to system", http.StatusInternalServerError)

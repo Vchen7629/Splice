@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"shared/handler"
 	"syscall"
 	"testing"
 	"time"
@@ -105,7 +106,7 @@ func TestRunProcessingI(t *testing.T) {
 
 		select {
 		case data := <-received:
-			var msg service.ChunkCompleteMessage
+			var msg handler.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 			assert.Equal(t, 0, msg.ChunkIndex)

@@ -1,15 +1,13 @@
 //go:build integration
 
-package handler_test
+package handler
 
 import (
 	"context"
 	"encoding/json"
+	"shared/test"
 	"testing"
 	"time"
-	"transcoder-worker/internal/handler"
-	"transcoder-worker/internal/service"
-	"transcoder-worker/internal/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -29,20 +27,19 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		msg := service.ChunkCompleteMessage{
+		msg := ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  2,
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-2.mp4",
 		}
 
-		fn := handler.PublishChunkComplete(js)
-		err = fn(msg)
+		err = PublishJobComplete(js, msg, "jobs.chunks.complete")
 		require.NoError(t, err)
 
 		select {
 		case data := <-received:
-			var got service.ChunkCompleteMessage
+			var got ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &got))
 			assert.Equal(t, msg, got)
 		case <-time.After(3 * time.Second):
@@ -72,13 +69,12 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
 
-		fn := handler.PublishChunkComplete(js)
-		err = fn(service.ChunkCompleteMessage{
+		err = PublishJobComplete(js, ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-0.mp4",
-		})
+		}, "jobs.chunks.complete")
 
 		assert.Error(t, err)
 	})

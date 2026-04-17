@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	shandler "shared/handler"
 	"testing"
 	"time"
 	"video-recombiner/internal/handler"
-	"video-recombiner/internal/service"
 	"video-recombiner/internal/test"
 
 	"github.com/nats-io/nats.go"
@@ -100,7 +100,7 @@ func TestMessageHandlingI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-partial",
 			ChunkIndex:  0,
 			TotalChunks: 2,
@@ -144,7 +144,7 @@ func TestMessageHandlingI(t *testing.T) {
 		ctx := context.Background()
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/job-combine/%s/processed", sharedFilerURL, fileName)
-			payload, err := json.Marshal(service.ChunkCompleteMessage{
+			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 				JobID:       "job-combine",
 				ChunkIndex:  i,
 				TotalChunks: 2,
@@ -186,7 +186,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       jobID,
 			ChunkIndex:  0,
 			TotalChunks: 1,
@@ -214,7 +214,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		require.NoError(t, err)
 
 		// Partial chunk (TotalChunks:2) so combine never fires — KV write still happens after ack.
-		payload, err := json.Marshal(service.ChunkCompleteMessage{
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       jobID,
 			ChunkIndex:  0,
 			TotalChunks: 2,
