@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"shared/middleware"
 	"syscall"
 	"video-recombiner/internal/handler"
-	"video-recombiner/internal/observability"
 	"video-recombiner/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := observability.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "video-recombiner")
 
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {

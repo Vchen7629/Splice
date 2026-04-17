@@ -5,8 +5,8 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"shared/middleware"
 	"testing"
-	"video-upload/internal/middleware"
 
 	"github.com/stretchr/testify/assert"
 )

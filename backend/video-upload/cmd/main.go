@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"shared/middleware"
 	"syscall"
 	"time"
 	"video-upload/internal/handler"
-	"video-upload/internal/middleware"
 	"video-upload/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "video-upload")
 
 	err = storage.CheckHealth(cfg.StorageURL, logger)
 	if err != nil {

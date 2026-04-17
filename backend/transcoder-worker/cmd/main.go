@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"shared/middleware"
 	"syscall"
 
 	"transcoder-worker/internal/handler"
-	"transcoder-worker/internal/observability"
 	"transcoder-worker/internal/storage"
 
 	"github.com/joho/godotenv"
@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := observability.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "transcoder-worker")
 
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {

@@ -4,25 +4,15 @@ package middleware_test
 
 import (
 	"net/http"
-	"net/http/httptest"
+	"shared/test"
 	"testing"
-	"video-status/internal/middleware"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newCorsServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	return httptest.NewServer(middleware.Cors(mux))
-}
-
 func TestCorsIntegration(t *testing.T) {
-	ts := newCorsServer(t)
+	ts := test.NewCorsServer(t)
 	defer ts.Close()
 
 	tests := []struct {

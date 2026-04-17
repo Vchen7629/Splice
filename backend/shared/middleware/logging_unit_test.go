@@ -1,6 +1,6 @@
 //go:build unit
 
-package middleware_test
+package middleware
 
 import (
 	"bytes"
@@ -11,15 +11,30 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"video-status/internal/middleware"
 
 	"github.com/stretchr/testify/assert"
 )
 
+func TestStructuredLogger(t *testing.T) {
+
+	t.Run("prod mode set to false should enable debug level", func(t *testing.T) {
+		logger := StructuredLogger(false, "transcoder-worker")
+
+		assert.True(t, logger.Enabled(context.Background(), slog.LevelDebug))
+	})
+
+	t.Run("prod mode set to true should disable debug level", func(t *testing.T) {
+		logger := StructuredLogger(true, "transcoder-worker")
+
+		assert.False(t, logger.Enabled(context.Background(), slog.LevelDebug))
+		assert.True(t, logger.Enabled(context.Background(), slog.LevelInfo))
+	})
+}
+
 func TestWriteHeader(t *testing.T) {
 	t.Run("Captures status code properly", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
-		wrapped := &middleware.WrappedWriter{
+		wrapped := &wrappedWriter{
 			ResponseWriter: recorder,
 			StatusCode:     http.StatusOK,
 		}
@@ -31,7 +46,7 @@ func TestWriteHeader(t *testing.T) {
 
 	t.Run("Forwards to responsewriter", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
-		wrapped := &middleware.WrappedWriter{
+		wrapped := &wrappedWriter{
 			ResponseWriter: recorder,
 			StatusCode:     http.StatusOK,
 		}
@@ -43,7 +58,7 @@ func TestWriteHeader(t *testing.T) {
 
 	t.Run("Starts at 200 status code", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
-		wrapped := &middleware.WrappedWriter{
+		wrapped := &wrappedWriter{
 			ResponseWriter: recorder,
 			StatusCode:     http.StatusOK,
 		}
@@ -60,7 +75,7 @@ func TestApiRequestLogging(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		logging := middleware.ApiRequestLogging(mockHandler)
+		logging := ApiRequestLogging(mockHandler)
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		recorder := httptest.NewRecorder()
 
@@ -79,7 +94,7 @@ func TestApiRequestLogging(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		logging := middleware.ApiRequestLogging(mockHandler)
+		logging := ApiRequestLogging(mockHandler)
 		req := httptest.NewRequest(http.MethodPost, "/api/products", nil)
 		recorder := httptest.NewRecorder()
 
@@ -99,7 +114,7 @@ func TestApiRequestLogging(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		})
 
-		logging := middleware.ApiRequestLogging(mockHandler)
+		logging := ApiRequestLogging(mockHandler)
 		req := httptest.NewRequest(http.MethodGet, "/test-path", nil)
 		recorder := httptest.NewRecorder()
 
@@ -114,20 +129,4 @@ func TestApiRequestLogging(t *testing.T) {
 		assert.True(t, strings.Contains(logOutput, "ns") || strings.Contains(logOutput, "µs") || strings.Contains(logOutput, "ms") || strings.Contains(logOutput, "s"), "Log should contain timing information")
 	})
 
-}
-
-func TestStructuredLogger(t *testing.T) {
-
-	t.Run("prod mode set to false should enable debug level", func(t *testing.T) {
-		logger := middleware.StructuredLogger(false)
-
-		assert.True(t, logger.Enabled(context.Background(), slog.LevelDebug))
-	})
-
-	t.Run("prod mode set to true should disable debug level", func(t *testing.T) {
-		logger := middleware.StructuredLogger(true)
-
-		assert.False(t, logger.Enabled(context.Background(), slog.LevelDebug))
-		assert.True(t, logger.Enabled(context.Background(), slog.LevelInfo))
-	})
 }
