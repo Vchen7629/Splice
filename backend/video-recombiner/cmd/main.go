@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	shanlder "shared/handler"
 	"shared/kv"
 	"shared/middleware"
+	"shared/service"
 	"shared/storage"
 	"syscall"
 	"video-recombiner/internal/handler"
 
-	"github.com/joho/godotenv"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -28,7 +28,7 @@ type Config struct {
 }
 
 func main() {
-	cfg, err := loadConfig()
+	cfg, err := service.LoadConfig[Config]()
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
@@ -86,29 +86,14 @@ func runCombiner(
 
 	consCtx, err := handler.RecombineVideo(js, msgRecievedKV, jobStatusKV, logger, baseStorageURL)
 	if err != nil {
-		handler.ShutdownHttpServer(server, logger)
+		shanlder.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
 	}
 
 	<-quit
 
-	handler.ShutdownHttpServer(server, logger)
+	shanlder.ShutdownHttpServer(server, logger)
 
 	consCtx.Stop()
 	return nc.Drain()
-}
-
-func loadConfig() (*Config, error) {
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Println("missing .env file")
-	}
-	var cfg Config
-
-	err = envconfig.Process("", &cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
 }

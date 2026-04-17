@@ -1,18 +1,16 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"os/signal"
+	shandler "shared/handler"
 	"shared/middleware"
+	"shared/service"
 	"shared/storage"
 	"syscall"
-	"time"
 	"video-upload/internal/handler"
 
-	"github.com/joho/godotenv"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -28,7 +26,7 @@ var osExit = os.Exit
 var natsConnect = nats.Connect
 
 func main() {
-	cfg, err := loadConfig()
+	cfg, err := service.LoadConfig[Config]()
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
@@ -67,28 +65,10 @@ func main() {
 
 	<-quit
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		logger.Warn("http server shutdown error", "err", err)
-	}
+	shandler.ShutdownHttpServer(server, logger)
 
-	if err := nc.Drain(); err != nil {
+	err = nc.Drain()
+	if err != nil {
 		logger.Warn("nats drain error", "err", err)
 	}
-}
-
-func loadConfig() (*Config, error) {
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Println("missing .env file")
-	}
-	var cfg Config
-
-	err = envconfig.Process("", &cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
 }

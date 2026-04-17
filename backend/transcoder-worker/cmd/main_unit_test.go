@@ -5,7 +5,6 @@ package main
 import (
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -103,40 +102,6 @@ func TestRunProcessing(t *testing.T) {
 		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), nc, test.SilentLogger(), quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
-	})
-}
-
-func TestLoadConfig(t *testing.T) {
-	t.Run("missing env file doesnt return error", func(t *testing.T) {
-		if _, err := os.Stat(filepath.Join("..", ".env")); err == nil {
-			t.Skip(".env already exists")
-		}
-
-		_, err := loadConfig()
-
-		assert.NoError(t, err)
-	})
-
-	t.Run("reads all values from env file", func(t *testing.T) {
-		writeEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nBASE_STORAGE_URL=http://storage:8888\n")
-
-		cfg, err := loadConfig()
-
-		require.NoError(t, err)
-		assert.Equal(t, "nats://test:9999", cfg.NatsURL)
-		assert.True(t, cfg.ProdMode)
-		assert.Equal(t, "http://storage:8888", cfg.BaseStorageURL)
-	})
-
-	t.Run("empty env file uses struct defaults", func(t *testing.T) {
-		writeEnvFile(t, "")
-
-		cfg, err := loadConfig()
-
-		require.NoError(t, err)
-		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
-		assert.False(t, cfg.ProdMode)
-		assert.Equal(t, "http://localhost:8888", cfg.BaseStorageURL)
 	})
 }
 

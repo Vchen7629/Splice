@@ -9,11 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"shared/middleware"
+	"shared/service"
 	"syscall"
 	"time"
 	"video-status/internal/handler"
 
-	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -30,7 +30,7 @@ type Config struct {
 var osExit = os.Exit
 
 func main() {
-	cfg, err := loadConfig()
+	cfg, err := service.LoadConfig[Config]()
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
@@ -123,15 +123,4 @@ func startHttpApi(logger *slog.Logger, jobStatusKV jetstream.KeyValue, cfg *Conf
 	}()
 
 	return server
-}
-
-func loadConfig() (*Config, error) {
-	var cfg Config
-
-	err := envconfig.Process("", &cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
 }

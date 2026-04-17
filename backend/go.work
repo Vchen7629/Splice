@@ -7,4 +7,5 @@ use (
     ./video-recombiner
     ./video-status
     ./video-upload
+    ./video-upscaling
 )
