@@ -21,6 +21,7 @@ jobs:
         video_recombiner: ${{ steps.changes.outputs.video_recombiner }}
         video_upload: ${{ steps.changes.outputs.video_upload }}
         video_status: ${{ steps.changes.outputs.video_status }}
+        shared: ${{ steps.changes.outputs.shared }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -39,6 +40,8 @@ jobs:
               - 'backend/video-upload/**'
             video_status:
               - 'backend/video-status/**'
+            shared:
+              - 'backend/shared/**'
   frontend-ci:
     needs: path-filter
     if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.frontend == 'true' }}
@@ -112,7 +115,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
       
       - name: Install ffmpeg dependency
@@ -145,7 +148,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
       
       - name: Install ffmpeg dependency
@@ -178,7 +181,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
 
       - name: Download Go modules
@@ -206,7 +209,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
 
       - name: Download Go modules
@@ -223,6 +226,33 @@ jobs:
         working-directory: ./backend/video-status/cmd
         run: make test_all
 
+  shared-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: v1.26.2
+          cache: 'true'
+
+      - name: Download Go modules
+        working-directory: ./backend/shared
+        run: go mod download
+      
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ./backend/shared
+      
+      - name: run tests
+        working-directory: ./backend/shared
+        run: make test_all
 
   coverage:
     needs: path-filter
@@ -233,7 +263,8 @@ jobs:
         needs.path-filter.outputs.transcoder_worker == 'true' ||
         needs.path-filter.outputs.video_recombiner == 'true' ||
         needs.path-filter.outputs.video_upload == 'true' ||
-        needs.path-filter.outputs.video_status == 'true'
+        needs.path-filter.outputs.video_status == 'true' ||
+        needs.path-filter.outputs.shared == 'true'
       )
     steps:
       - uses: actions/checkout@v4
@@ -269,9 +300,19 @@ jobs:
       - name: Run video_status coverage
         working-directory: ./backend/video-status/cmd
         run: make coverage
+      
+      - name: Run shared coverage
+        working-directory: ./backend/shared/cmd
+        run: make coverage
 
       - name: Upload coverage to Codecov                                                                       
         uses: codecov/codecov-action@v4                                                                        
         with:                                                                                                  
-          files: ./backend/transcoder-worker/cmd/coverage.out,./backend/video-recombiner/cmd/coverage.out,./backend/video-upload/cmd/coverage.out,./backend/video-status/cmd/coverage.out,./backend/scene-detector/coverage.xml                                                                       
+          files: |
+            ./backend/transcoder-worker/cmd/coverage.out,
+            ./backend/video-recombiner/cmd/coverage.out,
+            ./backend/video-upload/cmd/coverage.out,
+            ./backend/video-status/cmd/coverage.out,
+            ./backend/shared/coverage.out,
+            ./backend/scene-detector/coverage.xml                                                                       
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -6,10 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"shared/kv"
+	"shared/middleware"
+	"shared/storage"
 	"syscall"
 	"video-recombiner/internal/handler"
-	"video-recombiner/internal/observability"
-	"video-recombiner/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -32,7 +33,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := observability.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "video-recombiner")
 
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {
@@ -55,8 +56,8 @@ func main() {
 		return
 	}
 
-	msgRecievedKV := handler.CreateMsgRecievedKV(js, logger)
-	jobStatusKV := handler.ConnectJobStatusKV(js, logger)
+	msgRecievedKV := kv.CreateMsgProcessedKV("recombine-chunk-recieved", js, logger)
+	jobStatusKV := kv.ConnectJobStatus(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

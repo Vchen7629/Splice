@@ -3,6 +3,7 @@ package test
 import (
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"io"
 	"log/slog"
 	"net"
@@ -10,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func SilentLogger() *slog.Logger {

@@ -2,17 +2,14 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
+	"shared/middleware"
+	"shared/storage"
 	"syscall"
 	"time"
 	"video-upload/internal/handler"
-	"video-upload/internal/middleware"
-	"video-upload/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -33,7 +30,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "video-upload")
 
 	err = storage.CheckHealth(cfg.StorageURL, logger)
 	if err != nil {
@@ -60,7 +57,7 @@ func main() {
 
 	logger.Debug("starting service...")
 
-	server := startHttpApi(logger, js, kv, cfg)
+	server := handler.StartHttpApi(logger, js, kv, cfg.HTTPPort, cfg.StorageURL)
 
 	<-quit
 
@@ -73,30 +70,6 @@ func main() {
 	if err := nc.Drain(); err != nil {
 		logger.Warn("nats drain error", "err", err)
 	}
-}
-
-func startHttpApi(logger *slog.Logger, js jetstream.JetStream, kv jetstream.KeyValue, cfg *Config) *http.Server {
-	router := http.NewServeMux()
-
-	vh := &handler.VideoHandler{Logger: logger, JS: js, KV: kv, StorageURL: cfg.StorageURL}
-
-	router.HandleFunc("POST /jobs/upload", vh.UploadVideo)
-	router.HandleFunc("POST /jobs/download", vh.DownloadVideo)
-
-	server := &http.Server{
-		Addr:    ":" + cfg.HTTPPort,
-		Handler: middleware.Cors(middleware.ApiRequestLogging(router)),
-	}
-
-	go func() {
-		fmt.Printf("server running on http://localhost:%s\n", cfg.HTTPPort)
-		err := server.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			log.Fatalf("http server error: %v", err)
-		}
-	}()
-
-	return server
 }
 
 func loadConfig() (*Config, error) {

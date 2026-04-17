@@ -6,11 +6,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"shared/kv"
+	"shared/middleware"
 	"syscall"
 
+	"shared/storage"
 	"transcoder-worker/internal/handler"
-	"transcoder-worker/internal/observability"
-	"transcoder-worker/internal/storage"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -34,7 +35,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := observability.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "transcoder-worker")
 
 	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {
@@ -57,8 +58,8 @@ func main() {
 		return
 	}
 
-	processedKV := handler.CreateMsgProcessedKV(js, logger)
-	jobStatusKV := handler.ConnectJobStatusKV(js, logger)
+	processedKV := kv.CreateMsgProcessedKV("transcode-chunk-job-processed", js, logger)
+	jobStatusKV := kv.ConnectJobStatus(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

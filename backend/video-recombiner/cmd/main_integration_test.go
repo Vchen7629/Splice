@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"shared/handler"
 	"syscall"
 	"testing"
 	"time"
-	"video-recombiner/internal/service"
 	"video-recombiner/internal/test"
 
 	"github.com/nats-io/nats.go"
@@ -120,7 +120,7 @@ func TestRunCombinerI(t *testing.T) {
 		ctx := context.Background()
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/%s/%s/processed", sharedFilerURL, jobID, fileName)
-			payload, err := json.Marshal(service.ChunkCompleteMessage{
+			payload, err := json.Marshal(handler.ChunkCompleteMessage{
 				JobID:       jobID,
 				ChunkIndex:  i,
 				TotalChunks: 2,
@@ -133,7 +133,7 @@ func TestRunCombinerI(t *testing.T) {
 
 		select {
 		case data := <-received:
-			var msg service.VideoProcessingCompleteMessage
+			var msg handler.JobCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 		case <-time.After(30 * time.Second):

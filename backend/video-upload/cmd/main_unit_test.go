@@ -3,9 +3,6 @@
 package main
 
 import (
-	"errors"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,31 +50,6 @@ func TestLoadConfig(t *testing.T) {
 	})
 }
 
-func TestStartHttp(t *testing.T) {
-	t.Run("returns non-nil server with address derived from config", func(t *testing.T) {
-		server, cfg := startTestServer(t, &test.MockKV{})
-
-		require.NotNil(t, server)
-		assert.Equal(t, ":"+cfg.HTTPPort, server.Addr)
-	})
-
-	t.Run("server handler is non-nil", func(t *testing.T) {
-		server, _ := startTestServer(t, &test.MockKV{})
-
-		assert.NotNil(t, server.Handler)
-	})
-
-	t.Run("unregistered path returns 404", func(t *testing.T) {
-		server, _ := startTestServer(t, &test.MockKV{})
-
-		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
-		w := httptest.NewRecorder()
-		server.Handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusNotFound, w.Code)
-	})
-}
-
 func TestMainFunc(t *testing.T) {
 	t.Run("exits on NATS connect error", func(t *testing.T) {
 		if os.Getenv("RUN_MAIN") == "nats_error" {
@@ -103,17 +75,5 @@ func TestMainFunc(t *testing.T) {
 
 		require.ErrorAs(t, err, &exitErr)
 		assert.Equal(t, 1, exitErr.ExitCode())
-	})
-
-	t.Run("returns 500 when KV.Put fails during upload", func(t *testing.T) {
-		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
-		server, _ := startTestServer(t, kv)
-
-		req := test.NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p")
-		w := httptest.NewRecorder()
-		server.Handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "failed to record job status")
 	})
 }

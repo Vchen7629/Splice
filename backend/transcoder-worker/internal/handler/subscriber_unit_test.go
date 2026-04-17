@@ -27,47 +27,15 @@ func validPayload(t *testing.T, jobID string) []byte {
 	return data
 }
 
-func TestReturnError(t *testing.T) {
-	streamNameErr := errors.New("no stream")
-	streamErr := errors.New("stream error")
-	consumerErr := errors.New("consumer error")
+func TestConsumeFailReturnError(t *testing.T) {
 	consumeErr := errors.New("consume error")
 
-	tests := []struct {
-		name    string
-		js      *test.MockJS
-		wantErr error
-	}{
-		{
-			name:    "stream name lookup failure returns error",
-			js:      &test.MockJS{JStreamNameErr: streamNameErr},
-			wantErr: streamNameErr,
-		},
-		{
-			name:    "stream failure returns error",
-			js:      &test.MockJS{JStreamErr: streamErr},
-			wantErr: streamErr,
-		},
-		{
-			name:    "create consumer failure returns error",
-			js:      &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}},
-			wantErr: consumerErr,
-		},
-		{
-			name:    "consume failure returns error",
-			js:      &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}},
-			wantErr: consumeErr,
-		},
-	}
+	js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := handler.ConsumeVideoChunk("http://storage", tc.js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
+	_, err := handler.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
 
-			require.Error(t, err)
-			assert.ErrorIs(t, err, tc.wantErr)
-		})
-	}
+	require.Error(t, err)
+	assert.ErrorIs(t, err, consumeErr)
 }
 
 func TestAckAndNacking(t *testing.T) {

@@ -1,14 +1,15 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
+	"path/filepath"
+	"shared/handler"
+	"shared/kv"
+	"shared/storage"
 	"transcoder-worker/internal/service"
-	"transcoder-worker/internal/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -22,28 +23,7 @@ var removeAll = os.RemoveAll
 func ConsumeVideoChunk(
 	baseStorageURL string, js jetstream.JetStream, processedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
-	ctx := context.Background()
-
-	streamName, err := js.StreamNameBySubject(ctx, subSubject)
-	if err != nil {
-		return nil, fmt.Errorf("no stream found for subject: %s: %w", subSubject, err)
-	}
-
-	stream, err := js.Stream(ctx, streamName)
-	if err != nil {
-		return nil, err
-	}
-
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Name:          "transcoder-worker",
-		Durable:       "transcoder-worker",
-		Description:   "takes in nats msgs with job metadata and transcodes the video chunk",
-		FilterSubject: subSubject,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		MaxAckPending: 10, // worker wont recieve more than 10 inflight messages
-		MaxDeliver:    3,
-		AckWait:       30 * time.Second,
-	})
+	cons, err := handler.CreateDurableConsumer(js, subSubject, "transcoder-worker")
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +42,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		exists, err := CheckChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
+		exists, err := kv.CheckChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
 			return
@@ -78,12 +58,14 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = UpdateJobStatusKV(jobStatusKV, payload.JobID, logger)
+		err = kv.UpdateJobStatus(jobStatusKV, "transcoder", payload.JobID, logger)
 		if err != nil {
 			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 		}
 
-		filePath, err := storage.GetUnprocessedVideoChunk(payload.StorageURL, payload.JobID)
+		fileName := fmt.Sprintf("temp-unprocessed-%s", payload.JobID)
+
+		filePath, err := storage.GetVideoChunk(payload.StorageURL, fileName)
 		if err != nil {
 			logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
 			err := msg.Nak()
@@ -105,7 +87,10 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		url, err := storage.SaveTranscodedVideoChunk(baseStorageURL, outputPath, payload.JobID)
+		fileName = filepath.Base(outputPath)
+		url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, fileName)
+
+		storageUrl, err := storage.UploadVideoChunk(url, outputPath)
 		if err != nil {
 			logger.Error(
 				"error saving transcoded video chunk to seaweedfs storage",
@@ -121,12 +106,14 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = PublishChunkComplete(js)(service.ChunkCompleteMessage{
+		const pubSubject = "jobs.chunks.complete"
+
+		err = handler.PublishJobComplete(js, handler.ChunkCompleteMessage{
 			JobID:       payload.JobID,
 			ChunkIndex:  payload.ChunkIndex,
 			TotalChunks: payload.TotalChunks,
-			StorageURL:  url,
-		})
+			StorageURL:  storageUrl,
+		}, pubSubject)
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 			err := msg.Nak()
@@ -143,7 +130,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = AddChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
+		err = kv.AddChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as processed", "err", err)
 			return

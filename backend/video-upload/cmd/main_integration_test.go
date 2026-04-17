@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"video-upload/internal/service"
+	"video-upload/internal/handler"
 	"video-upload/internal/test"
 
 	nats "github.com/nats-io/nats.go"
@@ -45,7 +45,7 @@ func setupServer(t *testing.T) *serverEnv {
 	cfg := &Config{HTTPPort: test.FreePort(t), StorageURL: sharedStorageURL}
 
 	url := "http://localhost:" + cfg.HTTPPort
-	server := startHttpApi(test.SilentLogger(), js, kv, cfg)
+	server := handler.StartHttpApi(test.SilentLogger(), js, kv, cfg.HTTPPort, cfg.StorageURL)
 	t.Cleanup(func() {
 		server.Shutdown(context.Background()) //nolint:errcheck
 	})
@@ -151,7 +151,7 @@ func TestUploadPipeline(t *testing.T) {
 		// Verify NATS scene-split message was published
 		select {
 		case data := <-received:
-			var msg service.SceneSplitMessage
+			var msg handler.SceneSplitMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, uploadResp.JobID, msg.JobID)
 			assert.Equal(t, "720p", msg.TargetResolution)

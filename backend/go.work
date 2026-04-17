@@ -1,0 +1,10 @@
+go 1.26.2
+
+use (
+    ./shared
+    ./pipeline-tests
+    ./transcoder-worker
+    ./video-recombiner
+    ./video-status
+    ./video-upload
+)

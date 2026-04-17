@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"shared/middleware"
 	"syscall"
 	"time"
 	"video-status/internal/handler"
-	"video-status/internal/middleware"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
@@ -35,7 +35,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "video-status")
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {

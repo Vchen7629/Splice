@@ -1,13 +1,14 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
+	"path/filepath"
+	"shared/handler"
+	"shared/kv"
+	"shared/storage"
 	"video-recombiner/internal/service"
-	"video-recombiner/internal/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -18,28 +19,7 @@ const subSubject = "jobs.chunks.complete"
 func RecombineVideo(
 	js jetstream.JetStream, msgRecievedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
-	ctx := context.Background()
-
-	streamName, err := js.StreamNameBySubject(ctx, subSubject)
-	if err != nil {
-		return nil, fmt.Errorf("no stream found for subject: %s: %w", subSubject, err)
-	}
-
-	stream, err := js.Stream(ctx, streamName)
-	if err != nil {
-		return nil, err
-	}
-
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Name:          "video-recombiner",
-		Durable:       "video-recombiner",
-		Description:   "takes in nats msgs with video chunks and recombines it once it gathered all chunks",
-		FilterSubject: subSubject,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		MaxAckPending: 10, // worker wont recieve more than 10 inflight messages
-		MaxDeliver:    3,
-		AckWait:       30 * time.Second,
-	})
+	cons, err := handler.CreateDurableConsumer(js, subSubject, "video-recombiner")
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +27,7 @@ func RecombineVideo(
 	tracker := service.NewJobTracker()
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		var payload service.ChunkCompleteMessage
+		var payload handler.ChunkCompleteMessage
 
 		err := json.Unmarshal(msg.Data(), &payload)
 		if err != nil {
@@ -58,7 +38,7 @@ func RecombineVideo(
 			return
 		}
 
-		recieved, err := CheckChunkRecieved(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		recieved, err := kv.CheckChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk recieved", "err", err)
 			return
@@ -74,7 +54,7 @@ func RecombineVideo(
 			return
 		}
 
-		err = UpdateJobStatusKV(jobStatusKV, payload.JobID, logger)
+		err = kv.UpdateJobStatus(jobStatusKV, "video-recombiner", payload.JobID, logger)
 		if err != nil {
 			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 		}
@@ -87,7 +67,7 @@ func RecombineVideo(
 			return
 		}
 
-		err = AddChunkRecieved(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		err = kv.AddChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as recieved", "err", err)
 			return
@@ -98,7 +78,9 @@ func RecombineVideo(
 			failed := false
 
 			for idx, storageURL := range chunks {
-				localPath, err := storage.GetProcessedVideoChunk(storageURL, payload.JobID)
+				fileName := fmt.Sprintf("processed_chunk-%s", payload.JobID)
+
+				localPath, err := storage.GetVideoChunk(storageURL, fileName)
 				if err != nil {
 					logger.Error("failed to download chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
 					failed = true
@@ -116,7 +98,10 @@ func RecombineVideo(
 				return
 			}
 
-			_, err = storage.UploadRecombinedVideo(baseStorageURL, outputPath, payload.JobID)
+			fileName := filepath.Base(outputPath)
+			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
+
+			_, err = storage.UploadVideoChunk(url, outputPath)
 			if err != nil {
 				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				return
@@ -125,7 +110,9 @@ func RecombineVideo(
 			service.CleanUpTempFolders(payload.JobID, logger)
 
 			logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
-			err = PublishVideoProcessingComplete(js, service.VideoProcessingCompleteMessage{JobID: payload.JobID})
+
+			const pubSubject = "jobs.complete"
+			err = handler.PublishJobComplete(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 			if err != nil {
 				logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
 			}
