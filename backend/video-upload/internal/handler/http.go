@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"shared/handler"
 	"shared/middleware"
+	"video-upload/internal/service"
 	"video-upload/internal/storage"
 
 	"github.com/go-playground/validator/v10"
@@ -52,11 +53,7 @@ type uploadResponse struct {
 	JobID string `json:"job_id"`
 }
 
-type SceneSplitMessage struct {
-	JobID            string `json:"job_id"`
-	TargetResolution string `json:"target_resolution"`
-	StorageURL       string `json:"storage_url"`
-}
+var checkVideoResolution = service.CheckVideoResolution
 
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
 // and publishes a scene split message to NATS for downstream processing
@@ -96,6 +93,13 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	sourceRes, err := checkVideoResolution(file)
+	if err != nil {
+		http.Error(w, "failed to detect video resolution", http.StatusInternalServerError)
+		v.logger.Error("failed to detect video res", "err", err)
+		return
+	}
+
 	result, err := storage.SaveUploadedVideo(file, v.storageURL, header.Filename)
 	if err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
@@ -103,16 +107,21 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	const pubSubject = "jobs.video.scene-split"
+	pubSubject := "jobs.video.scene-split"
+	if service.ConvertResStringToInt(sourceRes) < service.ConvertResStringToInt(targetRes) {
+		pubSubject = "jobs.video.upscale"
+	}
+
+	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
 
 	err = handler.PublishJobComplete(
-		v.js, SceneSplitMessage{
+		v.js, handler.VideoJobMessage{
 			JobID: result.JobID, TargetResolution: targetRes, StorageURL: result.StorageURL,
 		}, pubSubject,
 	)
 	if err != nil {
 		http.Error(w, "unable to send process request msg to system", http.StatusInternalServerError)
-		v.logger.Error("error publishing split video request to nats", "err", err)
+		v.logger.Error("error publishing request to nats", "err", err)
 		return
 	}
 
