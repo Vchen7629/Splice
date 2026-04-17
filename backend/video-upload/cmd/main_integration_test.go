@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"video-upload/internal/handler"
 	"video-upload/internal/service"
 	"video-upload/internal/test"
 
@@ -45,7 +46,7 @@ func setupServer(t *testing.T) *serverEnv {
 	cfg := &Config{HTTPPort: test.FreePort(t), StorageURL: sharedStorageURL}
 
 	url := "http://localhost:" + cfg.HTTPPort
-	server := startHttpApi(test.SilentLogger(), js, kv, cfg)
+	server := handler.StartHttpApi(test.SilentLogger(), js, kv, cfg.HTTPPort, cfg.StorageURL)
 	t.Cleanup(func() {
 		server.Shutdown(context.Background()) //nolint:errcheck
 	})

@@ -1,6 +1,6 @@
 //go:build integration
 
-package handler_test
+package handler
 
 import (
 	"bytes"
@@ -13,7 +13,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	"video-upload/internal/handler"
 	"video-upload/internal/service"
 	"video-upload/internal/test"
 
@@ -35,23 +34,23 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func newUploadHandler(js jetstream.JetStream, kv jetstream.KeyValue, filerURL string) *handler.VideoHandler {
-	return &handler.VideoHandler{
-		Logger:     test.SilentLogger(),
-		JS:         js,
-		KV:         kv,
-		StorageURL: filerURL,
+func newUploadHandler(js jetstream.JetStream, kv jetstream.KeyValue, filerURL string) *videoHandler {
+	return &videoHandler{
+		logger:     test.SilentLogger(),
+		js:         js,
+		kv:         kv,
+		storageURL: filerURL,
 	}
 }
 
 func newDownloadVideoServer(t *testing.T, storageURL string) *httptest.Server {
 	t.Helper()
-	h := &handler.VideoHandler{
-		Logger:     test.SilentLogger(),
-		StorageURL: storageURL,
+	h := &videoHandler{
+		logger:     test.SilentLogger(),
+		storageURL: storageURL,
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /jobs", h.DownloadVideo)
+	mux.HandleFunc("GET /jobs", h.downloadVideoRoute)
 	return httptest.NewServer(mux)
 }
 
@@ -62,13 +61,13 @@ func TestUploadVideoFlow(t *testing.T) {
 	h := newUploadHandler(js, kv, sharedFilerUrl)
 
 	t.Run("Rejects uploads exceeding MaxUploadBytes", func(t *testing.T) {
-		h.MaxUploadBytes = 100
-		defer func() { h.MaxUploadBytes = 0 }()
+		h.maxUploadBytes = 100
+		defer func() { h.maxUploadBytes = 0 }()
 
 		req := test.NewUploadRequest(t, "/jobs", "big.mp4", bytes.Repeat([]byte("x"), 200), "1080p")
 		rec := httptest.NewRecorder()
 
-		h.UploadVideo(rec, req)
+		h.uploadVideoRoute(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Contains(t, rec.Body.String(), "invalid multipart form")
@@ -78,7 +77,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		req := test.NewUploadRequest(t, "/jobs", "clip.mp4", []byte("fake video bytes"), "1080p")
 		rec := httptest.NewRecorder()
 
-		h.UploadVideo(rec, req)
+		h.uploadVideoRoute(rec, req)
 
 		require.Equal(t, http.StatusCreated, rec.Code)
 		var resp struct {
@@ -93,7 +92,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", content, "720p")
 		rec := httptest.NewRecorder()
 
-		h.UploadVideo(rec, req)
+		h.uploadVideoRoute(rec, req)
 
 		require.Equal(t, http.StatusCreated, rec.Code)
 		var resp struct {
@@ -120,7 +119,7 @@ func TestUploadVideoFlow(t *testing.T) {
 
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "720p")
 		rec := httptest.NewRecorder()
-		h.UploadVideo(rec, req)
+		h.uploadVideoRoute(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code)
 
 		var uploadResp struct {
@@ -146,7 +145,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		for range 3 {
 			req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 			rec := httptest.NewRecorder()
-			h.UploadVideo(rec, req)
+			h.uploadVideoRoute(rec, req)
 			require.Equal(t, http.StatusCreated, rec.Code)
 
 			var resp struct {
@@ -163,7 +162,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		req := test.NewUploadRequest(t, "/jobs", "big.mp4", content, "4k")
 		rec := httptest.NewRecorder()
 
-		h.UploadVideo(rec, req)
+		h.uploadVideoRoute(rec, req)
 
 		require.Equal(t, http.StatusCreated, rec.Code)
 		var resp struct {
@@ -185,7 +184,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
 
-		h.UploadVideo(rec, req)
+		h.uploadVideoRoute(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 		assert.Contains(t, rec.Body.String(), "unable to send process request")
