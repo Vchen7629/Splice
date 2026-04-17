@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -37,4 +39,20 @@ func CreateDurableConsumer(js jetstream.JetStream, subSubject, consName string) 
 	}
 
 	return cons, nil
+}
+
+func UnmarshalJetstreamMsg[T any](msg jetstream.Msg, logger *slog.Logger) (T, bool) {
+	var payload T
+
+	err := json.Unmarshal(msg.Data(), &payload)
+	if err != nil {
+		logger.Error("failed to unmarshal msg from jetstream", "err", err)
+		err := msg.Nak()
+		if err != nil {
+			logger.Error("error naking msg", "err", err)
+		}
+		return payload, false
+	}
+
+	return payload, true
 }

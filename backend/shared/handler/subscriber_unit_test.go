@@ -48,3 +48,28 @@ func TestReturnError(t *testing.T) {
 		})
 	}
 }
+
+func TestUnmarshalJetstreamMsg(t *testing.T) {
+	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
+		msg := &test.MockMsg{Payload: []byte("not valid json")}
+
+		payload, ok := handler.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+
+		require.False(t, ok)
+		assert.NotNil(t, payload)
+		assert.True(t, msg.NakCalled)
+		assert.False(t, msg.AckCalled)
+	})
+
+	t.Run("invalid JSON with nak error logs and returns", func(t *testing.T) {
+		nakErr := errors.New("nak failed")
+		msg := &test.MockMsg{Payload: []byte("not valid json"), NakErr: nakErr}
+
+		payload, ok := handler.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+
+		require.False(t, ok)
+		assert.NotNil(t, payload)
+		assert.True(t, msg.NakCalled)
+	})
+
+}
