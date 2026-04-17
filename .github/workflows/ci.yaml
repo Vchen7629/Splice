@@ -115,7 +115,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
       
       - name: Install ffmpeg dependency
@@ -148,7 +148,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
       
       - name: Install ffmpeg dependency
@@ -181,7 +181,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
 
       - name: Download Go modules
@@ -209,7 +209,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: v1.26.1
+          go-version: v1.26.2
           cache: 'true'
 
       - name: Download Go modules
