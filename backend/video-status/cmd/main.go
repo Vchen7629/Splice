@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -11,8 +10,8 @@ import (
 	"shared/middleware"
 	"shared/service"
 	"syscall"
-	"time"
 	"video-status/internal/handler"
+	shandler "shared/handler"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -78,14 +77,8 @@ func main() {
 	}
 	jobCompleteSub.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	err = server.Shutdown(ctx)
-	if err != nil {
-		logger.Error("http server shutdown error", "err", err)
-	}
-
+	shandler.ShutdownHttpServer(server, logger)
+	
 	err = nc.Drain()
 	if err != nil {
 		logger.Error("nats drain error", "err", err)
