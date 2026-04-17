@@ -33,40 +33,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestConsumeVideoChunk(t *testing.T) {
-	t.Run("no stream for subject returns error", func(t *testing.T) {
-		ctx := context.Background()
-		container, err := natstc.Run(ctx, "nats:2.10-alpine")
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-		url, err := container.ConnectionString(ctx)
-		require.NoError(t, err)
-
-		nc, err := nats.Connect(url)
-		require.NoError(t, err)
-		t.Cleanup(nc.Close)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-		kv := test.SetupKV(t, js)
-		jobStatusKV := test.SetupJobStatusKV(t, js)
-
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
-
-		assert.Error(t, err)
-	})
-
-	t.Run("returns non-nil consume context", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js)
-		jobStatusKV := test.SetupJobStatusKV(t, js)
-
-		consCtx, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
-
-		require.NoError(t, err)
-		assert.NotNil(t, consCtx)
-	})
-
 	t.Run("consumer is created with correct config", func(t *testing.T) {
 		ctx := context.Background()
 		js, _ := test.SetupNats(t)

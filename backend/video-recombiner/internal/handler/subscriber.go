@@ -1,14 +1,13 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"shared/handler"
 	"shared/kv"
 	"shared/storage"
-	"time"
 	"video-recombiner/internal/service"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -20,28 +19,7 @@ const subSubject = "jobs.chunks.complete"
 func RecombineVideo(
 	js jetstream.JetStream, msgRecievedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
-	ctx := context.Background()
-
-	streamName, err := js.StreamNameBySubject(ctx, subSubject)
-	if err != nil {
-		return nil, fmt.Errorf("no stream found for subject: %s: %w", subSubject, err)
-	}
-
-	stream, err := js.Stream(ctx, streamName)
-	if err != nil {
-		return nil, err
-	}
-
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Name:          "video-recombiner",
-		Durable:       "video-recombiner",
-		Description:   "takes in nats msgs with video chunks and recombines it once it gathered all chunks",
-		FilterSubject: subSubject,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		MaxAckPending: 10, // worker wont recieve more than 10 inflight messages
-		MaxDeliver:    3,
-		AckWait:       30 * time.Second,
-	})
+	cons, err := handler.CreateDurableConsumer(js, subSubject, "video-recombiner")
 	if err != nil {
 		return nil, err
 	}

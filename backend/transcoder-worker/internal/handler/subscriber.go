@@ -1,15 +1,14 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"shared/handler"
 	"shared/kv"
 	"shared/storage"
-	"time"
 	"transcoder-worker/internal/service"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -24,28 +23,7 @@ var removeAll = os.RemoveAll
 func ConsumeVideoChunk(
 	baseStorageURL string, js jetstream.JetStream, processedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
-	ctx := context.Background()
-
-	streamName, err := js.StreamNameBySubject(ctx, subSubject)
-	if err != nil {
-		return nil, fmt.Errorf("no stream found for subject: %s: %w", subSubject, err)
-	}
-
-	stream, err := js.Stream(ctx, streamName)
-	if err != nil {
-		return nil, err
-	}
-
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Name:          "transcoder-worker",
-		Durable:       "transcoder-worker",
-		Description:   "takes in nats msgs with job metadata and transcodes the video chunk",
-		FilterSubject: subSubject,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		MaxAckPending: 10, // worker wont recieve more than 10 inflight messages
-		MaxDeliver:    3,
-		AckWait:       30 * time.Second,
-	})
+	cons, err := handler.CreateDurableConsumer(js, subSubject, "transcoder-worker")
 	if err != nil {
 		return nil, err
 	}

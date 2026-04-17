@@ -51,7 +51,10 @@ func OpenTestVideo(t *testing.T) *os.File {
 	t.Helper()
 	f, err := os.Open(testVideoPath)
 	require.NoError(t, err)
-	t.Cleanup(func() { f.Close() })
+	t.Cleanup(func() {
+		err := f.Close()
+		require.NoError(t, err)
+	})
 	return f
 }
 
@@ -67,6 +70,8 @@ func SeedProcessedVideo(t *testing.T, filerURL, jobID, fileName string, content 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	require.NoError(t, err)
+
 	require.Less(t, resp.StatusCode, 400)
 }
