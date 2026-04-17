@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"shared/kv"
 	"shared/middleware"
 	"syscall"
 	"video-recombiner/internal/handler"
@@ -55,8 +56,8 @@ func main() {
 		return
 	}
 
-	msgRecievedKV := handler.CreateMsgRecievedKV(js, logger)
-	jobStatusKV := handler.ConnectJobStatusKV(js, logger)
+	msgRecievedKV := kv.CreateMsgProcessedKV("recombine-chunk-recieved", js, logger)
+	jobStatusKV := kv.ConnectJobStatus(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

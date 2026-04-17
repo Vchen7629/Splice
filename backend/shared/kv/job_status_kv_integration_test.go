@@ -1,12 +1,12 @@
 //go:build integration
 
-package handler
+package kv
 
 import (
 	"context"
 	"os"
+	"shared/test"
 	"testing"
-	"video-recombiner/internal/test"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +14,7 @@ import (
 )
 
 // connects to existing job-status bucket
-func TestConnectJobStatusKV(t *testing.T) {
+func TestConnectJobStatus(t *testing.T) {
 	t.Run("connects to existing job-status bucket", func(t *testing.T) {
 		js, _ := test.SetupNats(t)
 
@@ -23,7 +23,7 @@ func TestConnectJobStatusKV(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		kv := ConnectJobStatusKV(js, test.SilentLogger())
+		kv := ConnectJobStatus(js, test.SilentLogger())
 
 		assert.NotNil(t, kv)
 	})
@@ -35,7 +35,7 @@ func TestConnectJobStatusKV(t *testing.T) {
 		osExit = func(c int) { code = c }
 		t.Cleanup(func() { osExit = os.Exit })
 
-		ConnectJobStatusKV(js, test.SilentLogger())
+		ConnectJobStatus(js, test.SilentLogger())
 
 		assert.Equal(t, 1, code)
 	})

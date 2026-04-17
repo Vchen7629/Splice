@@ -1,18 +1,18 @@
 //go:build unit
 
-package handler_test
+package kv_test
 
 import (
 	"errors"
+	"shared/kv"
+	"shared/test"
 	"testing"
-	"transcoder-worker/internal/handler"
-	"transcoder-worker/internal/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUpdateJobStatusKV(t *testing.T) {
+func TestUpdateJobStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		kv      *test.MockKV
@@ -34,7 +34,7 @@ func TestUpdateJobStatusKV(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := handler.UpdateJobStatusKV(tc.kv, "job-1", test.SilentLogger())
+			err := kv.UpdateJobStatus(tc.kv, "video-upload", "job-1", test.SilentLogger())
 
 			if tc.wantErr {
 				require.Error(t, err)

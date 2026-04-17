@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"shared/kv"
 	"time"
 	"transcoder-worker/internal/service"
 	"transcoder-worker/internal/storage"
@@ -62,7 +63,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		exists, err := CheckChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
+		exists, err := kv.CheckChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
 			return
@@ -78,7 +79,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = UpdateJobStatusKV(jobStatusKV, payload.JobID, logger)
+		err = kv.UpdateJobStatus(jobStatusKV, "transcoder", payload.JobID, logger)
 		if err != nil {
 			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 		}
@@ -143,7 +144,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		err = AddChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
+		err = kv.AddChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as processed", "err", err)
 			return

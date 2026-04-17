@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 )
+
+var osExit = os.Exit
 
 // starts the http server with /health endpoint
 func StartHttpServer(logger *slog.Logger, httpPort string) *http.Server {

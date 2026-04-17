@@ -1,20 +1,17 @@
-package handler
+package kv
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-var osExit = os.Exit
-
 // Create the Msg Processed KV store for idempotency
-func CreateMsgProcessedKV(js jetstream.JetStream, logger *slog.Logger) jetstream.KeyValue {
+func CreateMsgProcessedKV(bucketName string, js jetstream.JetStream, logger *slog.Logger) jetstream.KeyValue {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

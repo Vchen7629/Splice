@@ -1,6 +1,10 @@
+//go:build unit || integration
+
 package test
 
 import (
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"shared/middleware"
@@ -14,4 +18,8 @@ func NewCorsServer(t *testing.T) *httptest.Server {
 		w.WriteHeader(http.StatusOK)
 	})
 	return httptest.NewServer(middleware.Cors(mux))
+}
+
+func SilentLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

@@ -1,6 +1,6 @@
 test_all: integration unit
 
-PKGS := ./middleware/...
+PKGS := ./kv/... ./middleware/...
 
 format: 
 	go fmt ${PKGS} .

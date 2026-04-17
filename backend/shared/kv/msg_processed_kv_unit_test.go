@@ -1,12 +1,12 @@
 //go:build unit
 
-package handler_test
+package kv_test
 
 import (
 	"errors"
+	"shared/kv"
+	"shared/test"
 	"testing"
-	"transcoder-worker/internal/handler"
-	"transcoder-worker/internal/test"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -15,36 +15,36 @@ import (
 
 func TestCheckChunkProcessed(t *testing.T) {
 	t.Run("returns false when key not found", func(t *testing.T) {
-		kv := &test.MockKV{GetFound: false}
+		mockKV := &test.MockKV{GetFound: false}
 
-		processed, err := handler.CheckChunkProcessed(kv, "job-1", 0)
+		processed, err := kv.CheckChunkProcessed(mockKV, "job-1", 0)
 
 		require.NoError(t, err)
 		assert.False(t, processed)
 	})
 
 	t.Run("returns true when key exists", func(t *testing.T) {
-		kv := &test.MockKV{GetFound: true}
+		mockKV := &test.MockKV{GetFound: true}
 
-		processed, err := handler.CheckChunkProcessed(kv, "job-1", 0)
+		processed, err := kv.CheckChunkProcessed(mockKV, "job-1", 0)
 
 		require.NoError(t, err)
 		assert.True(t, processed)
 	})
 
 	t.Run("returns error on unexpected kv failure", func(t *testing.T) {
-		kv := &test.MockKV{GetErr: errors.New("kv unavailable")}
+		mockKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := handler.CheckChunkProcessed(kv, "job-1", 0)
+		_, err := kv.CheckChunkProcessed(mockKV, "job-1", 0)
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "failed")
 	})
 
 	t.Run("does not return error for ErrKeyNotFound", func(t *testing.T) {
-		kv := &test.MockKV{GetErr: jetstream.ErrKeyNotFound}
+		mockKV := &test.MockKV{GetErr: jetstream.ErrKeyNotFound}
 
-		processed, err := handler.CheckChunkProcessed(kv, "job-1", 0)
+		processed, err := kv.CheckChunkProcessed(mockKV, "job-1", 0)
 
 		require.NoError(t, err)
 		assert.False(t, processed)
@@ -53,9 +53,9 @@ func TestCheckChunkProcessed(t *testing.T) {
 	t.Run("uses correct key format job_id.chunk_index", func(t *testing.T) {
 		// Key lookup for job "abc" chunk 3 must use "abc.3".
 		// We verify by having GetFound=true and confirming no error path is hit.
-		kv := &test.MockKV{GetFound: true}
+		mockKV := &test.MockKV{GetFound: true}
 
-		processed, err := handler.CheckChunkProcessed(kv, "abc", 3)
+		processed, err := kv.CheckChunkProcessed(mockKV, "abc", 3)
 
 		require.NoError(t, err)
 		assert.True(t, processed)
@@ -64,26 +64,26 @@ func TestCheckChunkProcessed(t *testing.T) {
 
 func TestAddChunkProcessed(t *testing.T) {
 	t.Run("returns nil on success", func(t *testing.T) {
-		kv := &test.MockKV{}
+		mockKV := &test.MockKV{}
 
-		err := handler.AddChunkProcessed(kv, "job-1", 0)
+		err := kv.AddChunkProcessed(mockKV, "job-1", 0)
 
 		require.NoError(t, err)
 	})
 
 	t.Run("writes correct key job_id.chunk_index", func(t *testing.T) {
-		kv := &test.MockKV{}
+		mockKV := &test.MockKV{}
 
-		err := handler.AddChunkProcessed(kv, "job-abc", 2)
+		err := kv.AddChunkProcessed(mockKV, "job-abc", 2)
 
 		require.NoError(t, err)
-		assert.Equal(t, "job-abc.2", kv.PutKey)
+		assert.Equal(t, "job-abc.2", mockKV.PutKey)
 	})
 
 	t.Run("returns error on kv failure", func(t *testing.T) {
-		kv := &test.MockKV{PutErr: errors.New("put failed")}
+		mockKV := &test.MockKV{PutErr: errors.New("put failed")}
 
-		err := handler.AddChunkProcessed(kv, "job-1", 0)
+		err := kv.AddChunkProcessed(mockKV, "job-1", 0)
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "failed")

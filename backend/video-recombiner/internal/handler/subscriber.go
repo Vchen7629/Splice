@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"shared/kv"
 	"time"
 	"video-recombiner/internal/service"
 	"video-recombiner/internal/storage"
@@ -58,7 +59,7 @@ func RecombineVideo(
 			return
 		}
 
-		recieved, err := CheckChunkRecieved(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		recieved, err := kv.CheckChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk recieved", "err", err)
 			return
@@ -74,7 +75,7 @@ func RecombineVideo(
 			return
 		}
 
-		err = UpdateJobStatusKV(jobStatusKV, payload.JobID, logger)
+		err = kv.UpdateJobStatus(jobStatusKV, "video-recombiner", payload.JobID, logger)
 		if err != nil {
 			logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 		}
@@ -87,7 +88,7 @@ func RecombineVideo(
 			return
 		}
 
-		err = AddChunkRecieved(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		err = kv.AddChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as recieved", "err", err)
 			return
