@@ -5,12 +5,14 @@ package handler
 import (
 	"context"
 	"errors"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+	"video-upload/internal/service"
 	"video-upload/internal/test"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -84,6 +86,13 @@ func newVideoHandler(StorageURL string, js *test.MockJS) *videoHandler {
 	}
 }
 
+// mockVideoResolution replaces checkVideoResolution for the duration of the test.
+func mockVideoResolution(t *testing.T, res string) {
+	t.Helper()
+	checkVideoResolution = func(_ multipart.File) (string, error) { return res, nil }
+	t.Cleanup(func() { checkVideoResolution = service.CheckVideoResolution })
+}
+
 func TestUploadVideo(t *testing.T) {
 	t.Run("Returns 400 when body is not a multipart form", func(t *testing.T) {
 		h := newVideoHandler("http://localhost:1", &test.MockJS{})
@@ -121,7 +130,23 @@ func TestUploadVideo(t *testing.T) {
 		})
 	}
 
+	t.Run("Returns 500 when checkVideoResolution fails", func(t *testing.T) {
+		checkVideoResolution = func(_ multipart.File) (string, error) { return "", errors.New("ffprobe error") }
+		t.Cleanup(func() { checkVideoResolution = service.CheckVideoResolution })
+
+		h := newVideoHandler("http://localhost:1", &test.MockJS{})
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
+		rec := httptest.NewRecorder()
+
+		h.uploadVideoRoute(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "failed to detect video resolution")
+	})
+
 	t.Run("Returns 500 when saving the video file fails", func(t *testing.T) {
+		mockVideoResolution(t, "1080p")
+
 		// Null byte in path causes os.MkdirAll to fail
 		h := newVideoHandler("\x00", &test.MockJS{})
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
@@ -134,6 +159,8 @@ func TestUploadVideo(t *testing.T) {
 	})
 
 	t.Run("returns 500 when KV.Put fails during upload", func(t *testing.T) {
+		mockVideoResolution(t, "1080p")
+
 		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
 		server, _ := startTestServer(t, kv)
 
@@ -146,6 +173,8 @@ func TestUploadVideo(t *testing.T) {
 	})
 
 	t.Run("Does not publish to NATS when saving fails", func(t *testing.T) {
+		mockVideoResolution(t, "1080p")
+
 		js := &test.MockJS{}
 		h := newVideoHandler("\x00", js)
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")

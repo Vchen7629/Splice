@@ -24,6 +24,9 @@ type Config struct {
 	HTTPPort   string `envconfig:"HTTP_PORT" default:"8080"`
 }
 
+var osExit = os.Exit
+var natsConnect = nats.Connect
+
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -35,19 +38,22 @@ func main() {
 	err = storage.CheckHealth(cfg.StorageURL, logger)
 	if err != nil {
 		logger.Error("storage seedweedfs unreachable", "url", cfg.StorageURL, "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
-	nc, err := nats.Connect(cfg.NatsURL)
+	nc, err := natsConnect(cfg.NatsURL)
 	if err != nil {
 		logger.Error("unable to connect to nats", "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Error("unable to connect to jetstream", "err", err)
-		os.Exit(1)
+		osExit(1)
+		return
 	}
 
 	kv := handler.ConnectJobStatusKV(js, logger)

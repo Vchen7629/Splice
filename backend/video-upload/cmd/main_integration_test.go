@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	shandler "shared/handler"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 	"video-upload/internal/handler"
@@ -89,7 +91,7 @@ func TestStartHttpApi(t *testing.T) {
 		{
 			name: "POST /jobs/upload is wired to the upload handler",
 			buildReq: func() *http.Request {
-				return test.NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", []byte("data"), "1080p")
+				return test.NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", test.TestVideoBytes(t), "1080p")
 			},
 			wantStatus: http.StatusCreated,
 		},
@@ -126,7 +128,7 @@ func TestUploadPipeline(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", []byte("data"), "720p")
+		req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", test.TestVideoBytes(t), "720p")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -151,7 +153,7 @@ func TestUploadPipeline(t *testing.T) {
 		// Verify NATS scene-split message was published
 		select {
 		case data := <-received:
-			var msg handler.SceneSplitMessage
+			var msg shandler.VideoJobMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, uploadResp.JobID, msg.JobID)
 			assert.Equal(t, "720p", msg.TargetResolution)
@@ -165,7 +167,7 @@ func TestUploadPipeline(t *testing.T) {
 		jobIDs := make([]string, 3)
 
 		for i := range jobIDs {
-			req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", []byte("data"), "1080p")
+			req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", test.TestVideoBytes(t), "1080p")
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
@@ -212,3 +214,40 @@ func TestGracefulShutdown(t *testing.T) {
 		assert.NoError(t, nc.Drain())
 	})
 }
+
+// runs and shuts down cleanly on SIGINT
+func TestMainFuncLifecycle(t *testing.T) {
+	js, nc := test.SetupNats(t)
+	test.SetupKV(t, js) // ConnectJobStatusKV expects the bucket to already exist
+
+	port := test.FreePort(t)
+	writeEnvFile(t, fmt.Sprintf(
+		"NATS_URL=%s\nSTORAGE_URL=%s\nHTTP_PORT=%s\n",
+		nc.ConnectedUrl(), sharedStorageURL, port,
+	))
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		main()
+	}()
+
+	serverURL := "http://localhost:" + port
+	require.Eventually(t, func() bool {
+		resp, err := http.Post(serverURL+"/jobs/upload", "text/plain", nil)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return true
+	}, 15*time.Second, 100*time.Millisecond, "main() server did not start")
+
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGINT))
+
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("main() did not return after SIGINT")
+	}
+}
+

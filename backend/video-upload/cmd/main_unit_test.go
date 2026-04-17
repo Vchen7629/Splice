@@ -3,10 +3,9 @@
 package main
 
 import (
+	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"video-upload/internal/test"
 
@@ -51,29 +50,33 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestMainFunc(t *testing.T) {
-	t.Run("exits on NATS connect error", func(t *testing.T) {
-		if os.Getenv("RUN_MAIN") == "nats_error" {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T)
+	}{
+		{
+			name: "exits when storage is unreachable",
+			setup: func(t *testing.T) {
+				writeEnvFile(t, "STORAGE_URL=http://localhost:1\n")
+			},
+		},
+		{
+			name: "exits when nats is unreachable",
+			setup: func(t *testing.T) {
+				writeEnvFile(t, "STORAGE_URL="+fakeStorageServer(t)+"\nNATS_URL=nats://localhost:1\n")
+				patchNatsConnect(t, errors.New("nats unreachable"))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code := patchOsExit(t)
+			tc.setup(t)
+
 			main()
-			return
-		}
 
-		test.WriteEnvFile(t, "NATS_URL=nats://localhost:1\n")
-
-		var env []string
-		for _, e := range os.Environ() {
-			if !strings.HasPrefix(e, "NATS_URL=") && !strings.HasPrefix(e, "PROD_MODE=") &&
-				!strings.HasPrefix(e, "STORAGE_URL=") && !strings.HasPrefix(e, "HTTP_PORT=") {
-				env = append(env, e)
-			}
-		}
-
-		cmd := exec.Command(os.Args[0], "-test.run=TestMain/exits_on_NATS_connect_error", "-test.count=1")
-		cmd.Env = append(env, "RUN_MAIN=nats_error")
-		err := cmd.Run()
-
-		var exitErr *exec.ExitError
-
-		require.ErrorAs(t, err, &exitErr)
-		assert.Equal(t, 1, exitErr.ExitCode())
-	})
+			assert.Equal(t, 1, *code)
+		})
+	}
 }
