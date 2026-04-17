@@ -41,7 +41,7 @@ jobs:
             video_status:
               - 'backend/video-status/**'
             shared:
-              - 'backend/shared'
+              - 'backend/shared/**'
   frontend-ci:
     needs: path-filter
     if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.frontend == 'true' }}
