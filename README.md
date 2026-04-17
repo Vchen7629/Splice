@@ -5,7 +5,7 @@
 [![CI](https://github.com/Vchen7629/Splice/actions/workflows/ci.yaml/badge.svg)](https://github.com/Vchen7629/Splice/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/Vchen7629/Splice/graph/badge.svg?token=XT7E5YRZEX)](https://codecov.io/gh/Vchen7629/Splice)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26.1-00ADD8)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.26.2-00ADD8)](https://go.dev/)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB)](https://www.python.org/)
 
 </div>
