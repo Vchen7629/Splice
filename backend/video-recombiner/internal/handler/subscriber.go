@@ -39,11 +39,7 @@ func RecombineVideo(
 
 		if recieved {
 			logger.Debug("message already recieved, skipping")
-			err := msg.Ack()
-			if err != nil {
-				logger.Error("error acking msg", "err", err)
-				return
-			}
+			kv.AckWithErrHandling(logger, msg)
 			return
 		}
 

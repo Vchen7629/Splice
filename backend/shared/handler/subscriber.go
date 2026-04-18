@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"shared/kv"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -47,10 +48,7 @@ func UnmarshalJetstreamMsg[T any](msg jetstream.Msg, logger *slog.Logger) (T, bo
 	err := json.Unmarshal(msg.Data(), &payload)
 	if err != nil {
 		logger.Error("failed to unmarshal msg from jetstream", "err", err)
-		err := msg.Nak()
-		if err != nil {
-			logger.Error("error naking msg", "err", err)
-		}
+		kv.NakWithErrHandling(logger, msg)
 		return payload, false
 	}
 
