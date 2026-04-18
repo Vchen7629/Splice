@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"shared/handler"
+	"shared/kv"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -79,7 +81,7 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, kv jetstream
 }
 
 // subs to jobs.complete (from video-recombiner service) via jetstream consumer and writes COMPLETE to KV
-func ListenJobComplete(js jetstream.JetStream, kv jetstream.KeyValue, logger *slog.Logger) (jetstream.ConsumeContext, error) {
+func ListenJobComplete(js jetstream.JetStream, jobStatusKV jetstream.KeyValue, logger *slog.Logger) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
 	streamName, err := js.StreamNameBySubject(ctx, "jobs.complete")
@@ -105,35 +107,22 @@ func ListenJobComplete(js jetstream.JetStream, kv jetstream.KeyValue, logger *sl
 	}
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		var payload jobIDPayload
-
-		err := json.Unmarshal(msg.Data(), &payload)
-		if err != nil {
-			logger.Error("failed to unmarshal jobs.complete message", "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("failed to nak the msg on unmarshal", "err", err)
-			}
+		payload, ok := handler.UnmarshalJetstreamMsg[jobIDPayload](msg, logger)
+		if !ok {
 			return
 		}
 
 		status, err := json.Marshal(JobStatus{State: StateComplete})
 		if err != nil {
 			logger.Error("failed to marshal complete status", "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("failed to nak the msg on marshal", "err", err)
-			}
+			kv.NakWithErrHandling(logger, msg)
 			return
 		}
 
-		_, err = kv.Put(context.Background(), payload.JobID, status)
+		_, err = jobStatusKV.Put(context.Background(), payload.JobID, status)
 		if err != nil {
 			logger.Error("failed to write complete status to kv", "job_id", payload.JobID, "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("failed to nak the msg on keyvalue put", "err", err)
-			}
+			kv.NakWithErrHandling(logger, msg)
 			return
 		}
 

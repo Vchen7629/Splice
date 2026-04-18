@@ -41,11 +41,7 @@ func ConsumeVideoChunk(
 
 		if exists {
 			logger.Debug("message already processed, skipping")
-			err := msg.Ack()
-			if err != nil {
-				logger.Error("error acking msg", "err", err)
-				return
-			}
+			kv.AckWithErrHandling(logger, msg)
 			return
 		}
 
@@ -59,22 +55,14 @@ func ConsumeVideoChunk(
 		filePath, err := storage.GetVideoChunk(payload.StorageURL, fileName)
 		if err != nil {
 			logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("error naking msg for get unprocessed video chunk", "err", err)
-				return
-			}
+			kv.NakWithErrHandling(logger, msg)
 			return
 		}
 
 		outputPath, err := service.TranscodeVideo(filePath, payload.TargetResolution, payload.JobID, logger)
 		if err != nil {
 			logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("error naking msg", "err", err)
-				return
-			}
+			kv.NakWithErrHandling(logger, msg)
 			return
 		}
 
@@ -89,11 +77,7 @@ func ConsumeVideoChunk(
 				"file_path", outputPath,
 				"err", err,
 			)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("error naking msg", "err", err)
-				return
-			}
+			kv.NakWithErrHandling(logger, msg)
 			return
 		}
 
@@ -107,11 +91,7 @@ func ConsumeVideoChunk(
 		}, pubSubject)
 		if err != nil {
 			logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			err := msg.Nak()
-			if err != nil {
-				logger.Error("error naking msg", "err", err)
-				return
-			}
+			kv.NakWithErrHandling(logger, msg)
 			return
 		}
 

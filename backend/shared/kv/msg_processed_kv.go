@@ -16,8 +16,7 @@ func CreateMsgProcessedKV(bucketName string, js jetstream.JetStream, logger *slo
 	defer cancel()
 
 	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket:      "transcode-chunk-job-processed",
-		Description: "tracks already completed video chunk for the jobID is already processed for idempotency",
+		Bucket:      bucketName,
 		TTL:         3 * time.Hour,
 	})
 	if err != nil {
