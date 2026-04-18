@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	shandler "shared/handler"
+	"shared/kv"
 	"shared/middleware"
 	"shared/service"
 	"shared/storage"
@@ -54,7 +55,7 @@ func main() {
 		return
 	}
 
-	kv := handler.ConnectJobStatusKV(js, logger)
+	kv := kv.ConnectJobStatus(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
