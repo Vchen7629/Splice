@@ -53,10 +53,12 @@ async def test_uses_job_scoped_output_dir() -> None:
 @pytest.mark.asyncio
 async def test_returns_chunk_messages_on_success() -> None:
     """Returns correct VideoChunkMessage list with SeaweedFS URLs"""
+    url_map = dict(zip(FAKE_CHUNK_PATHS, FAKE_STORAGE_URLS))
+
     with (
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
-        patch("src.processing.job.upload_video", side_effect=FAKE_STORAGE_URLS),
+        patch("src.processing.job.upload_video", side_effect=lambda job_id, path: url_map[path]),
         patch("src.processing.job.shutil.rmtree"),
     ):
         result = await process_job(METADATA)
@@ -75,10 +77,12 @@ async def test_returns_chunk_messages_on_success() -> None:
 @pytest.mark.asyncio
 async def test_cleans_up_temp_dir_after_upload() -> None:
     """Temp directory is removed after chunks are uploaded"""
+    url_map = dict(zip(FAKE_CHUNK_PATHS, FAKE_STORAGE_URLS))
+
     with (
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
-        patch("src.processing.job.upload_video", side_effect=FAKE_STORAGE_URLS),
+        patch("src.processing.job.upload_video", side_effect=lambda job_id, path: url_map[path]),
         patch("src.processing.job.shutil.rmtree") as mock_rmtree,
     ):
         await process_job(METADATA)

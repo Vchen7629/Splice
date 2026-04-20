@@ -97,7 +97,7 @@ async def test_raises_runtime_error_when_video_chunks_stream_not_found(
     )
     nc.drain = AsyncMock()
 
-    with pytest.raises(RuntimeError, match="No stream found for video chunks"):
+    with pytest.raises(RuntimeError, match="No stream found for `nonexistent.subject.xyz`"):
         await start_service()
 
 

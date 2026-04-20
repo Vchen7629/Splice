@@ -13,6 +13,7 @@ TEST_VIDEO_PATH = os.path.join(
 )
 TEST_VIDEO_FILENAME = "ForBiggerBlazes.mp4"
 
+
 @pytest.fixture(autouse=True)
 def patch_temp_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
