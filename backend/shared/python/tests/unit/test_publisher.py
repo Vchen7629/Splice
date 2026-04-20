@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 from nats.errors import TimeoutError
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
-from shared_handler.publisher import publish_jetstream
+from shared_handler.nats import publisher
 from shared_handler.messages import VideoChunkMessage
 import pytest
 
@@ -26,7 +26,7 @@ async def test_raises_on_publish_failure(exc: Any) -> None:
         ]
 
         for msg in msgs:
-            await publish_jetstream(mock_js, msg, "jobs.video.chunks")
+            await publisher(mock_js, msg, "jobs.video.chunks")
 
 
 @pytest.mark.asyncio
@@ -52,6 +52,6 @@ async def test_calls_publish_per_msg() -> None:
     ]
 
     for msg in msgs:
-        await publish_jetstream(mock_js, msg, "jobs.video.chunks")
+        await publisher(mock_js, msg, "jobs.video.chunks")
 
     assert mock_js.publish.call_count == 2

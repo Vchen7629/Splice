@@ -33,7 +33,7 @@ async def js_context(
         pass
     await js.add_stream(
         name="videos",
-        subjects=[settings.SCENE_SPLIT_SUBJECT, settings.VIDEO_CHUNKS_SUBJECT],
+        subjects=[settings.SUB_SUBJECT, settings.PUB_SUBJECT],
     )
     await js.create_key_value(config=KeyValueConfig(bucket="job-status"))
     yield nc, js
@@ -50,7 +50,7 @@ async def nats_video_chunks_subscriber(
     async def handler(msg: Msg) -> None:
         received.append(json.loads(msg.data.decode()))
 
-    sub = await nc.subscribe(settings.VIDEO_CHUNKS_SUBJECT, cb=handler)
+    sub = await nc.subscribe(settings.PUB_SUBJECT, cb=handler)
     yield received
     await sub.unsubscribe()
 

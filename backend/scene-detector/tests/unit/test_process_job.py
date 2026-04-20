@@ -2,7 +2,7 @@ from shared_handler.messages import VideoChunkMessage
 from scenedetect import VideoOpenFailure
 from unittest.mock import patch
 from src.processing.job import process_job
-from src.handler.messages import SceneSplitMessage
+from src.processing.nats_msg import SceneSplitMessage
 import pytest
 
 METADATA = SceneSplitMessage(
@@ -58,7 +58,10 @@ async def test_returns_chunk_messages_on_success() -> None:
     with (
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
-        patch("src.processing.job.upload_video", side_effect=lambda job_id, path: url_map[path]),
+        patch(
+            "src.processing.job.upload_video",
+            side_effect=lambda job_id, path: url_map[path],
+        ),
         patch("src.processing.job.shutil.rmtree"),
     ):
         result = await process_job(METADATA)
@@ -82,7 +85,10 @@ async def test_cleans_up_temp_dir_after_upload() -> None:
     with (
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
-        patch("src.processing.job.upload_video", side_effect=lambda job_id, path: url_map[path]),
+        patch(
+            "src.processing.job.upload_video",
+            side_effect=lambda job_id, path: url_map[path],
+        ),
         patch("src.processing.job.shutil.rmtree") as mock_rmtree,
     ):
         await process_job(METADATA)
