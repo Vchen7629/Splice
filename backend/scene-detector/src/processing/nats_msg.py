@@ -1,34 +1,21 @@
+from pydantic import BaseModel
 from nats.js.kv import KeyValue
-from nats.js.api import ConsumerConfig
 from nats.aio.msg import Msg
 from shared_core.logging import logger
 from shared_handler.kv import update_job_status
 from shared_handler.kv import check_already_processed
-from shared_handler.publisher import publish_jetstream
+from shared_handler.nats import publisher
 from ..core.settings import settings
 from ..processing.job import process_job
-from .messages import SceneSplitMessage
 from nats.js.client import JetStreamContext
 
+# typed class for messages in the nats jetstream
+class SceneSplitMessage(BaseModel):
+    job_id: str
+    storage_url: str
+    target_resolution: str
 
-async def raw_videos(
-    js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue
-) -> None:
-    """Nats jetstream consumer that subscribes to subject to process videos"""
-    sub = await js.subscribe(
-        subject=settings.SCENE_SPLIT_SUBJECT,
-        durable=settings.NATS_SUB_QUEUE_NAME,
-        queue=settings.NATS_SUB_QUEUE_NAME,
-        config=ConsumerConfig(
-            max_deliver=settings.MAX_DELIVER_ATTEMPTS, ack_wait=settings.ACK_WAIT_S
-        ),
-    )
-
-    async for msg in sub.messages:
-        await _process_msg(js, msg_processed_kv, job_status_kv, msg)
-
-
-async def _process_msg(
+async def process_msg(
     js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg
 ) -> None:
     """Processes a single scene-split message"""
@@ -45,7 +32,7 @@ async def _process_msg(
         chunk_messages = await process_job(metadata)
 
         for chunk_msg in chunk_messages:
-            await publish_jetstream(js, chunk_msg, settings.VIDEO_CHUNKS_SUBJECT)
+            await publisher(js, chunk_msg, settings.PUB_SUBJECT)
 
         await msg_processed_kv.put(metadata.job_id, b"done")
         await msg.ack()

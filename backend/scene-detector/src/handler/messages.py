@@ -1,8 +1,0 @@
-from pydantic import BaseModel
-
-
-# typed class for messages in the nats jetstream
-class SceneSplitMessage(BaseModel):
-    job_id: str
-    storage_url: str
-    target_resolution: str
