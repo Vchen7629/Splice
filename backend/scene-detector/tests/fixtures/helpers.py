@@ -3,9 +3,7 @@ from typing import AsyncGenerator
 from pathlib import Path
 from nats.js import JetStreamContext
 from unittest.mock import patch
-from src.handler.http_server import start_health_server
-from src.storage import queries
-import socket
+from shared_storage import queries
 import pytest
 import pytest_asyncio
 
@@ -28,38 +26,6 @@ async def patched_start_service(
         patch("src.service.nats_connect", return_value=(nc, js)),
     ):
         yield nc, js
-
-
-@pytest.fixture
-def chunk_files(tmp_path: Path) -> list[str]:
-    """Creates a set of fake .mp4 chunk files in tmp_path"""
-    chunks = []
-    for i in range(3):
-        chunk = tmp_path / f"video-Scene-{i + 1:03d}.mp4"
-        chunk.write_bytes(b"fake chunk content")
-        chunks.append(str(chunk))
-    return chunks
-
-
-@pytest.fixture
-def single_video_chunk(tmp_path: Path) -> str:
-    chunk = tmp_path / "chunk.mp4"
-    chunk.write_bytes(b"data")
-    return str(chunk)
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
-@pytest.fixture
-def live_http_server() -> Any:
-    port = _free_port()
-    server = start_health_server(port)
-    yield f"http://localhost:{port}"
-    server.shutdown()
 
 
 @pytest.fixture

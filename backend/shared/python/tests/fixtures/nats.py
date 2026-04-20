@@ -1,13 +1,10 @@
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from nats.aio.msg import Msg
+from nats.js.api import KeyValueConfig
 from typing import Any
 from typing import Generator
 from typing import AsyncGenerator
 from nats.js import JetStreamContext
-from nats.js.api import KeyValueConfig
-from nats.aio.msg import Msg
 from testcontainers.nats import NatsContainer
-from src.core.settings import settings
 import nats  # type: ignore[import-untyped]
 import json
 import pytest
@@ -33,7 +30,7 @@ async def js_context(
         pass
     await js.add_stream(
         name="videos",
-        subjects=[settings.SCENE_SPLIT_SUBJECT, settings.VIDEO_CHUNKS_SUBJECT],
+        subjects=["jobs.video.scene-split", "jobs.video.chunks"],
     )
     await js.create_key_value(config=KeyValueConfig(bucket="job-status"))
     yield nc, js
@@ -50,17 +47,6 @@ async def nats_video_chunks_subscriber(
     async def handler(msg: Msg) -> None:
         received.append(json.loads(msg.data.decode()))
 
-    sub = await nc.subscribe(settings.VIDEO_CHUNKS_SUBJECT, cb=handler)
+    sub = await nc.subscribe("jobs.video.chunks", cb=handler)
     yield received
     await sub.unsubscribe()
-
-
-@pytest.fixture
-def mock_nats() -> tuple[MagicMock, MagicMock]:
-    mock_js = MagicMock()
-    mock_js.find_stream_name_by_subject = AsyncMock()
-    mock_js.create_key_value = AsyncMock()
-    mock_js.key_value = AsyncMock()
-    mock_nc = MagicMock()
-    mock_nc.drain = AsyncMock()
-    return mock_nc, mock_js

@@ -1,7 +1,7 @@
 from typing import Any
 from nats.js.client import JetStreamContext
-from src.handler.messages import VideoChunkMessage
-from src.handler.publisher import scene_video_chunks
+from shared_handler.messages import VideoChunkMessage
+from shared_handler.publisher import publish_jetstream
 import pytest
 
 
@@ -28,7 +28,8 @@ async def test_publishes_all_messages_with_correct_payload(
         ),
     ]
 
-    await scene_video_chunks(js, MSGS)
+    for msg in MSGS:
+        await publish_jetstream(js, msg, "jobs.video.chunks")
 
     assert len(nats_video_chunks_subscriber) == 2
     assert nats_video_chunks_subscriber[0] == {

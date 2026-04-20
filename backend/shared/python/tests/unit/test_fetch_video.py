@@ -1,8 +1,8 @@
 from unittest.mock import patch
 from unittest.mock import MagicMock
 from pathlib import Path
-from src.storage.queries import fetch_video
-import src.storage.queries as queries
+from shared_storage.queries import fetch_video
+import shared_storage.queries as queries
 import requests
 import pytest
 
@@ -17,7 +17,7 @@ def test_fetch_video_raises_on_server_error(status_code: int) -> None:
     )
 
     with (
-        patch("src.storage.queries.requests.get", return_value=mock_response),
+        patch("shared_storage.queries.requests.get", return_value=mock_response),
         pytest.raises(requests.HTTPError),
     ):
         fetch_video("http://fake/job-id/video.mp4")
@@ -34,7 +34,7 @@ def test_fetch_video_writes_correct_content(
     mock_response.content = fake_content
 
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
-    with patch("src.storage.queries.requests.get", return_value=mock_response):
+    with patch("shared_storage.queries.requests.get", return_value=mock_response):
         local_path = fetch_video("http://fake/job-123/video.mp4")
 
     with open(local_path, "rb") as f:
