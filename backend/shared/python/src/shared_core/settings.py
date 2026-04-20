@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     MAX_RECONNECT_ATTEMPT: int = 5
     RECONNECT_TIME_WAIT_S: int = 2
     KV_BUCKET_TTL_S: int = 3 * 60 * 60  # 3 hour TTL
+    MAX_DELIVER_ATTEMPTS: int = 3
+    ACK_WAIT_S: int = 30
 
     BASE_STORAGE_URL: str = "http://localhost:8888"
 

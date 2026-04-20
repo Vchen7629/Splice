@@ -1,6 +1,6 @@
 from typing import Any
 from socket import socket
-from shared_handler.http_server import start_health_server
+from shared_handler.http import start_health_server
 import pytest
 
 
