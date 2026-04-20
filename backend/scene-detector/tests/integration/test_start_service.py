@@ -51,6 +51,7 @@ async def test_full_flow_publishes_chunks_downstream(
                 {
                     "job_id": job_id,
                     "storage_url": "/fake/video.mp4",
+                    "source_resolution": "1080p",
                     "target_resolution": "480p",
                 }
             ).encode(),
@@ -126,7 +127,7 @@ async def test_drain_called_in_finally_on_cancellation(
     _, called = spy_drain
 
     async def hanging_consumer(*_args: Any, **_kwargs: Any) -> None:
-        await asyncio.sleep(30)
+        await asyncio.Event().wait()
 
     with patch("src.service.consumer", side_effect=hanging_consumer):
         task = asyncio.create_task(start_service())
@@ -154,10 +155,9 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
     processing_started = asyncio.Event()
 
-    async def slow_process_job(_metadata: Any) -> list[Any]:
+    async def slow_process_job(_metadata: Any) -> None:
         processing_started.set()
-        await asyncio.sleep(30)
-        return []
+        await asyncio.Event().wait()
 
     with patch("src.processing.nats_msg.process_job", side_effect=slow_process_job):
         task = asyncio.create_task(start_service())
@@ -165,6 +165,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
             {
                 "job_id": str(uuid.uuid4()),
                 "storage_url": "/fake/video.mp4",
+                "source_resolution": "1080p",
                 "target_resolution": "480p",
             }
         ).encode()

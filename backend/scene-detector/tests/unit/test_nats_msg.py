@@ -21,7 +21,12 @@ def make_mock_msg(data: dict[str, Any]) -> AsyncMock:
 @pytest.fixture
 def msg() -> AsyncMock:
     return make_mock_msg(
-        {"job_id": "1", "storage_url": "/fake/idk.mp4", "target_resolution": "480p"}
+        {
+            "job_id": "1",
+            "storage_url": "/fake/idk.mp4",
+            "source_resolution": "1080p",
+            "target_resolution": "480p",
+        }
     )
 
 
@@ -126,7 +131,12 @@ async def test_passes_chunk_messages_to_publisher(mock_kv: AsyncMock) -> None:
         )
     ]
     msg = make_mock_msg(
-        {"job_id": "1", "storage_url": "/fake/idk.mp4", "target_resolution": "480p"}
+        {
+            "job_id": "1",
+            "storage_url": "/fake/idk.mp4",
+            "source_resolution": "1080p",
+            "target_resolution": "480p",
+        }
     )
     mock_js = AsyncMock(spec=JetStreamContext)
 
@@ -153,6 +163,7 @@ async def test_writes_to_kv_on_success() -> None:
         {
             "job_id": "abc-123",
             "storage_url": "/fake/idk.mp4",
+            "source_resolution": "1080p",
             "target_resolution": "480p",
         }
     )
@@ -241,6 +252,7 @@ async def test_stage_written_to_job_status_kv_before_processing(
         {
             "job_id": "abc-123",
             "storage_url": "/fake/idk.mp4",
+            "source_resolution": "1080p",
             "target_resolution": "480p",
         }
     )

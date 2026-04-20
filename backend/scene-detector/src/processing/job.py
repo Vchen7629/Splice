@@ -2,14 +2,14 @@ from shared_core.logging import logger
 from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
 from shared_handler.messages import VideoChunkMessage
+from shared_handler.messages import ProcessJobMessage
 from .video import split_into_chunks
-from ..processing.messages import SceneSplitMessage
 from scenedetect import VideoOpenFailure
 import asyncio
 import shutil
 
 
-async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
+async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     """
     takes in the msg from NATS subcriber, fetches the video from SeaweedFS, splits
     the video into chunks, uploads the chunks back to seaweedfs, and returns

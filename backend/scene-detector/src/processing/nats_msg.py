@@ -1,5 +1,4 @@
-from src.processing.messages import SceneSplitMessage
-from pydantic import BaseModel
+from shared_handler.messages import ProcessJobMessage
 from nats.js.kv import KeyValue
 from nats.aio.msg import Msg
 from shared_core.logging import logger
@@ -16,7 +15,7 @@ async def process_msg(
 ) -> None:
     """Processes a single scene-split message"""
     try:
-        metadata = SceneSplitMessage.model_validate_json(msg.data.decode())
+        metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
 
         if await check_already_processed(msg_processed_kv, metadata.job_id):
             logger.debug("job already processed, skipping", job_id=metadata.job_id)
