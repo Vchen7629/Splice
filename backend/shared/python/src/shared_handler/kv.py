@@ -8,7 +8,44 @@ import json
 import nats.js.errors as js_errors
 
 
-async def create_msg_processed_kv(bucket_name: str, js: JetStreamContext) -> KeyValue:
+async def connect_kv(js: JetStreamContext, kv_name: str) -> KeyValue:
+    """
+    Connect to an existing jetstream kv
+
+    Args:
+        js: jetstreamContext server we are connecting to
+        kv_name: the kv we are trying to connect to
+
+    Returns:
+        the Jetstream KeyValue connection
+
+    Raises:
+        RuntimeError if the Jetstream KV isnt found
+    """
+    try:
+        job_status_kv = await js.key_value(kv_name)
+
+        return job_status_kv
+    except js_errors.NotFoundError:
+        raise RuntimeError(
+            "job-status KV bucket not found, check video-status is running"
+        )
+
+
+async def create_kv(js: JetStreamContext, bucket_name: str) -> KeyValue:
+    """
+    Create a new Jetstream KV
+
+    Args:
+        js: jetstreamContext server we creating the new KV on
+        kv_name: the kv we are trying to create
+
+    Returns:
+        the Jetstream KeyValue connection
+
+    Raises:
+        RuntimeError if the a API error happens with jetstream
+    """
     try:
         msg_processed_kv = await js.create_key_value(
             config=KeyValueConfig(bucket=bucket_name, ttl=settings.KV_BUCKET_TTL_S)
