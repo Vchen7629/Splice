@@ -3,7 +3,7 @@ from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
 from shared_handler.messages import VideoChunkMessage
 from .video import split_into_chunks
-from ..processing.nats_msg import SceneSplitMessage
+from ..processing.messages import SceneSplitMessage
 from scenedetect import VideoOpenFailure
 import asyncio
 import shutil
