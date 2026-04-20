@@ -1,7 +1,7 @@
 from http.server import HTTPServer
 from http.server import BaseHTTPRequestHandler
-import threading
 import json
+import threading
 
 
 class HealthEnpointHandler(BaseHTTPRequestHandler):

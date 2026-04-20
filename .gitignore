@@ -33,6 +33,7 @@ docs/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+shared_python.egg-info
 
 # Logs
 logs
