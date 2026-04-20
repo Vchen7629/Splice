@@ -1,8 +1,8 @@
 from typing import Any
 from http.server import HTTPServer
 from unittest.mock import MagicMock, create_autospec, patch
-from shared_handler.http_server import start_health_server
-from shared_handler.http_server import HealthEnpointHandler
+from shared_handler.http import start_health_server
+from shared_handler.http import HealthEnpointHandler
 import json
 import pytest
 import threading
@@ -38,9 +38,6 @@ def test_endpoint(
         handler.wfile.write.assert_not_called()
 
 
-# ── server startup ────────────────────────────────────────────────────────────
-
-
 def test_start_health_server() -> None:
     mock_server = MagicMock(spec=HTTPServer)
     real_thread_cls = threading.Thread
@@ -54,10 +51,8 @@ def test_start_health_server() -> None:
         return t
 
     with (
-        patch("shared_handler.http_server.HTTPServer", return_value=mock_server),
-        patch(
-            "shared_handler.http_server.threading.Thread", side_effect=capture_thread
-        ),
+        patch("shared_handler.http.HTTPServer", return_value=mock_server),
+        patch("shared_handler.http.threading.Thread", side_effect=capture_thread),
     ):
         result = start_health_server(9099)
 

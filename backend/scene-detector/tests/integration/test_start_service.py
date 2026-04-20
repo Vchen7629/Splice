@@ -19,13 +19,7 @@ async def test_full_flow_publishes_chunks_downstream(
 ) -> None:
     """Publishes to upstream topic -> process_job runs -> chunks appear on downstream topic"""
     nc, js = patched_start_service
-    monkeypatch.setattr(
-        "src.handler.subscriber.settings.SCENE_SPLIT_SUBJECT",
-        settings.SCENE_SPLIT_SUBJECT,
-    )
-    monkeypatch.setattr(
-        "src.handler.subscriber.settings.NATS_SUB_QUEUE_NAME", "test-full-flow-worker"
-    )
+    monkeypatch.setattr("src.service.settings.SUB_QUEUE_NAME", "test-full-flow-worker")
     nc.drain = AsyncMock()
 
     job_id = str(uuid.uuid4())
@@ -49,10 +43,10 @@ async def test_full_flow_publishes_chunks_downstream(
     async def fake_process_job(_metadata: Any) -> list[VideoChunkMessage]:
         return fake_chunks
 
-    with patch("src.handler.subscriber.process_job", side_effect=fake_process_job):
+    with patch("src.processing.nats_msg.process_job", side_effect=fake_process_job):
         task = asyncio.create_task(start_service())
         await nc.publish(
-            settings.SCENE_SPLIT_SUBJECT,
+            settings.SUB_SUBJECT,
             json.dumps(
                 {
                     "job_id": job_id,
@@ -92,12 +86,12 @@ async def test_raises_runtime_error_when_video_chunks_stream_not_found(
 ) -> None:
     """Raises RuntimeError when no NATS stream covers the downstream chunks subject"""
     nc, js = patched_start_service
-    monkeypatch.setattr(
-        "src.service.settings.VIDEO_CHUNKS_SUBJECT", "nonexistent.subject.xyz"
-    )
+    monkeypatch.setattr("src.service.settings.PUB_SUBJECT", "nonexistent.subject.xyz")
     nc.drain = AsyncMock()
 
-    with pytest.raises(RuntimeError, match="No stream found for `nonexistent.subject.xyz`"):
+    with pytest.raises(
+        RuntimeError, match="No stream found for `nonexistent.subject.xyz`"
+    ):
         await start_service()
 
 
@@ -110,13 +104,11 @@ async def test_drain_called_in_finally_when_raw_videos_raises(
     nc, js = patched_start_service  # this isnt used? maybe we dont need it
     _, called = spy_drain
 
-    async def failing_raw_videos(
-        _js: JetStreamContext, _kv: Any, _job_status_kv: Any
-    ) -> None:
+    async def failing_consumer(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("subscriber failed unexpectedly")
 
     with (
-        patch("src.service.raw_videos", side_effect=failing_raw_videos),
+        patch("src.service.consumer", side_effect=failing_consumer),
         pytest.raises(RuntimeError, match="subscriber failed unexpectedly"),
     ):
         await start_service()
@@ -133,12 +125,10 @@ async def test_drain_called_in_finally_on_cancellation(
     nc, js = patched_start_service  # this isnt used? maybe we dont need it
     _, called = spy_drain
 
-    async def hanging_raw_videos(
-        _js: JetStreamContext, _kv: Any, _job_status_kv: Any
-    ) -> None:
+    async def hanging_consumer(*_args: Any, **_kwargs: Any) -> None:
         await asyncio.sleep(30)
 
-    with patch("src.service.raw_videos", side_effect=hanging_raw_videos):
+    with patch("src.service.consumer", side_effect=hanging_consumer):
         task = asyncio.create_task(start_service())
         await asyncio.sleep(0.05)
         task.cancel()
@@ -158,13 +148,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
     """Service cancels promptly mid-processing, proving process_job does not block the event loop"""
     nc, _ = patched_start_service
     monkeypatch.setattr(
-        "src.handler.subscriber.settings.SCENE_SPLIT_SUBJECT",
-        settings.SCENE_SPLIT_SUBJECT,
-    )
-    # Unique consumer name: prevents unacked messages from leaking into other tests' durable consumers
-    monkeypatch.setattr(
-        "src.handler.subscriber.settings.NATS_SUB_QUEUE_NAME",
-        "test-cancellation-worker",
+        "src.service.settings.SUB_QUEUE_NAME", "test-cancellation-worker"
     )
     nc.drain = AsyncMock()
 
@@ -175,7 +159,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
         await asyncio.sleep(30)
         return []
 
-    with patch("src.handler.subscriber.process_job", side_effect=slow_process_job):
+    with patch("src.processing.nats_msg.process_job", side_effect=slow_process_job):
         task = asyncio.create_task(start_service())
         payload = json.dumps(
             {
@@ -184,7 +168,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
                 "target_resolution": "480p",
             }
         ).encode()
-        await nc.publish(settings.SCENE_SPLIT_SUBJECT, payload)
+        await nc.publish(settings.SUB_SUBJECT, payload)
         await processing_started.wait()
 
         task.cancel()
@@ -199,9 +183,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
 
 @pytest.mark.asyncio
-async def test_raises_before_nats_when_storage_unreachable(
-    monkeypatch: Any,
-) -> None:
+async def test_raises_before_nats_when_storage_unreachable(monkeypatch: Any) -> None:
     """Service raises and never connects to NATS when SeaweedFS is unreachable"""
     monkeypatch.setattr(
         "shared_storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
