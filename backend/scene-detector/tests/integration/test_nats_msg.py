@@ -3,7 +3,8 @@ from unittest.mock import patch
 from unittest.mock import AsyncMock
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
-from src.processing.nats_msg import process_msg, SceneSplitMessage
+from shared_handler.messages import ProcessJobMessage
+from src.processing.nats_msg import process_msg
 import json
 import pytest
 import uuid
@@ -29,6 +30,7 @@ async def test_processes_published_message(
         {
             "job_id": job_id,
             "storage_url": "/fake/video.mp4",
+            "source_resolution": "280p",
             "target_resolution": "480p",
         }
     ).encode()
@@ -39,8 +41,11 @@ async def test_processes_published_message(
         await process_msg(js, kv, job_status_kv, msg)
 
     mock_process.assert_called_once_with(
-        SceneSplitMessage(
-            job_id=job_id, storage_url="/fake/video.mp4", target_resolution="480p"
+        ProcessJobMessage(
+            job_id=job_id,
+            storage_url="/fake/video.mp4",
+            source_resolution="280p",
+            target_resolution="480p",
         )
     )
     msg.ack.assert_called_once()
@@ -66,6 +71,7 @@ async def test_skips_redelivered_message_for_already_processed_job(
         {
             "job_id": "job-already-done",
             "storage_url": "/fake/video.mp4",
+            "source_resolution": "280p",
             "target_resolution": "480p",
         }
     ).encode()

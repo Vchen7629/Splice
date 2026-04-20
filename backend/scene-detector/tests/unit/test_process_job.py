@@ -1,13 +1,14 @@
+from shared_handler.messages import ProcessJobMessage
 from shared_handler.messages import VideoChunkMessage
 from scenedetect import VideoOpenFailure
 from unittest.mock import patch
 from src.processing.job import process_job
-from src.processing.nats_msg import SceneSplitMessage
 import pytest
 
-METADATA = SceneSplitMessage(
+METADATA = ProcessJobMessage(
     job_id="test-123",
     storage_url="http://fake:8888/test-123/video.mp4",
+    source_resolution="280p",
     target_resolution="480p",
 )
 
