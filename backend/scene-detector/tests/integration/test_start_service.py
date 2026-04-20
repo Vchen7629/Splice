@@ -2,8 +2,8 @@ from typing import Any
 from unittest.mock import patch
 from unittest.mock import AsyncMock
 from nats.js import JetStreamContext
+from shared_handler.messages import VideoChunkMessage
 from src.service import start_service
-from src.handler.messages import VideoChunkMessage
 from src.core.settings import settings
 import asyncio
 import json
@@ -204,7 +204,7 @@ async def test_raises_before_nats_when_storage_unreachable(
 ) -> None:
     """Service raises and never connects to NATS when SeaweedFS is unreachable"""
     monkeypatch.setattr(
-        "src.storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
+        "shared_storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
     )
 
     with (

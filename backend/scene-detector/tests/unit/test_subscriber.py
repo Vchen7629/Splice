@@ -1,15 +1,14 @@
+from shared_handler.messages import VideoChunkMessage
 from typing import Any, AsyncGenerator
 from unittest.mock import patch, MagicMock, AsyncMock
 from nats.js.errors import APIError, KeyNotFoundError
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
 from src.handler.subscriber import raw_videos
-from src.handler.messages import SceneSplitMessage, VideoChunkMessage
+from src.handler.messages import SceneSplitMessage
+from src.core.settings import settings
 import json
 import pytest
-
-
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 
 def make_mock_msg(data: dict[str, Any]) -> AsyncMock:
@@ -31,9 +30,6 @@ def make_mock_js(*msgs: AsyncMock) -> AsyncMock:
     return js
 
 
-# ── fixtures ─────────────────────────────────────────────────────────────────
-
-
 @pytest.fixture
 def msg() -> AsyncMock:
     return make_mock_msg(
@@ -49,7 +45,7 @@ async def test_acks_on_success(mock_kv: AsyncMock, msg: AsyncMock) -> None:
             new_callable=AsyncMock,
             return_value=[],
         ),
-        patch("src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock),
+        patch("src.handler.subscriber.publish_jetstream", new_callable=AsyncMock),
     ):
         await raw_videos(make_mock_js(msg), mock_kv, AsyncMock(spec=KeyValue))
 
@@ -57,12 +53,23 @@ async def test_acks_on_success(mock_kv: AsyncMock, msg: AsyncMock) -> None:
     msg.nak.assert_not_called()
 
 
+_one_chunk = [
+    VideoChunkMessage(
+        job_id="1",
+        chunk_index=0,
+        total_chunks=1,
+        storage_url="/tmp/c.mp4",
+        target_resolution="480p",
+    )
+]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "process_job_kwargs,publish_kwargs",
     [
         ({"side_effect": Exception("process failed")}, {}),
-        ({"return_value": []}, {"side_effect": Exception("publish failed")}),
+        ({"return_value": _one_chunk}, {"side_effect": Exception("publish failed")}),
     ],
     ids=["process_job_fails", "publish_fails"],
 )
@@ -79,7 +86,7 @@ async def test_naks_on_failure(
             **process_job_kwargs,
         ),
         patch(
-            "src.handler.subscriber.scene_video_chunks",
+            "src.handler.subscriber.publish_jetstream",
             new_callable=AsyncMock,
             **publish_kwargs,
         ),
@@ -111,16 +118,13 @@ async def test_acks_and_skips_when_job_already_processed(msg: AsyncMock) -> None
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_process,
-        patch("src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock),
+        patch("src.handler.subscriber.publish_jetstream", new_callable=AsyncMock),
     ):
         await raw_videos(mock_js, already_processed_kv, AsyncMock(spec=KeyValue))
 
     msg.ack.assert_called_once()
     msg.nak.assert_not_called()
     mock_process.assert_not_called()
-
-
-# ── message routing ───────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -141,7 +145,7 @@ async def test_calls_process_job_per_message(mock_kv: AsyncMock) -> None:
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_process,
-        patch("src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock),
+        patch("src.handler.subscriber.publish_jetstream", new_callable=AsyncMock),
     ):
         await raw_videos(mock_js, mock_kv, AsyncMock(spec=KeyValue))
 
@@ -177,12 +181,14 @@ async def test_passes_chunk_messages_to_publisher(mock_kv: AsyncMock) -> None:
             return_value=chunk_messages,
         ),
         patch(
-            "src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock
+            "src.handler.subscriber.publish_jetstream", new_callable=AsyncMock
         ) as mock_publish,
     ):
         await raw_videos(mock_js, mock_kv, AsyncMock(spec=KeyValue))
 
-    mock_publish.assert_called_once_with(mock_js, chunk_messages)
+    mock_publish.assert_called_once_with(
+        mock_js, chunk_messages[0], settings.VIDEO_CHUNKS_SUBJECT
+    )
 
 
 @pytest.mark.asyncio
@@ -204,7 +210,7 @@ async def test_writes_to_kv_on_success() -> None:
             new_callable=AsyncMock,
             return_value=[],
         ),
-        patch("src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock),
+        patch("src.handler.subscriber.publish_jetstream", new_callable=AsyncMock),
     ):
         await raw_videos(mock_js, mock_kv, AsyncMock(spec=KeyValue))
 
@@ -216,7 +222,7 @@ async def test_writes_to_kv_on_success() -> None:
     "process_job_kwargs,publish_kwargs",
     [
         ({"side_effect": Exception("process failed")}, {}),
-        ({"return_value": []}, {"side_effect": Exception("publish failed")}),
+        ({"return_value": _one_chunk}, {"side_effect": Exception("publish failed")}),
     ],
     ids=["process_job_fails", "publish_fails"],
 )
@@ -233,7 +239,7 @@ async def test_does_not_write_to_kv_on_failure(
             **process_job_kwargs,
         ),
         patch(
-            "src.handler.subscriber.scene_video_chunks",
+            "src.handler.subscriber.publish_jetstream",
             new_callable=AsyncMock,
             **publish_kwargs,
         ),
@@ -257,7 +263,7 @@ async def test_update_job_status_error_logs_and_continues(
             new_callable=AsyncMock,
             return_value=[],
         ),
-        patch("src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock),
+        patch("src.handler.subscriber.publish_jetstream", new_callable=AsyncMock),
     ):
         await raw_videos(make_mock_js(msg), mock_kv, mock_job_status_kv)
 
@@ -292,7 +298,7 @@ async def test_stage_written_to_job_status_kv_before_processing(
 
     with (
         patch("src.handler.subscriber.process_job", side_effect=fake_process_job),
-        patch("src.handler.subscriber.scene_video_chunks", new_callable=AsyncMock),
+        patch("src.handler.subscriber.publish_jetstream", new_callable=AsyncMock),
     ):
         await raw_videos(mock_js, mock_kv, mock_job_status_kv)
 

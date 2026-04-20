@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-from src.storage.check_health import check_storage_health
+from shared_storage.check_health import check_storage_health
 import requests
 import pytest
 
@@ -9,7 +9,7 @@ def test_check_health_succeeds(
 ) -> None:
     """Passes without raising when SeaweedFS master and filer are reachable"""
     monkeypatch.setattr(
-        "src.storage.check_health.settings.BASE_STORAGE_URL", seaweedfs_url
+        "shared_storage.check_health.settings.BASE_STORAGE_URL", seaweedfs_url
     )
     check_storage_health()
 
@@ -25,7 +25,9 @@ def test_check_health_raises_on_connection_error(
     bad_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Raises ConnectionError when SeaweedFS is unreachable"""
-    monkeypatch.setattr("src.storage.check_health.settings.BASE_STORAGE_URL", bad_url)
+    monkeypatch.setattr(
+        "shared_storage.check_health.settings.BASE_STORAGE_URL", bad_url
+    )
     with pytest.raises(requests.ConnectionError):
         check_storage_health()
 
@@ -40,7 +42,7 @@ def test_check_health_raises_on_server_error(status_code: int) -> None:
     )
 
     with (
-        patch("src.storage.check_health.requests.get", return_value=mock_response),
+        patch("shared_storage.check_health.requests.get", return_value=mock_response),
         pytest.raises(requests.HTTPError),
     ):
         check_storage_health()
