@@ -10,7 +10,11 @@ dependencies = [
     "scenedetect[opencv-headless]>=0.6.7.1",
     "structlog>=25.5.0",
     "types-requests>=2.33.0.20260402",
+    "shared_python"
 ]
+
+[tool.uv.sources]
+shared_python = { path = "../shared/python", editable = true }
 
 [tool.pyright]
 venvPath = "."
@@ -22,7 +26,8 @@ extraPaths = ["."]
 [tool.pyrefly]
 python-version = "3.13"
 untyped-def-behavior = "check-and-infer-return-any"
-search-path = ["."]
+search-path = [".", "../shared/python/src"]
+venv = ".venv"
 
 [tool.pyrefly.errors]
 unannotated-parameter = "error"

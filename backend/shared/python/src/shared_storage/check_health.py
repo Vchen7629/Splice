@@ -1,5 +1,5 @@
-from ..core.logging import logger
-from ..core.settings import settings
+from shared_core.logging import logger
+from shared_core.settings import settings
 import requests
 
 

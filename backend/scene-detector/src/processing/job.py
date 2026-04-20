@@ -1,9 +1,9 @@
-from ..core.logging import logger
-from ..storage.queries import fetch_video
-from ..storage.queries import upload_video_chunks
+from shared_core.logging import logger
+from shared_storage.queries import fetch_video
+from shared_storage.queries import upload_video
+from shared_handler.messages import VideoChunkMessage
 from .video import split_into_chunks
 from ..handler.messages import SceneSplitMessage
-from ..handler.messages import VideoChunkMessage
 from scenedetect import VideoOpenFailure
 import asyncio
 import shutil
@@ -46,8 +46,11 @@ async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
         )
         raise
 
-    chunk_paths = await asyncio.to_thread(
-        upload_video_chunks, metadata.job_id, chunk_paths
+    storage_urls = await asyncio.gather(
+        *[
+            asyncio.to_thread(upload_video, metadata.job_id, path)
+            for path in chunk_paths
+        ]
     )
 
     try:
@@ -59,9 +62,9 @@ async def process_job(metadata: SceneSplitMessage) -> list[VideoChunkMessage]:
         VideoChunkMessage(
             job_id=metadata.job_id,
             chunk_index=i,
-            total_chunks=len(chunk_paths),
-            storage_url=path,
+            total_chunks=len(storage_urls),
+            storage_url=url,
             target_resolution=metadata.target_resolution,
         )
-        for i, path in enumerate(chunk_paths)
+        for i, url in enumerate(storage_urls)
     ]

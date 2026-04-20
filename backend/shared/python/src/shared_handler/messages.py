@@ -1,8 +1,9 @@
 from pydantic import BaseModel
 
 
-# typed class for messages in the nats jetstream
-class SceneSplitMessage(BaseModel):
+class VideoChunkMessage(BaseModel):
     job_id: str
+    chunk_index: int
+    total_chunks: int
     storage_url: str
     target_resolution: str

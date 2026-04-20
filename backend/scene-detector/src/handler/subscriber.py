@@ -1,14 +1,14 @@
-from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 from nats.js.api import ConsumerConfig
 from nats.aio.msg import Msg
-from ..core.logging import logger
+from shared_core.logging import logger
+from shared_handler.kv import update_job_status
+from shared_handler.kv import check_already_processed
+from shared_handler.publisher import publish_jetstream
 from ..core.settings import settings
 from ..processing.job import process_job
 from .messages import SceneSplitMessage
-from .publisher import scene_video_chunks
 from nats.js.client import JetStreamContext
-import json
 
 
 async def raw_videos(
@@ -35,36 +35,20 @@ async def _process_msg(
     try:
         metadata = SceneSplitMessage.model_validate_json(msg.data.decode())
 
-        if await _is_already_processed(msg_processed_kv, metadata.job_id):
+        if await check_already_processed(msg_processed_kv, metadata.job_id):
             logger.debug("job already processed, skipping", job_id=metadata.job_id)
             await msg.ack()
             return
 
-        await _update_job_status(job_status_kv, metadata.job_id)
+        await update_job_status(job_status_kv, metadata.job_id, "scene-detector")
 
         chunk_messages = await process_job(metadata)
 
-        await scene_video_chunks(js, chunk_messages)
+        for chunk_msg in chunk_messages:
+            await publish_jetstream(js, chunk_msg, settings.VIDEO_CHUNKS_SUBJECT)
+
         await msg_processed_kv.put(metadata.job_id, b"done")
         await msg.ack()
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
         await msg.nak()
-
-
-async def _is_already_processed(kv: KeyValue, job_id: str) -> bool:
-    """Checks if the job_id exists in the scene-split-processed so it doesnt reprocess"""
-    try:
-        await kv.get(job_id)
-        return True
-    except KeyNotFoundError:
-        return False
-
-
-async def _update_job_status(job_status_kv: KeyValue, job_id: str) -> None:
-    """Writes PROCESSING:scene-detector stage to the job-status KV bucket"""
-    try:
-        status = json.dumps({"state": "PROCESSING", "stage": "scene-detector"}).encode()
-        await job_status_kv.put(job_id, status)
-    except Exception as e:
-        logger.error("failed to update job status stage", job_id=job_id, err=str(e))
