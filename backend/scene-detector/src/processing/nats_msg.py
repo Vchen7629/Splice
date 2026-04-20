@@ -1,3 +1,4 @@
+from src.processing.messages import SceneSplitMessage
 from pydantic import BaseModel
 from nats.js.kv import KeyValue
 from nats.aio.msg import Msg
@@ -9,11 +10,6 @@ from ..core.settings import settings
 from ..processing.job import process_job
 from nats.js.client import JetStreamContext
 
-# typed class for messages in the nats jetstream
-class SceneSplitMessage(BaseModel):
-    job_id: str
-    storage_url: str
-    target_resolution: str
 
 async def process_msg(
     js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg

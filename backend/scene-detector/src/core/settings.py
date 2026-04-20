@@ -10,14 +10,9 @@ class Settings(BaseSettings):
     HTTP_PORT: int = 9098
 
     # Nats config
-    NATS_SUB_QUEUE_NAME: str = "scene-detector-workers"
-    SCENE_SPLIT_SUBJECT: str = (
-        "jobs.video.scene-split"  # topic containing Job ID + storage path in MinIO
-    )
-    VIDEO_CHUNKS_SUBJECT: str = "jobs.video.chunks"
-
-    MAX_DELIVER_ATTEMPTS: int = 3
-    ACK_WAIT_S: int = 30
+    SUB_QUEUE_NAME: str = "scene-detector-workers"
+    SUB_SUBJECT: str = "jobs.video.scene-split"
+    PUB_SUBJECT: str = "jobs.video.chunks"
 
 
 settings = Settings()
