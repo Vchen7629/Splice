@@ -1,5 +1,6 @@
+import torch
 from queue import Queue
-from typing import Any
+from typing import Optional
 from realesrgan import RealESRGANer
 from time import perf_counter
 import torch
@@ -7,7 +8,7 @@ import numpy as np
 
 
 def flush_batch(
-    upsampler: RealESRGANer, frames: list[Any], encode_queue: Queue
+    upsampler: RealESRGANer, frames: list[np.ndarray], encode_queue: Queue[Optional[bytes]]
 ) -> tuple[float, float, int]:
     """
     Runs one batch of frames through GPU model and queues the results for encoding
@@ -33,8 +34,7 @@ def flush_batch(
 
     return t1 - t0, t2 - t1, len(frames)
 
-
-def _infer_batch(model: RealESRGANer, frames_bgr: list) -> list[Any]:
+def _infer_batch(model: torch.nn.Module, frames_bgr: list[np.ndarray]) -> list[bytes]:
     """
     Upscales a batch of BGR frames. Converts to YUV420p on GPU before CPU transfer
     to minimize PCIe bandwidth and maximize calculations on gpu for speed

@@ -1,9 +1,10 @@
+from pathlib import Path
 from realesrgan import RealESRGANer
 from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 import torch
 
 
-def load_model(model_path: str, scale: int) -> RealESRGANer:
+def load_model(model_path: Path, scale: int) -> RealESRGANer:
     """
     Loads a RealESRGAN upscaler model onto CUDA with fp16 and torch.compile optimization.
     Tiling is disabled so full-frame inference only.

@@ -8,6 +8,7 @@ from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
 from shared_core.logging import logger
 from shared_core.settings import settings
+from shared_handler.messages import UpscaleCompleteMsg
 from .messages import VideoChunkMessage
 
 
@@ -34,7 +35,7 @@ async def consumer(
         await process_msg(js, msg_processed_kv, job_status_kv, msg)
 
 
-async def publisher(js: JetStreamContext, msg: VideoChunkMessage, subject: str) -> None:
+async def publisher(js: JetStreamContext, msg: VideoChunkMessage | UpscaleCompleteMsg, subject: str) -> None:
     """
     Publishes message to nats jetstream
 

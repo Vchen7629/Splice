@@ -13,3 +13,6 @@ class ProcessJobMessage(BaseModel):
     storage_url: str
     source_resolution: str
     target_resolution: str
+
+class UpscaleCompleteMsg(BaseModel):
+    JobID: str
