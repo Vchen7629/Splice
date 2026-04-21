@@ -8,11 +8,13 @@ class VideoChunkMessage(BaseModel):
     storage_url: str
     target_resolution: str
 
+
 class ProcessJobMessage(BaseModel):
     job_id: str
     storage_url: str
     source_resolution: str
     target_resolution: str
+
 
 class UpscaleCompleteMsg(BaseModel):
     job_id: str

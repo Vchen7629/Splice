@@ -29,7 +29,7 @@ async def test_publishes_all_messages_with_correct_payload(
     ]
 
     for msg in MSGS:
-        await publisher(js, msg, "jobs.video.chunks")
+        await publisher(js, msg, "jobs.video.chunks", service_name="scene-detector")
 
     assert len(nats_video_chunks_subscriber) == 2
     assert nats_video_chunks_subscriber[0] == {

@@ -11,7 +11,7 @@ def test_check_health_succeeds(
     monkeypatch.setattr(
         "shared_storage.check_health.settings.BASE_STORAGE_URL", seaweedfs_url
     )
-    check_storage_health()
+    check_storage_health(service_name="scene-detector")
 
 
 @pytest.mark.parametrize(
@@ -29,7 +29,7 @@ def test_check_health_raises_on_connection_error(
         "shared_storage.check_health.settings.BASE_STORAGE_URL", bad_url
     )
     with pytest.raises(requests.ConnectionError):
-        check_storage_health()
+        check_storage_health(service_name="scene-detector")
 
 
 @pytest.mark.parametrize("status_code", [500, 502, 503])
@@ -45,4 +45,4 @@ def test_check_health_raises_on_server_error(status_code: int) -> None:
         patch("shared_storage.check_health.requests.get", return_value=mock_response),
         pytest.raises(requests.HTTPError),
     ):
-        check_storage_health()
+        check_storage_health(service_name="scene-detector")

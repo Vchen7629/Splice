@@ -11,7 +11,7 @@ async def test_connect_returns_connected_clients(
 ) -> None:
     monkeypatch.setattr("shared_handler.connection.settings.NATS_URL", nats_url)
 
-    nc, js = await nats_connect()
+    nc, js = await nats_connect(service_name="scene-detector")
 
     assert isinstance(nc, NATSClient)
     assert isinstance(js, JetStreamContext)

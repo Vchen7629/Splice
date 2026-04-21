@@ -8,7 +8,7 @@ import os
 def test_fetch_video_downloads_file(seeded_video: Tuple[str, str]) -> None:
     """File is downloaded and saved locally with the correct filename"""
     job_id, storage_url = seeded_video
-    local_path = fetch_video(storage_url)
+    local_path = fetch_video(storage_url, service_name="scene-detector")
 
     assert os.path.exists(local_path)
     assert os.path.getsize(local_path) > 0
@@ -18,7 +18,7 @@ def test_fetch_video_downloads_file(seeded_video: Tuple[str, str]) -> None:
 def test_fetch_video_creates_directory(seeded_video: Tuple[str, str]) -> None:
     """Destination directory is created if it does not already exist"""
     job_id, storage_url = seeded_video
-    local_path = fetch_video(storage_url)
+    local_path = fetch_video(storage_url, service_name="scene-detector")
 
     assert os.path.isdir(os.path.dirname(local_path))
 
@@ -26,7 +26,7 @@ def test_fetch_video_creates_directory(seeded_video: Tuple[str, str]) -> None:
 def test_fetch_video_path_namespaced_by_job_id(seeded_video: Tuple[str, str]) -> None:
     """Local path includes the job_id segment to prevent collisions across jobs"""
     job_id, storage_url = seeded_video
-    local_path = fetch_video(storage_url)
+    local_path = fetch_video(storage_url, service_name="scene-detector")
 
     assert job_id in local_path
 
@@ -35,7 +35,7 @@ def test_fetch_video_raises_on_404(seaweedfs_url: str) -> None:
     """Raises HTTPError when the video does not exist in storage"""
     missing_url = f"{seaweedfs_url}/nonexistent-job/missing.mp4"
     with pytest.raises(requests.HTTPError):
-        fetch_video(missing_url)
+        fetch_video(missing_url, service_name="scene-detector")
 
 
 @pytest.mark.parametrize(
@@ -48,4 +48,4 @@ def test_fetch_video_raises_on_404(seaweedfs_url: str) -> None:
 def test_fetch_video_raises_on_connection_error(bad_url: str) -> None:
     """Raises ConnectionError when SeaweedFS is unreachable"""
     with pytest.raises(requests.ConnectionError):
-        fetch_video(bad_url)
+        fetch_video(bad_url, service_name="scene-detector")

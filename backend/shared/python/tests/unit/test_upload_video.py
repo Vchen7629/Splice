@@ -4,11 +4,18 @@ from shared_storage.queries import upload_video
 import requests
 import pytest
 
+fake_storage_url = "idk/idk2/chunk-001.mp4"
+
 
 def test_raises_file_not_found(tmp_path: Path) -> None:
     """Raises FileNotFoundError when the chunk path does not exist on disk"""
     with pytest.raises(FileNotFoundError):
-        upload_video("job-1", str(tmp_path / "missing.mp4"))
+        upload_video(
+            fake_storage_url,
+            "job-1",
+            str(tmp_path / "missing.mp4"),
+            service_name="scene-detector",
+        )
 
 
 @pytest.mark.parametrize("status_code", [400, 404, 500, 503])
@@ -24,7 +31,9 @@ def test_raises_on_http_error(single_video_chunk: str, status_code: int) -> None
         patch("shared_storage.queries.requests.put", return_value=mock_response),
         pytest.raises(requests.HTTPError),
     ):
-        upload_video("job-1", single_video_chunk)
+        upload_video(
+            fake_storage_url, "job-1", single_video_chunk, service_name="scene-detector"
+        )
 
 
 def test_raises_on_connection_error(single_video_chunk: str) -> None:
@@ -35,7 +44,9 @@ def test_raises_on_connection_error(single_video_chunk: str) -> None:
         ),
         pytest.raises(requests.ConnectionError),
     ):
-        upload_video("job-1", single_video_chunk)
+        upload_video(
+            fake_storage_url, "job-1", single_video_chunk, service_name="scene-detector"
+        )
 
 
 def test_returns_correct_storage_url(fake_base_url: str, tmp_path: Path) -> None:
@@ -47,7 +58,11 @@ def test_returns_correct_storage_url(fake_base_url: str, tmp_path: Path) -> None
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
 
-    with patch("shared_storage.queries.requests.put", return_value=mock_response):
-        url = upload_video(job_id, str(chunk))
+    storage_url = f"{fake_base_url}/{job_id}/chunk-001.mp4"
 
-    assert url == f"{fake_base_url}/{job_id}/chunk-001.mp4"
+    with patch("shared_storage.queries.requests.put", return_value=mock_response):
+        url = upload_video(
+            storage_url, job_id, str(chunk), service_name="scene-detector"
+        )
+
+    assert url == storage_url

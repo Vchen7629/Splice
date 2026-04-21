@@ -20,7 +20,7 @@ def test_fetch_video_raises_on_server_error(status_code: int) -> None:
         patch("shared_storage.queries.requests.get", return_value=mock_response),
         pytest.raises(requests.HTTPError),
     ):
-        fetch_video("http://fake/job-id/video.mp4")
+        fetch_video("http://fake/job-id/video.mp4", service_name="scene-detector")
 
 
 def test_fetch_video_writes_correct_content(
@@ -35,7 +35,9 @@ def test_fetch_video_writes_correct_content(
 
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
     with patch("shared_storage.queries.requests.get", return_value=mock_response):
-        local_path = fetch_video("http://fake/job-123/video.mp4")
+        local_path = fetch_video(
+            "http://fake/job-123/video.mp4", service_name="scene-detector"
+        )
 
     with open(local_path, "rb") as f:
         assert f.read() == fake_content
