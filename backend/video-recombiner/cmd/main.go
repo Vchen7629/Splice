@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	shanlder "shared/handler"
+	shandler "shared/handler"
 	"shared/kv"
 	"shared/middleware"
 	"shared/service"
@@ -82,17 +82,17 @@ func runCombiner(
 ) error {
 	logger.Debug("starting service...")
 
-	server := handler.StartHttpServer(logger, httpPort)
+	server := shandler.StartHealthHttpServer(logger, httpPort)
 
 	consCtx, err := handler.RecombineVideo(js, msgRecievedKV, jobStatusKV, logger, baseStorageURL)
 	if err != nil {
-		shanlder.ShutdownHttpServer(server, logger)
+		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
 	}
 
 	<-quit
 
-	shanlder.ShutdownHttpServer(server, logger)
+	shandler.ShutdownHttpServer(server, logger)
 
 	consCtx.Stop()
 	return nc.Drain()
