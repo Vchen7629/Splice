@@ -6,6 +6,8 @@ export const VideoService = {
     upload: (
         videoFile: File,
         targetResolution: string,
+        sourceResolution: string,
+        processingType: string,
         onProgress: (pct: number) => void
     ): { promise: Promise<{ job_id: string }>; abort: () => void} => {
         let xhr: XMLHttpRequest
@@ -17,6 +19,8 @@ export const VideoService = {
             const formData = new FormData()
             formData.append("video", videoFile)
             formData.append("target_resolution", targetResolution)
+            formData.append("source_resolution", sourceResolution)
+            formData.append("process_type", processingType)
 
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))

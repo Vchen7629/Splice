@@ -102,3 +102,4 @@ function validateFile(file: File): string | null {
     }
     return null
 }
+
