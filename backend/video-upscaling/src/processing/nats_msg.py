@@ -97,13 +97,14 @@ async def _finalize_job(
     temp_file_loc: str,
 ) -> None:
     """shared logic for uploading video file to storage, publish complete msg, updating KV and acking msg"""
-    upload_video(job_id, temp_file_loc, settings.SERVICE_NAME)
+    storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
+    upload_video(storage_url, job_id, temp_file_loc, settings.SERVICE_NAME)
 
     await publisher(js, UpscaleCompleteMsg(job_id=job_id), settings.PUB_SUBJECT, settings.SERVICE_NAME)
     
     await msg_processed_kv.put(job_id, b"done")
     await msg.ack()
-    
-    temp_dir = os.path.dirname(temp_file_loc)
-    shutil.rmtree(temp_dir)
-    logger.debug("removed temp dir", job_id=job_id, temp_dir=temp_dir)
+
+    shutil.rmtree(os.path.dirname(temp_file_loc))
+    shutil.rmtree(f"../temp/{job_id}", ignore_errors=True)
+    logger.debug("removed temp dirs", job_id=job_id)

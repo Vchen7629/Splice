@@ -19,5 +19,7 @@ class Settings(BaseSettings):
     MAX_DELIVER_ATTEMPTS: int = 3
     ACK_WAIT_S: int = 30
 
+    BASE_STORAGE_URL: str = "http://localhost:8888"
+
 
 settings = Settings()
