@@ -21,7 +21,8 @@ jobs:
         video_recombiner: ${{ steps.changes.outputs.video_recombiner }}
         video_upload: ${{ steps.changes.outputs.video_upload }}
         video_status: ${{ steps.changes.outputs.video_status }}
-        shared: ${{ steps.changes.outputs.shared }}
+        shared_go: ${{ steps.changes.outputs.shared.go }}
+        shared_python: ${{ steps.changes.outputs.shared.python }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -40,8 +41,10 @@ jobs:
               - 'backend/video-upload/**'
             video_status:
               - 'backend/video-status/**'
-            shared:
-              - 'backend/shared/**'
+            shared_go:
+              - 'backend/shared/go/**'
+            shared_python:
+              - 'backend/shared/python/**'
   frontend-ci:
     needs: path-filter
     if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.frontend == 'true' }}
@@ -226,9 +229,9 @@ jobs:
         working-directory: ./backend/video-status/cmd
         run: make test_all
 
-  shared-ci:
+  shared-go-ci:
     needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared.go == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -241,18 +244,54 @@ jobs:
           cache: 'true'
 
       - name: Download Go modules
-        working-directory: ./backend/shared
+        working-directory: ./backend/shared/go
         run: go mod download
       
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11
-          working-directory: ./backend/shared
+          working-directory: ./backend/shared/go
       
       - name: run tests
-        working-directory: ./backend/shared
+        working-directory: ./backend/shared/go
         run: make test_all
+
+  shared-python-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared.python == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.19"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./backend/shared/python
+      
+      - name: Run Linter and Formatting
+        run: |
+          uv run ruff check .
+          uv run ruff format --check
+        working-directory: ./backend/shared/python
+      
+      - name: Run Type Checking
+        run: uv run pyrefly check
+        working-directory: ./backend/shared/python
+      
+      - name: Run Unit/Integration Tests
+        run: make test_all
+        working-directory: ./backend/shared/python
 
   coverage:
     needs: path-filter
@@ -264,7 +303,8 @@ jobs:
         needs.path-filter.outputs.video_recombiner == 'true' ||
         needs.path-filter.outputs.video_upload == 'true' ||
         needs.path-filter.outputs.video_status == 'true' ||
-        needs.path-filter.outputs.shared == 'true'
+        needs.path-filter.outputs.shared.go == 'true' ||
+        needs.path-filter.outputs.shared.python == 'true'
       )
     steps:
       - uses: actions/checkout@v4
@@ -301,8 +341,12 @@ jobs:
         working-directory: ./backend/video-status/cmd
         run: make coverage
       
-      - name: Run shared coverage
-        working-directory: ./backend/shared
+      - name: Run shared go coverage
+        working-directory: ./backend/shared/go
+        run: make coverage
+      
+      - name: Run shared python coverage
+        working-directory: ./backend/shared/python
         run: make coverage
 
       - name: Upload coverage to Codecov                                                                       
@@ -313,6 +357,7 @@ jobs:
             ./backend/video-recombiner/cmd/coverage.out,
             ./backend/video-upload/cmd/coverage.out,
             ./backend/video-status/cmd/coverage.out,
-            ./backend/shared/coverage.out,
-            ./backend/scene-detector/coverage.xml                                                                       
+            ./backend/scene-detector/coverage.xml,
+            ./backend/shared/go/coverage.out,
+            ./backend/shared/python/coverage.out                                                                      
           token: ${{ secrets.CODECOV_TOKEN }}
