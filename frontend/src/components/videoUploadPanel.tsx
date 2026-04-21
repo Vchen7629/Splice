@@ -4,7 +4,6 @@ import { ALLOWED_EXTENSIONS, CollectFilesFromDrop, FilterFiles } from '../utils/
 
 /**
  * Drop zone, used to add video files for upload via drag & drop or click to browse.
- * TODO: wire onDragOver, onDragLeave, onDrop, onClick (hidden <input type="file">)
  */
 const FileUploadDropZone = ({ onFiles }: { onFiles: (files: File[]) => void}) => {
   const [isDragging, setIsDragging] = useState<boolean>(false)
@@ -30,25 +29,26 @@ const FileUploadDropZone = ({ onFiles }: { onFiles: (files: File[]) => void}) =>
 
   function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    
+
     const { accepted } = FilterFiles(files)
     if (accepted.length > 0) onFiles(accepted)
 
-    e.target.value = '' // reseting so the same file can be readded
+    e.target.value = ''
   }
 
   return (
     <div
-      className={`relative flex flex-col min-h-0 items-center justify-center flex-1 aspect-square border-2
-        rounded-xl cursor-pointer gap-6 group transition-all duration-150
-        ${isDragging ? 'border-transparent bg-accent/10 scale-[1.01] shadow-[0_0_24px_rgba(var(--accent-rgb),0.25)]'
-          : 'bg-panel border-line border-solid'
+      className={`relative flex flex-col h-[65vh] items-center justify-center flex-1 aspect-square border-2
+        rounded-[10px] cursor-pointer gap-6 group transition-all duration-150
+        ${isDragging
+          ? 'border-amber-400/60 bg-amber-400/5 scale-[1.01]'
+          : 'bg-panel border-dashed border-[var(--border)] hover:border-[var(--border-1)]'
         }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <input 
+      <input
         ref={inputRef}
         type="file"
         accept={ALLOWED_EXTENSIONS.join(',')}
@@ -58,18 +58,18 @@ const FileUploadDropZone = ({ onFiles }: { onFiles: (files: File[]) => void}) =>
       />
       <CornerBrackets active={isDragging} />
 
-      <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent-bg border-1 border-accent-border">
-        <Upload className='text-accent mb-1'/>
+      <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-amber-400/8 border border-amber-400/20">
+        <Upload className='text-amber-400 mb-1'/>
       </div>
 
       <div className="flex flex-col items-center gap-2 text-center">
-        <span className="text-sm text-white font-medium">
+        <span className="text-sm text-stone-200 font-medium">
           Drop video files here
         </span>
-        <span className="text-xs leading-relaxed text-text-1">
+        <span className="text-xs leading-relaxed text-stone-500">
           or
           <button
-            className="ml-1 underline underline-offset-2 text-accent decoration-accent-border"
+            className="ml-1 underline underline-offset-2 text-amber-400 decoration-amber-400/40"
             onClick={() => inputRef.current?.click()}
           >
             click to browse
@@ -82,7 +82,7 @@ const FileUploadDropZone = ({ onFiles }: { onFiles: (files: File[]) => void}) =>
         {ALLOWED_EXTENSIONS.map(fmt => (
           <span
             key={fmt}
-            className="text-xs px-2 py-0.5 rounded font-mono border-1 border-line bg-row-bg"
+            className="text-xs px-2 py-0.5 rounded font-mono border border-[var(--border)] bg-[var(--bg-row)] text-stone-500"
           >
             {fmt}
           </span>
@@ -98,7 +98,7 @@ const CornerBrackets = ({ active }: { active: boolean }) => {
     position: 'absolute',
     width: active ? 18 : 14,
     height: active ? 18 : 14,
-    borderColor: active ? 'var(--accent)' : 'var(--border-hi)',
+    borderColor: active ? '#fbbf24' : 'var(--border-1)',
     transition: 'all 0.15s ease',
   }
 
