@@ -25,4 +25,5 @@ def configure_logging() -> None:
 def get_logger(service_name: str) -> structlog.stdlib.BoundLogger:
     return structlog.get_logger().bind(service=service_name)
 
+
 configure_logging()

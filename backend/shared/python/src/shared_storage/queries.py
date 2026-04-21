@@ -1,5 +1,4 @@
 from shared_core.logging import get_logger
-from shared_core.settings import settings
 import os
 import requests
 
@@ -50,7 +49,9 @@ def fetch_video(storage_url: str, service_name: str) -> str:
     return dest_path
 
 
-def upload_video(storage_url: str, job_id: str, video_path: str, service_name: str) -> str:
+def upload_video(
+    storage_url: str, job_id: str, video_path: str, service_name: str
+) -> str:
     """
     Upload a single video to seaweedfs storage
 
@@ -81,7 +82,9 @@ def upload_video(storage_url: str, job_id: str, video_path: str, service_name: s
     try:
         with open(video_path, "rb") as f:
             response = requests.put(
-                storage_url, data=f, headers={"Content-Type": "application/octet-stream"}
+                storage_url,
+                data=f,
+                headers={"Content-Type": "application/octet-stream"},
             )
         response.raise_for_status()
     except requests.ConnectionError as e:

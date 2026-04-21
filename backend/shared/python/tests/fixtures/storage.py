@@ -74,10 +74,8 @@ def seeded_video(seaweedfs_url: str) -> Generator[Tuple[str, str], None, None]:
 
 
 @pytest.fixture
-def fake_base_url(monkeypatch: pytest.MonkeyPatch) -> str:
-    url = "http://fake:8888"
-    monkeypatch.setattr("shared_storage.queries.settings.BASE_STORAGE_URL", url)
-    return url
+def fake_base_url() -> str:
+    return "http://fake:8888"
 
 
 @pytest.fixture

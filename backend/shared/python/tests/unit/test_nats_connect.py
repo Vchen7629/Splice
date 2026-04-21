@@ -22,7 +22,7 @@ async def test_connect_raises_on_nats_failure(exc: Any) -> None:
         mock_instance.connect = AsyncMock(side_effect=exc)
         mock_client_class.return_value = mock_instance
         with pytest.raises(type(exc)):
-            await nats_connect()
+            await nats_connect(service_name="scene-detector")
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_connect_returns_nats_and_jetstream() -> None:
     mock_ns.jetstream.return_value = mock_js
 
     with patch("shared_handler.connection.NATSClient", return_value=mock_ns):
-        nc, js = await nats_connect()
+        nc, js = await nats_connect(service_name="scene-detector")
 
     assert nc is mock_ns
     assert js is mock_js

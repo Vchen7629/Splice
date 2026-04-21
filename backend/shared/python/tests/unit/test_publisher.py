@@ -26,7 +26,9 @@ async def test_raises_on_publish_failure(exc: Any) -> None:
         ]
 
         for msg in msgs:
-            await publisher(mock_js, msg, "jobs.video.chunks")
+            await publisher(
+                mock_js, msg, "jobs.video.chunks", service_name="scene-detector"
+            )
 
 
 @pytest.mark.asyncio
@@ -52,6 +54,8 @@ async def test_calls_publish_per_msg() -> None:
     ]
 
     for msg in msgs:
-        await publisher(mock_js, msg, "jobs.video.chunks")
+        await publisher(
+            mock_js, msg, "jobs.video.chunks", service_name="scene-detector"
+        )
 
     assert mock_js.publish.call_count == 2

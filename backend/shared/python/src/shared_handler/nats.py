@@ -36,7 +36,10 @@ async def consumer(
 
 
 async def publisher(
-    js: JetStreamContext, msg: VideoChunkMessage | UpscaleCompleteMsg, subject: str, service_name: str
+    js: JetStreamContext,
+    msg: VideoChunkMessage | UpscaleCompleteMsg,
+    subject: str,
+    service_name: str,
 ) -> None:
     """
     Publishes message to nats jetstream
