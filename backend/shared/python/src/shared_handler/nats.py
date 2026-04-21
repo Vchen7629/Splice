@@ -6,7 +6,7 @@ from nats.js.api import ConsumerConfig
 from nats.errors import TimeoutError
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_core.settings import settings
 from shared_handler.messages import UpscaleCompleteMsg
 from .messages import VideoChunkMessage
@@ -35,7 +35,9 @@ async def consumer(
         await process_msg(js, msg_processed_kv, job_status_kv, msg)
 
 
-async def publisher(js: JetStreamContext, msg: VideoChunkMessage | UpscaleCompleteMsg, subject: str) -> None:
+async def publisher(
+    js: JetStreamContext, msg: VideoChunkMessage | UpscaleCompleteMsg, subject: str, service_name: str
+) -> None:
     """
     Publishes message to nats jetstream
 
@@ -43,12 +45,15 @@ async def publisher(js: JetStreamContext, msg: VideoChunkMessage | UpscaleComple
         js: the jetstream context with connection info for publishing
         msg: the actual data we are publishing to the broker
         subject: the jetstream subject we want to publish to
+        service_name: the service name to log with
 
     Raises:
         TimeoutError: when publishing times out, logs and raises
         APIError: when an jetstream api error is recieved when trying
         to publish, logs and raises
     """
+    logger = get_logger(service_name)
+
     try:
         await js.publish(subject=subject, payload=msg.model_dump_json().encode())
         logger.debug("pub msg to nats jetstream successfully")

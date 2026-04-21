@@ -1,4 +1,3 @@
-import torch
 from queue import Queue
 from typing import Optional
 from realesrgan import RealESRGANer

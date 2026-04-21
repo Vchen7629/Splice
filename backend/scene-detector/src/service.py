@@ -1,5 +1,5 @@
 from shared_handler.nats import consumer
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_handler.kv import create_kv
 from shared_handler.kv import connect_kv
 from shared_handler.connection import nats_connect
@@ -10,16 +10,17 @@ from .core.settings import settings
 from .processing.nats_msg import process_msg
 import asyncio
 
+logger = get_logger(settings.SERVICE_NAME)
 
 async def start_service() -> None:
     """Start the python scene-detection service"""
-    check_storage_health()
+    check_storage_health(settings.SERVICE_NAME)
     health_server = start_health_server(settings.HTTP_PORT)
 
     nc, js = await nats_connect()
 
-    await check_js_stream_exists(js, settings.SUB_SUBJECT)
-    await check_js_stream_exists(js, settings.PUB_SUBJECT)
+    await check_js_stream_exists(js, settings.SUB_SUBJECT, settings.SERVICE_NAME)
+    await check_js_stream_exists(js, settings.PUB_SUBJECT, settings.SERVICE_NAME)
 
     job_status_kv = await connect_kv(js, "job-status")
     msg_processed_kv = await create_kv(js, "scene-split-processed")

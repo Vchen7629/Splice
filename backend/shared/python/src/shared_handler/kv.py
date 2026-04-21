@@ -2,11 +2,10 @@ from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_core.settings import settings
 import json
 import nats.js.errors as js_errors
-
 
 async def connect_kv(js: JetStreamContext, kv_name: str) -> KeyValue:
     """
@@ -67,8 +66,17 @@ async def check_already_processed(kv: KeyValue, job_id: str) -> bool:
         return False
 
 
-async def update_job_status(job_status_kv: KeyValue, job_id: str, stage: str) -> None:
-    """Writes PROCESSING for the stage to the job-status KV bucket"""
+async def update_job_status(job_status_kv: KeyValue, job_id: str, stage: str, service_name: str) -> None:
+    """
+    Writes PROCESSING for the stage to the job-status KV bucket
+    
+    Args:
+
+    Exception:
+        logs the error
+    """
+    logger = get_logger(service_name)
+
     try:
         status = json.dumps({"state": "PROCESSING", "stage": stage}).encode()
         await job_status_kv.put(job_id, status)

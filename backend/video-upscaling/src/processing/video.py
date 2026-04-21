@@ -1,6 +1,5 @@
 from typing import Optional
 from pathlib import Path
-from typing import Any
 from queue import Queue
 from subprocess import Popen
 from utils.metrics import log_timing

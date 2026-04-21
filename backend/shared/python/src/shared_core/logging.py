@@ -5,7 +5,7 @@ import structlog
 
 
 def configure_logging() -> None:
-    """Initialize the structured logger"""
+    """Initialize structlog, call once at service startup"""
     level = logging.DEBUG if settings.LOG_LEVEL == "DEBUG" else logging.INFO
     logging.basicConfig(stream=sys.stdout, level=level)
 
@@ -22,8 +22,7 @@ def configure_logging() -> None:
     structlog.configure(processors=processors)
 
 
-logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
-    service="scene-detector"
-)
+def get_logger(service_name: str) -> structlog.stdlib.BoundLogger:
+    return structlog.get_logger().bind(service=service_name)
 
 configure_logging()
