@@ -17,10 +17,10 @@ async def start_service() -> None:
     check_storage_health(settings.SERVICE_NAME)
     health_server = start_health_server(settings.HTTP_PORT)
 
-    nc, js = await nats_connect()
+    nc, js = await nats_connect(settings.SERVICE_NAME)
 
-    await check_js_stream_exists(js, settings.SUB_SUBJECT, settings.SERVICE_NAME)
-    await check_js_stream_exists(js, settings.PUB_SUBJECT, settings.SERVICE_NAME)
+    await check_js_stream_exists(js, settings.SUB_SUBJECT)
+    await check_js_stream_exists(js, settings.PUB_SUBJECT)
 
     job_status_kv = await connect_kv(js, "job-status")
     msg_processed_kv = await create_kv(js, "scene-split-processed")

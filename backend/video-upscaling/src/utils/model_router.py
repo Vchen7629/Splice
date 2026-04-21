@@ -9,7 +9,7 @@ class Resolution(IntEnum):
     R_280P = 280
     R_360P = 360
     R_480P = 480
-    R_740P = 740
+    R_720P = 720
     R_960P = 960
     R_1080P = 1080
     R_2080P = 2080

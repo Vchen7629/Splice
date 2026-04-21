@@ -3,7 +3,7 @@ from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
 from shared_handler.messages import VideoChunkMessage
 from shared_handler.messages import ProcessJobMessage
-from core.settings import settings
+from ..core.settings import settings
 from .video import split_into_chunks
 from scenedetect import VideoOpenFailure
 import asyncio
