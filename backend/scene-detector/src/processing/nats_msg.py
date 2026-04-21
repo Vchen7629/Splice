@@ -11,6 +11,7 @@ from nats.js.client import JetStreamContext
 
 logger = get_logger("scene-detector")
 
+
 async def process_msg(
     js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg
 ) -> None:
@@ -23,7 +24,9 @@ async def process_msg(
             await msg.ack()
             return
 
-        await update_job_status(job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME)
+        await update_job_status(
+            job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
+        )
 
         chunk_messages = await process_job(metadata)
 

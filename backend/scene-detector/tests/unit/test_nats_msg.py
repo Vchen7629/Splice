@@ -153,7 +153,7 @@ async def test_passes_chunk_messages_to_publisher(mock_kv: AsyncMock) -> None:
         await process_msg(mock_js, mock_kv, AsyncMock(spec=KeyValue), msg)
 
     mock_publish.assert_called_once_with(
-        mock_js, chunk_messages[0], settings.PUB_SUBJECT
+        mock_js, chunk_messages[0], settings.PUB_SUBJECT, settings.SERVICE_NAME
     )
 
 
