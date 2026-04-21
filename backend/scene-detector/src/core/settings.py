@@ -15,5 +15,7 @@ class Settings(BaseSettings):
     SUB_SUBJECT: str = "jobs.video.scene-split"
     PUB_SUBJECT: str = "jobs.video.chunks"
 
+    BASE_STORAGE_URL: str = "http://localhost:8888"
+
 
 settings = Settings()

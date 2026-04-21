@@ -6,6 +6,7 @@ from shared_handler.messages import ProcessJobMessage
 from ..core.settings import settings
 from .video import split_into_chunks
 from scenedetect import VideoOpenFailure
+import os
 import asyncio
 import shutil
 
@@ -50,7 +51,13 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
 
     storage_urls = await asyncio.gather(
         *[
-            asyncio.to_thread(upload_video, metadata.job_id, path, settings.SERVICE_NAME)
+            asyncio.to_thread(
+                upload_video,
+                f"{settings.BASE_STORAGE_URL}/{metadata.job_id}/{os.path.basename(path)}",
+                metadata.job_id,
+                path,
+                settings.SERVICE_NAME,
+            )
             for path in chunk_paths
         ]
     )
