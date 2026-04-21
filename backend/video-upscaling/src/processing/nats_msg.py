@@ -1,3 +1,4 @@
+import shutil
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
@@ -13,6 +14,7 @@ from core.settings import settings
 from processing.video import video_upscale
 from processing.video import video_downscale
 from src.utils.model_router import select_model
+import os
 import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
@@ -31,8 +33,11 @@ async def process_msg(
 
         await update_job_status(job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME)
 
-        temp_file_loc = f"../temp/{metadata.job_id}"  # where to save the unupscaled downloaded video
         local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url, settings.SERVICE_NAME)
+        filename = os.path.basename(local_video_path)
+        temp_file_loc = f"../temp_output/{metadata.job_id}/{filename}"
+        os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
+
         logger.debug(
             "fetched unprocessed video",
             job_id=metadata.job_id,
@@ -71,6 +76,7 @@ async def process_msg(
         )
 
         model_path, resolution_scale = res
+        logger.debug("upscaling with model and resolution", jobid=metadata, scale=resolution_scale, model=model_path)
 
         video_upscale(local_video_path, temp_file_loc, model_path, resolution_scale)
         logger.debug("upscaled video", job_id=metadata.job_id)
@@ -92,11 +98,12 @@ async def _finalize_job(
 ) -> None:
     """shared logic for uploading video file to storage, publish complete msg, updating KV and acking msg"""
     upload_video(job_id, temp_file_loc, settings.SERVICE_NAME)
-    logger.debug("uploaded video to storage", job_id=job_id)
 
-    await publisher(js, UpscaleCompleteMsg(JobID=job_id), settings.PUB_SUBJECT, settings.SERVICE_NAME)
-    logger.debug("published upscale complete message", job_id=job_id)
-
+    await publisher(js, UpscaleCompleteMsg(job_id=job_id), settings.PUB_SUBJECT, settings.SERVICE_NAME)
+    
     await msg_processed_kv.put(job_id, b"done")
     await msg.ack()
-    logger.debug("acked and updated msg_processed_kv", job_id=job_id)
+    
+    temp_dir = os.path.dirname(temp_file_loc)
+    shutil.rmtree(temp_dir)
+    logger.debug("removed temp dir", job_id=job_id, temp_dir=temp_dir)
