@@ -12,6 +12,7 @@ import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
 
+
 async def start_service() -> None:
     """Start the video-upscaling service"""
     check_storage_health(settings.SERVICE_NAME)

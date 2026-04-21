@@ -19,6 +19,7 @@ import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
 
+
 async def process_msg(
     js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg
 ) -> None:
@@ -31,9 +32,13 @@ async def process_msg(
             await msg.ack()
             return
 
-        await update_job_status(job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME)
+        await update_job_status(
+            job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
+        )
 
-        local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url, settings.SERVICE_NAME)
+        local_video_path = await asyncio.to_thread(
+            fetch_video, metadata.storage_url, settings.SERVICE_NAME
+        )
         filename = os.path.basename(local_video_path)
         temp_file_loc = f"../temp_output/{metadata.job_id}/{filename}"
         os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
@@ -76,7 +81,12 @@ async def process_msg(
         )
 
         model_path, resolution_scale = res
-        logger.debug("upscaling with model and resolution", jobid=metadata, scale=resolution_scale, model=model_path)
+        logger.debug(
+            "upscaling with model and resolution",
+            jobid=metadata,
+            scale=resolution_scale,
+            model=model_path,
+        )
 
         video_upscale(local_video_path, temp_file_loc, model_path, resolution_scale)
         logger.debug("upscaled video", job_id=metadata.job_id)
@@ -100,8 +110,13 @@ async def _finalize_job(
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     upload_video(storage_url, job_id, temp_file_loc, settings.SERVICE_NAME)
 
-    await publisher(js, UpscaleCompleteMsg(job_id=job_id), settings.PUB_SUBJECT, settings.SERVICE_NAME)
-    
+    await publisher(
+        js,
+        UpscaleCompleteMsg(job_id=job_id),
+        settings.PUB_SUBJECT,
+        settings.SERVICE_NAME,
+    )
+
     await msg_processed_kv.put(job_id, b"done")
     await msg.ack()
 
