@@ -61,7 +61,7 @@ async def test_returns_chunk_messages_on_success() -> None:
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch(
             "src.processing.job.upload_video",
-            side_effect=lambda job_id, path: url_map[path],
+            side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
         ),
         patch("src.processing.job.shutil.rmtree"),
     ):
@@ -88,7 +88,7 @@ async def test_cleans_up_temp_dir_after_upload() -> None:
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch(
             "src.processing.job.upload_video",
-            side_effect=lambda job_id, path: url_map[path],
+            side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
         ),
         patch("src.processing.job.shutil.rmtree") as mock_rmtree,
     ):

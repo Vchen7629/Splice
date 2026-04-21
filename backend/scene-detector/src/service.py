@@ -12,6 +12,7 @@ import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
 
+
 async def start_service() -> None:
     """Start the python scene-detection service"""
     check_storage_health(settings.SERVICE_NAME)

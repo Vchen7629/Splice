@@ -12,6 +12,7 @@ import shutil
 
 logger = get_logger(settings.SERVICE_NAME)
 
+
 async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     """
     takes in the msg from NATS subcriber, fetches the video from SeaweedFS, splits
@@ -34,7 +35,9 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     temp_dir = f"../temp/{metadata.job_id}"
     chunks_dir = f"../temp/{metadata.job_id}/chunks"
 
-    local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url, settings.SERVICE_NAME)
+    local_video_path = await asyncio.to_thread(
+        fetch_video, metadata.storage_url, settings.SERVICE_NAME
+    )
 
     try:
         chunk_paths = await asyncio.to_thread(
