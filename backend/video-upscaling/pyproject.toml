@@ -13,7 +13,23 @@ dependencies = [
     "torchvision",
     "basicsr-fixed",
     "pydantic-settings>=2.13.1",
+    "shared_python"
 ]
+
+[tool.uv.sources]
+shared_python = { path = "../shared/python", editable = true }
+torch = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[tool.pyrefly]
+python-version = "3.13"
+untyped-def-behavior = "check-and-infer-return-any"
+search-path = [".", "../shared/python/src"]
+venv = ".venv"
 
 [tool.uv.workspace]
 members = [
@@ -25,13 +41,21 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+[tool.pyrefly.errors]
+unannotated-parameter = "error"
+unannotated-return = "error"
+unannotated-attribute = "error"
+implicit-any = "error"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning:testcontainers",
 ]
-torchvision = [
-    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-]
+
+[tool.ruff]                                                                                                                                                                             
+exclude = ["src/processing/video.py"]
 
 [dependency-groups]
 dev = [
