@@ -33,7 +33,7 @@ def load_model(model_path: Path, scale: int) -> RealESRGANer:
 
     upsampler = RealESRGANer(
         scale=scale,
-        model_path=model_path,
+        model_path=str(model_path),
         model=model,
         tile=0,
         tile_pad=10,
