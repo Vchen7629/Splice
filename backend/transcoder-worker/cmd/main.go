@@ -85,7 +85,7 @@ func runProcessing(
 ) error {
 	logger.Debug("starting service")
 
-	server := handler.StartHttpServer(logger, httpPort)
+	server := shandler.StartHealthHttpServer(logger, httpPort)
 
 	consCtx, err := handler.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobStatusKV, logger)
 	if err != nil {

@@ -16,8 +16,8 @@ func CreateMsgProcessedKV(bucketName string, js jetstream.JetStream, logger *slo
 	defer cancel()
 
 	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket:      bucketName,
-		TTL:         3 * time.Hour,
+		Bucket: bucketName,
+		TTL:    3 * time.Hour,
 	})
 	if err != nil {
 		logger.Error("failed to create transcode-chunk-job-processed kv bucket", "err", err)
