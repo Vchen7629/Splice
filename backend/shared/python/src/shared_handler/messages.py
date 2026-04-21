@@ -15,4 +15,4 @@ class ProcessJobMessage(BaseModel):
     target_resolution: str
 
 class UpscaleCompleteMsg(BaseModel):
-    JobID: str
+    job_id: str

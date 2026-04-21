@@ -12,7 +12,7 @@ class Resolution(IntEnum):
     R_720P = 720
     R_960P = 960
     R_1080P = 1080
-    R_2080P = 2080
+    R_1440P = 1440
 
     @classmethod
     def from_string(cls, s: str) -> "Resolution":
