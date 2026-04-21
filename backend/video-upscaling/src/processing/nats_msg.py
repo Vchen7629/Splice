@@ -1,9 +1,7 @@
-from typing import Awaitable
-from typing import Callable
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_handler.nats import publisher
 from shared_handler.kv import update_job_status
 from shared_handler.kv import check_already_processed
@@ -17,6 +15,7 @@ from processing.video import video_downscale
 from src.utils.model_router import select_model
 import asyncio
 
+logger = get_logger(settings.SERVICE_NAME)
 
 async def process_msg(
     js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg
@@ -30,12 +29,10 @@ async def process_msg(
             await msg.ack()
             return
 
-        await update_job_status(job_status_kv, metadata.job_id, "video-upscaling")
+        await update_job_status(job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME)
 
         temp_file_loc = f"../temp/{metadata.job_id}"  # where to save the unupscaled downloaded video
-        local_video_path = await asyncio.to_thread(
-            fetch_video, metadata.storage_url
-        )  # do i need to cleanup this thread?
+        local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url, settings.SERVICE_NAME)
         logger.debug(
             "fetched unprocessed video",
             job_id=metadata.job_id,
@@ -94,10 +91,10 @@ async def _finalize_job(
     temp_file_loc: str,
 ) -> None:
     """shared logic for uploading video file to storage, publish complete msg, updating KV and acking msg"""
-    upload_video(job_id, temp_file_loc)
+    upload_video(job_id, temp_file_loc, settings.SERVICE_NAME)
     logger.debug("uploaded video to storage", job_id=job_id)
 
-    await publisher(js, UpscaleCompleteMsg(JobID=job_id), settings.PUB_SUBJECT)
+    await publisher(js, UpscaleCompleteMsg(JobID=job_id), settings.PUB_SUBJECT, settings.SERVICE_NAME)
     logger.debug("published upscale complete message", job_id=job_id)
 
     await msg_processed_kv.put(job_id, b"done")

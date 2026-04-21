@@ -1,4 +1,4 @@
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_core.settings import settings
 import os
 import requests
@@ -6,13 +6,14 @@ import requests
 TEMP_DIR: str = "../temp"
 
 
-def fetch_video(storage_url: str) -> str:
+def fetch_video(storage_url: str, service_name: str) -> str:
     """
     Fetch unprocessed video from seaweedfs storage for processing
     and save it locally for processing
 
     Args:
         storage_url: full SeaweedFS URL to the video, from NATS
+        service_name: the service name to log with
 
     Raises:
         requests.ConnectionError if SeaweedFS is unreachable
@@ -21,6 +22,8 @@ def fetch_video(storage_url: str) -> str:
     Returns:
         dest_path string on success
     """
+    logger = get_logger(service_name)
+
     try:
         response = requests.get(storage_url)
         response.raise_for_status()
@@ -47,13 +50,14 @@ def fetch_video(storage_url: str) -> str:
     return dest_path
 
 
-def upload_video(job_id: str, video_path: str) -> str:
+def upload_video(job_id: str, video_path: str, service_name: str) -> str:
     """
     Upload a single video to seaweedfs storage
 
     Args:
         job_id: job_id for one request from NATS
         video_path: local file path for the video
+        service_name: the service name to log with
 
     Raises:
         FileNotFoundError: if the local chunk file is missing before upload
@@ -63,6 +67,8 @@ def upload_video(job_id: str, video_path: str) -> str:
     Returns:
         SeaweedFS storage URL for the uploaded video
     """
+    logger = get_logger(service_name)
+    
     if not os.path.exists(video_path):
         logger.error(
             "video file not found before upload",

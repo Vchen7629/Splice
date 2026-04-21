@@ -1,13 +1,15 @@
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
 from shared_handler.messages import VideoChunkMessage
 from shared_handler.messages import ProcessJobMessage
+from core.settings import settings
 from .video import split_into_chunks
 from scenedetect import VideoOpenFailure
 import asyncio
 import shutil
 
+logger = get_logger(settings.SERVICE_NAME)
 
 async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     """
@@ -31,7 +33,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     temp_dir = f"../temp/{metadata.job_id}"
     chunks_dir = f"../temp/{metadata.job_id}/chunks"
 
-    local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url)
+    local_video_path = await asyncio.to_thread(fetch_video, metadata.storage_url, settings.SERVICE_NAME)
 
     try:
         chunk_paths = await asyncio.to_thread(
@@ -48,7 +50,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
 
     storage_urls = await asyncio.gather(
         *[
-            asyncio.to_thread(upload_video, metadata.job_id, path)
+            asyncio.to_thread(upload_video, metadata.job_id, path, settings.SERVICE_NAME)
             for path in chunk_paths
         ]
     )

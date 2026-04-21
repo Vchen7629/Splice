@@ -8,6 +8,7 @@ ENV_FILE = PROJECT_ROOT / ".env"
 class Settings(BaseSettings):
     # general config
     HTTP_PORT: int = 9098
+    SERVICE_NAME: str = "scene-detector"
 
     # Nats config
     SUB_QUEUE_NAME: str = "scene-detector-workers"

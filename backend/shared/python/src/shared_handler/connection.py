@@ -1,11 +1,10 @@
-from shared_core.logging import logger
+from shared_core.logging import get_logger
 from shared_core.settings import settings
 from nats.js.client import JetStreamContext
 from nats.aio.client import Client as NATSClient
 import nats.js.errors as js_errors
 
-
-async def check_js_stream_exists(js: JetStreamContext, subject_name: str) -> None:
+async def check_js_stream_exists(js: JetStreamContext, subject_name: str, service_name: str) -> None:
     """
     Check if a js stream exists using the subject name. Used before trying to
     connect to the stream in order to fail early
@@ -13,6 +12,7 @@ async def check_js_stream_exists(js: JetStreamContext, subject_name: str) -> Non
     Args:
         js: the jetstream context connection
         subject_name: the stream subject name we are checking
+        service_name: the name of the service for logging
 
     Raises:
         RuntimeError if the jetstream stream doesnt exist
