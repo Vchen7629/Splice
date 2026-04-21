@@ -61,18 +61,8 @@ async def publisher(
         await js.publish(subject=subject, payload=msg.model_dump_json().encode())
         logger.debug("pub msg to nats jetstream successfully")
     except TimeoutError as e:
-        logger.error(
-            "timed out publishing chunk msg",
-            job_id=msg.job_id,
-            chunk_idex=msg.chunk_index,
-            err=str(e),
-        )
+        logger.error("timed out publishing msg", job_id=msg.job_id, err=str(e))
         raise
     except APIError as e:
-        logger.error(
-            "jetstream error publishing chunk message",
-            job_id=msg.job_id,
-            chunk_idex=msg.chunk_index,
-            err=str(e),
-        )
+        logger.error("jetstream error publishing msg", job_id=msg.job_id, err=str(e))
         raise
