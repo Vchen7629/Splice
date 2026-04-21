@@ -3,6 +3,7 @@ package handler
 type VideoJobMessage struct {
 	JobID            string `json:"job_id"`
 	TargetResolution string `json:"target_resolution"`
+	SourceResolution string `json:"source_resolution"`
 	StorageURL       string `json:"storage_url"`
 }
 

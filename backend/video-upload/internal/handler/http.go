@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"shared/handler"
 	"shared/middleware"
-	"video-upload/internal/service"
 	"video-upload/internal/storage"
 
 	"github.com/go-playground/validator/v10"
@@ -53,8 +52,6 @@ type uploadResponse struct {
 	JobID string `json:"job_id"`
 }
 
-var checkVideoResolution = service.CheckVideoResolution
-
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
 // and publishes a scene split message to NATS for downstream processing
 func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) {
@@ -93,12 +90,37 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sourceRes, err := checkVideoResolution(file)
-	if err != nil {
-		http.Error(w, "failed to detect video resolution", http.StatusInternalServerError)
-		v.logger.Error("failed to detect video res", "err", err)
+	sourceRes := r.FormValue("source_resolution")
+	if sourceRes == "" {
+		http.Error(w, "missing source_resolution field", http.StatusBadRequest)
+		v.logger.Error("missing source_resolution field")
 		return
 	}
+
+
+	processType := r.FormValue("process_type")
+	if targetRes == "" {
+		http.Error(w, "missing process_type field", http.StatusBadRequest)
+		v.logger.Error("missing process_type field")
+		return
+	}
+
+	var pubSubject string
+
+	switch processType {
+	case "Transcode":
+		pubSubject = "jobs.video.scene-split"
+	case "Upscale":
+		pubSubject = "jobs.video.upscale"
+	case "Denoise":
+		pubSubject = "jobs.video.denoise"
+	case "Convert":
+		pubSubject = "jobs.video.convert"
+	default:
+		pubSubject = "jobs.video.scene-split"
+	}
+
+	v.logger.Debug("pubsubject called", "subject", pubSubject)
 
 	result, err := storage.SaveUploadedVideo(file, v.storageURL, header.Filename)
 	if err != nil {
@@ -107,16 +129,11 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	pubSubject := "jobs.video.scene-split"
-	if service.ConvertResStringToInt(sourceRes) < service.ConvertResStringToInt(targetRes) {
-		pubSubject = "jobs.video.upscale"
-	}
-
 	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
 
 	err = handler.PublishJobComplete(
 		v.js, handler.VideoJobMessage{
-			JobID: result.JobID, TargetResolution: targetRes, StorageURL: result.StorageURL,
+			JobID: result.JobID, TargetResolution: targetRes, SourceResolution: sourceRes, StorageURL: result.StorageURL,
 		}, pubSubject,
 	)
 	if err != nil {
