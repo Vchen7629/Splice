@@ -8,14 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"shared/handler"
 	"testing"
 	"time"
-	"video-upload/internal/service"
 	"video-upload/internal/test"
 
 	nats "github.com/nats-io/nats.go"
@@ -160,9 +158,6 @@ func TestUploadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("Large file (5 MB) is fully persisted to SeaweedFS", func(t *testing.T) {
-		checkVideoResolution = func(_ multipart.File) (string, error) { return "1080p", nil }
-		t.Cleanup(func() { checkVideoResolution = service.CheckVideoResolution })
-
 		content := bytes.Repeat([]byte("x"), 5*1024*1024)
 		req := test.NewUploadRequest(t, "/jobs", "big.mp4", content, "4k")
 		rec := httptest.NewRecorder()
@@ -185,9 +180,6 @@ func TestUploadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("Returns 500 when NATS publish fails after successful storage save", func(t *testing.T) {
-		checkVideoResolution = func(_ multipart.File) (string, error) { return "1080p", nil }
-		t.Cleanup(func() { checkVideoResolution = service.CheckVideoResolution })
-
 		h := newUploadHandler(&test.MockJS{PublishErr: errors.New("nats unavailable")}, &test.MockKV{}, sharedFilerUrl)
 		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
 		rec := httptest.NewRecorder()
