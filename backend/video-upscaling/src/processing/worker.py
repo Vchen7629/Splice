@@ -1,8 +1,9 @@
 from queue import Queue
+from typing import Optional
 from subprocess import Popen
 
 
-def encode_worker(encode_queue: Queue, encoder: Popen[bytes]) -> None:
+def encode_worker(encode_queue: Queue[Optional[bytes]], encoder: Popen[bytes]) -> None:
     """
     runs in a background thread. pulls upscaled frames from encode_queue
     and writes them to ffmpeg encoder's stdin for further processing
@@ -16,7 +17,10 @@ def encode_worker(encode_queue: Queue, encoder: Popen[bytes]) -> None:
         if frame is None:
             break
 
-        encoder.stdin.write(frame)
+        if encoder.stdin:
+            encoder.stdin.write(frame)
 
-    encoder.stdin.close()
+    if encoder.stdin:
+        encoder.stdin.close()
+
     encoder.wait()
