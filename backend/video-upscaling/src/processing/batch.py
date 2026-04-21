@@ -8,7 +8,9 @@ import numpy as np
 
 
 def flush_batch(
-    upsampler: RealESRGANer, frames: list[np.ndarray], encode_queue: Queue[Optional[bytes]]
+    upsampler: RealESRGANer,
+    frames: list[np.ndarray],
+    encode_queue: Queue[Optional[bytes]],
 ) -> tuple[float, float, int]:
     """
     Runs one batch of frames through GPU model and queues the results for encoding
@@ -33,6 +35,7 @@ def flush_batch(
     t2 = perf_counter()
 
     return t1 - t0, t2 - t1, len(frames)
+
 
 def _infer_batch(model: torch.nn.Module, frames_bgr: list[np.ndarray]) -> list[bytes]:
     """
