@@ -21,8 +21,8 @@ jobs:
         video_recombiner: ${{ steps.changes.outputs.video_recombiner }}
         video_upload: ${{ steps.changes.outputs.video_upload }}
         video_status: ${{ steps.changes.outputs.video_status }}
-        shared_go: ${{ steps.changes.outputs.shared.go }}
-        shared_python: ${{ steps.changes.outputs.shared.python }}
+        shared_go: ${{ steps.changes.outputs.shared_go }}
+        shared_python: ${{ steps.changes.outputs.shared_python }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
