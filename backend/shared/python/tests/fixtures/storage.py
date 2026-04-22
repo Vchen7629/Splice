@@ -1,3 +1,4 @@
+from typing import Any
 from shared_storage import queries
 from pathlib import Path
 from typing import Generator, Tuple
@@ -15,7 +16,7 @@ TEST_VIDEO_FILENAME = "ForBiggerBlazes.mp4"
 
 
 @pytest.fixture(autouse=True)
-def patch_temp_dir(tmp_path, monkeypatch):
+def patch_temp_dir(tmp_path: Any, monkeypatch: Any) -> None:
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
 
 
