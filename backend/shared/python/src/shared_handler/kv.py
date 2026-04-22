@@ -68,7 +68,11 @@ async def check_already_processed(kv: KeyValue, job_id: str) -> bool:
 
 
 async def update_job_status(
-    job_status_kv: KeyValue, job_id: str, stage: str, service_name: str, progress: int | None = None
+    job_status_kv: KeyValue,
+    job_id: str,
+    stage: str,
+    service_name: str,
+    progress: int | None = None,
 ) -> None:
     """
     Writes PROCESSING for the stage to the job-status KV bucket
@@ -81,7 +85,7 @@ async def update_job_status(
     logger = get_logger(service_name)
 
     try:
-        payload: dict = {"state": "PROCESSING", "stage": stage}
+        payload: dict[str, str | int] = {"state": "PROCESSING", "stage": stage}
         if progress is not None:
             payload["progress"] = progress
         status = json.dumps(payload).encode()
