@@ -1,4 +1,3 @@
-import shutil
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
@@ -15,6 +14,7 @@ from processing.video import video_upscale
 from processing.video import video_downscale
 from src.utils.model_router import select_model
 import os
+import shutil
 import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
@@ -88,7 +88,28 @@ async def process_msg(
             model=model_path,
         )
 
-        video_upscale(local_video_path, temp_file_loc, model_path, resolution_scale)
+        loop = asyncio.get_event_loop()
+
+        def on_progress(pct: int) -> None:
+            asyncio.run_coroutine_threadsafe(
+                update_job_status(
+                    job_status_kv,
+                    metadata.job_id,
+                    settings.SERVICE_NAME,
+                    settings.SERVICE_NAME,
+                    pct,
+                ),
+                loop,
+            )
+
+        await asyncio.to_thread(
+            video_upscale,
+            local_video_path,
+            temp_file_loc,
+            model_path,
+            resolution_scale,
+            on_progress,
+        )
         logger.debug("upscaled video", job_id=metadata.job_id)
 
         await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)

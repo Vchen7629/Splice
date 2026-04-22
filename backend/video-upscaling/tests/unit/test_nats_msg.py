@@ -1,5 +1,6 @@
 from typing import Any
 from pathlib import Path
+from unittest.mock import ANY
 from unittest.mock import AsyncMock
 from src.core.settings import settings
 from src.processing.nats_msg import process_msg
@@ -95,6 +96,7 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
         "../temp_output/abc/video.mp4",
         model_path,
         4,
+        ANY,
     )
 
 
