@@ -24,7 +24,7 @@ const VideoUploadButton = ({ videos, fileMap, processingType }: VideoUploadButto
     useEffect(() => {
         if (!erroredVideo) return
         toast.error(`Failed to upload "${erroredVideo.name}": ${erroredVideo.error ?? 'Unknown error'}`)
-    }, [erroredVideo?.id, erroredVideo?.status])
+    }, [erroredVideo])
 
     return (
         <div className="p-4 shrink-0 border-t border-[var(--border)]">

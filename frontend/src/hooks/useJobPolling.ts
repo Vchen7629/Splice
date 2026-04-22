@@ -10,7 +10,7 @@ async function pollVideo(video: UploadedVideo, processingType: ProcessingType) {
         if (data.state === 'COMPLETE') markComplete(processingType, video)
         else if (data.state === 'FAILED') updateVideoStatus(processingType, video.id, { status: 'error', error: data.error })
         else if (data.state === 'DEGRADED') updateVideoStatus(processingType, video.id, { status: 'degraded', stage: data.stage, error: data.error })
-        else if (data.state === 'PROCESSING') updateVideoStatus(processingType, video.id, { status: 'processing', stage: data.stage })
+        else if (data.state === 'PROCESSING') updateVideoStatus(processingType, video.id, { status: 'processing', stage: data.stage, jobProgress: data.progress ?? undefined })
     } catch {
         updateVideoStatus(processingType, video.id, { status: 'error' })
     }

@@ -64,7 +64,7 @@ export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
     removeProcessedVideo: (processingType, id) =>
         set(state => ({ 
             processedVideos: {
-                ...state.uploadedVideos,
+                ...state.processedVideos,
                 [processingType]: state.processedVideos[processingType].filter(v => v.id !== id) 
             }
         })),
