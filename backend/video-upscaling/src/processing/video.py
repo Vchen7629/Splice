@@ -140,7 +140,7 @@ def video_downscale(video_path: str, target_res: str, output_path: str) -> None:
         subprocess.run([
             "ffmpeg",
             "-i", video_path,
-            "-vf", f"scale=-2:{tgt_res}"
+            "-vf", f"scale=-2:{tgt_res}",
             "-c:a", "copy",
             output_path
         ], check=True)
