@@ -57,7 +57,7 @@ func newDownloadVideoServer(t *testing.T, storageURL string) *httptest.Server {
 
 // covers the full upload pipeline: multipart form → SeaweedFS → NATS → response.
 func TestUploadVideoFlow(t *testing.T) {
-	js, nc := test.SetupNats(t)
+	js, nc := stest.SetupNats(t)
 	kv := test.SetupKV(t, js)
 	h := newUploadHandler(js, kv, sharedFilerUrl)
 

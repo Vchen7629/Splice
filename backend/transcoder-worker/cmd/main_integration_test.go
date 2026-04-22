@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 
 func TestRunProcessingI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 		quit := make(chan os.Signal, 1)
@@ -63,7 +63,7 @@ func TestRunProcessingI(t *testing.T) {
 			t.Skip("ffmpeg not available")
 		}
 
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-full-flow"

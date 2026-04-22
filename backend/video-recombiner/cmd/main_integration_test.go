@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 
 func TestRunCombinerI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 		quit := make(chan os.Signal, 1)
@@ -58,7 +58,7 @@ func TestRunCombinerI(t *testing.T) {
 	})
 
 	t.Run("no stream returns error", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 
 		err := js.DeleteStream(context.Background(), "jobs")
 		require.NoError(t, err)
@@ -75,7 +75,7 @@ func TestRunCombinerI(t *testing.T) {
 			t.Skip("ffmpeg not available")
 		}
 
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 

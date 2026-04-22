@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 // it should create consumer with correct config
 func TestReturnCorrectConfig(t *testing.T) {
 	ctx := context.Background()
-	js, _ := test.SetupNats(t)
+	js, _ := stest.SetupNats(t)
 	kv := test.SetupKV(t, js)
 	jobStatusKV := test.SetupJobStatusKV(t, js)
 
@@ -62,7 +62,7 @@ func TestReturnCorrectConfig(t *testing.T) {
 
 func TestMessageHandlingI(t *testing.T) {
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
@@ -87,7 +87,7 @@ func TestMessageHandlingI(t *testing.T) {
 	})
 
 	t.Run("partial chunk does not publish downstream", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
@@ -120,7 +120,7 @@ func TestMessageHandlingI(t *testing.T) {
 	})
 
 	t.Run("all chunks received triggers combine", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		videoFile := stest.OpenTestVideo(t)
@@ -166,7 +166,7 @@ func TestMessageHandlingI(t *testing.T) {
 
 func TestRecombineVideoIdempotency(t *testing.T) {
 	t.Run("already received chunk is acked and skipped", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-idempotency-skip"
@@ -205,7 +205,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 	})
 
 	t.Run("kv entry is written after chunk is acked", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
+		js, _ := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-idempotency-write"

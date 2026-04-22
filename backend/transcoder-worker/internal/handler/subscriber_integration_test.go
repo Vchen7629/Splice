@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 func TestConsumeVideoChunk(t *testing.T) {
 	t.Run("consumer is created with correct config", func(t *testing.T) {
 		ctx := context.Background()
-		js, _ := test.SetupNats(t)
+		js, _ := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
@@ -60,7 +60,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 	})
 
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
@@ -85,7 +85,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 	})
 
 	t.Run("valid message publishes chunk complete and acks", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-full-flow"
@@ -153,7 +153,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			js, _ := test.SetupNats(t)
+			js, _ := stest.SetupNats(t)
 			kv := test.SetupKV(t, js)
 			jobID := "job-nak-" + tc.fileName
 			t.Cleanup(func() {
@@ -229,7 +229,7 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 func TestConsumeVideoChunkCleanup(t *testing.T) {
 	seedAndConsume := func(t *testing.T, jobID string) (jetstream.JetStream, <-chan struct{}) {
 		t.Helper()
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		videoContent, err := os.ReadFile("../test/test_video.mp4")
@@ -294,7 +294,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 
 func TestConsumeVideoChunkIdempotency(t *testing.T) {
 	t.Run("already processed chunk is acked and skipped", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
+		js, nc := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-idempotency-skip"
@@ -325,7 +325,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 	})
 
 	t.Run("kv entry is written after successful processing", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
+		js, _ := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-idempotency-write"
@@ -355,7 +355,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 	})
 
 	t.Run("kv entry is not written when processing fails", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
+		js, _ := stest.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
 		jobID := "job-idempotency-no-write-on-fail"

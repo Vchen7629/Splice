@@ -6,10 +6,22 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+const testVideoPath = "../test/testvideo.mp4"
+
+// helper to open the test video
+func OpenTestVideo(t *testing.T) *os.File {
+	t.Helper()
+	f, err := os.Open(testVideoPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { f.Close() })
+	return f
+}
 
 func SeedProcessedVideo(t *testing.T, filerURL, jobID, fileName string, content []byte) {
 	t.Helper()
