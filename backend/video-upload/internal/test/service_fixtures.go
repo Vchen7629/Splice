@@ -12,8 +12,7 @@ import (
 // NewUploadRequest builds a multipart POST request.
 // Pass a path ("/jobs") for direct handler invocation via httptest.NewRecorder,
 // or a full URL ("http://host:port/jobs") for use with http.DefaultClient.
-// Pass filename="" to omit the video field. Pass targetRes="" to omit target_resolution.
-func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte, targetRes string) *http.Request {
+func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte, targetRes, sourceRes, processType string) *http.Request {
 	t.Helper()
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
@@ -27,6 +26,14 @@ func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte,
 
 	if targetRes != "" {
 		require.NoError(t, w.WriteField("target_resolution", targetRes))
+	}
+
+	if sourceRes != "" {
+		require.NoError(t, w.WriteField("source_resolution", sourceRes))
+	}
+
+	if processType != "" {
+		require.NoError(t, w.WriteField("process_type", processType))
 	}
 
 	require.NoError(t, w.Close())
