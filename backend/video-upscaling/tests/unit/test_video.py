@@ -116,7 +116,7 @@ def test_video_upscale_flushes_all_frames(
     w, h = 64, 64
     frames = [np.zeros((h, w, 3), dtype=np.uint8) for _ in range(n_frames)]
     video_upscale_patches["decoder"].return_value = make_fake_decoder(frames)
-    video_upscale_patches["info"].return_value = (w, h, 24.0)
+    video_upscale_patches["info"].return_value = (w, h, 24.0, 22)
     video_upscale_patches["settings"].BATCH_SIZE = batch_size
 
     flushed: list[int] = []
@@ -149,7 +149,7 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
     video_upscale_patches: dict[str, Any],
 ) -> None:
     w, h, scale = 64, 64, 2
-    video_upscale_patches["info"].return_value = (w, h, 24.0)
+    video_upscale_patches["info"].return_value = (w, h, 24.0, 22)
     video_upscale_patches["decoder"].return_value = make_fake_decoder([])
 
     video_upscale(

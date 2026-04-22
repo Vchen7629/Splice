@@ -17,11 +17,12 @@ requires_cuda = pytest.mark.skipif(
 
 
 def test_extract_video_info_returns_correct_info() -> None:
-    w, h, fps = extract_video_info(str(TEST_VIDEO))
+    w, h, fps, nb_frames = extract_video_info(str(TEST_VIDEO))
 
     assert w == 1280
     assert h == 720
     assert abs(fps - 23.976) < 0.01
+    assert nb_frames == 360
 
 
 @pytest.mark.parametrize("target_res", ["480p", "360p"])
@@ -40,13 +41,13 @@ def test_video_downscale_output_has_correct_resolution(
     output = str(tmp_path / f"out_{target_res}.mp4")
     video_downscale(str(TEST_VIDEO), target_res, output)
 
-    _, h, _ = extract_video_info(output)
+    _, h, _, _ = extract_video_info(output)
 
     assert h == expected_h
 
 
 def test_video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
-    w, h, _ = extract_video_info(str(one_frame_video))
+    w, h, _, _ = extract_video_info(str(one_frame_video))
     frame_bytes = w * h * 3  # rgb24
 
     decoder = video_decoder(str(one_frame_video))
@@ -60,7 +61,7 @@ def test_video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
 
 
 def test_video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
-    w, h, _ = extract_video_info(str(one_frame_video))
+    w, h, _, _ = extract_video_info(str(one_frame_video))
     frame_bytes = w * h * 3
 
     decoder = video_decoder(str(one_frame_video))
@@ -127,11 +128,11 @@ def test_video_upscale_produces_output_file(
 def test_video_upscale_output_has_correct_resolution(
     one_frame_video: Path, tmp_path: Path, filename: str, scale: int
 ) -> None:
-    src_w, src_h, _ = extract_video_info(str(one_frame_video))
+    src_w, src_h, _, _ = extract_video_info(str(one_frame_video))
     output = str(tmp_path / f"upscaled_{scale}x.mp4")
 
     video_upscale(str(one_frame_video), output, WEIGHTS_DIR / filename, scale)
 
-    out_w, out_h, _ = extract_video_info(output)
+    out_w, out_h, _, _ = extract_video_info(output)
     assert out_w == src_w * scale
     assert out_h == src_h * scale

@@ -84,7 +84,7 @@ def video_upscale_patches() -> Generator[dict[str, Any], Any, None]:
 
     with (
         patch(
-            "src.processing.video.extract_video_info", return_value=(64, 64, 24.0)
+            "src.processing.video.extract_video_info", return_value=(64, 64, 24.0, 0)
         ) as mock_info,
         patch("src.processing.video.load_model", return_value=MagicMock()) as mock_load,
         patch("src.processing.video.video_decoder") as mock_decoder,

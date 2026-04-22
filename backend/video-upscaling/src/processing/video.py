@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable
 from pathlib import Path
 from queue import Queue
 from subprocess import Popen
@@ -13,7 +13,7 @@ import threading
 import subprocess
 import numpy as np
 
-def extract_video_info(video_path: str) -> tuple[int, int, float]:
+def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     """
     use ffprobe to extract video information like w, h, and fps of a video
 
@@ -21,7 +21,7 @@ def extract_video_info(video_path: str) -> tuple[int, int, float]:
         video_path: the path to the video we are trying to process
 
     Returns:
-        a tuple containing the width, height, and fps of the video
+        a tuple containing the width, height, fps, and num frames of the video
 
     Raises:
         TypeError if the video_path is not provided
@@ -32,18 +32,17 @@ def extract_video_info(video_path: str) -> tuple[int, int, float]:
     probe = subprocess.run([
         "ffprobe", "-v", "error",
         "-select_streams", "v:0",
-        "-show_entries", "stream=width,height,r_frame_rate",
+        "-show_entries", "stream=width,height,r_frame_rate,nb_frames",
         "-of", "csv=p=0",
         video_path
     ], capture_output=True, text=True, check=True)
-    w, h, fps_frac = probe.stdout.strip().split(",")
 
-    w, h = int(w), int(h)
+    w, h, fps_frac, nb_frames = probe.stdout.strip().split(",")
 
     fps_num, fps_den = fps_frac.split("/")
     fps = float(fps_num) / float(fps_den)
 
-    return w, h, fps
+    return int(w), int(h), fps, int(nb_frames)
 
 def recombine_video_audio(video_path: str, output_path: str) -> None:
     """
@@ -148,8 +147,15 @@ def video_downscale(video_path: str, target_res: str, output_path: str) -> None:
         raise RuntimeError(f"ffmpeg downscale failed: {e.stderr.decode()}") from e
 
 
-def video_upscale(video_path: str, output_path: str, model_path: Path, scale: int) -> None:
-    w, h, fps = extract_video_info(video_path)
+def video_upscale(
+    video_path: str, 
+    output_path: str, 
+    model_path: Path, 
+    scale: int, 
+    on_progress: Callable[[int], None] | None = None
+) -> None:
+    """Upscale a video using the model"""
+    w, h, fps, total_frames = extract_video_info(video_path)
 
     out_w, out_h = w * scale, h * scale
 
@@ -190,6 +196,10 @@ def video_upscale(video_path: str, output_path: str, model_path: Path, scale: in
             t_enq += dt_enq
             n_frames += n
             n_batches += 1
+
+            if on_progress is not None:
+                pct = min(99, int(n_frames / total_frames * 100))
+                on_progress(pct)
 
             pending.clear()
 
