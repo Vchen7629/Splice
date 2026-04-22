@@ -11,7 +11,7 @@ lint:
 	golangci-lint run ../internal/test/...
 	
 coverage:
-	go test -tags=unit,integration ${PKGS} -v -coverprofile=coverage.out -covermode=atomic
+	go test -tags=unit,integration ${PKGS} -v -p 1 -coverprofile=coverage.out -covermode=atomic
 
 integration:
 	go test -tags integration ${PKGS}
