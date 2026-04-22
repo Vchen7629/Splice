@@ -99,8 +99,7 @@ func TestListenAdvisoriesFailure_WritesKV(t *testing.T) {
 	}
 }
 
-// TestListenAdvisoriesFailure_Ignored covers cases where the advisory handler
-// encounters an error mid-way and leaves the KV unwritten.
+// covers cases where the advisory handler encounters an error mid-way and leaves the KV unwritten.
 func TestListenAdvisoriesFailure_Ignored(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -186,7 +185,11 @@ func TestListenJobCompleteI(t *testing.T) {
 		url, err := container.ConnectionString(ctx)
 		require.NoError(t, err)
 
-		nc, err := nats.Connect(url)
+		nc, err := nats.Connect(url,
+			nats.MaxReconnects(5),
+			nats.RetryOnFailedConnect(true),
+			nats.ReconnectWait(200*time.Millisecond),
+		)
 		require.NoError(t, err)
 		t.Cleanup(nc.Close)
 
