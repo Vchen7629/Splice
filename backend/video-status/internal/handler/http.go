@@ -19,16 +19,18 @@ const (
 )
 
 type JobStatus struct {
-	State JobState `json:"state"`
-	Stage string   `json:"stage"`
-	Error string   `json:"error,omitempty"`
+	State    JobState `json:"state"`
+	Stage    string   `json:"stage"`
+	Progress *int     `json:"progress,omitempty"`
+	Error    string   `json:"error,omitempty"`
 }
 
 type jobStatusResponse struct {
-	JobID string   `json:"job_id"`
-	State JobState `json:"state"`
-	Stage string   `json:"stage"`
-	Error string   `json:"error,omitempty"`
+	JobID    string   `json:"job_id"`
+	State    JobState `json:"state"`
+	Stage    string   `json:"stage"`
+	Progress *int     `json:"progress,omitempty"`
+	Error    string   `json:"error,omitempty"`
 }
 
 type JobStatusHandler struct {
@@ -71,7 +73,7 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: status.State, Stage: status.Stage, Error: status.Error})
+	err = json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: status.State, Stage: status.Stage, Progress: status.Progress, Error: status.Error})
 	if err != nil {
 		j.Logger.Error("error encoding job status response", "err", err)
 	}

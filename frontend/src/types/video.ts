@@ -12,5 +12,6 @@ export interface UploadedVideo {
     uploadProgress: number
     jobId: string | null
     stage?: string
+    jobProgress?: number
     error?: string
 }

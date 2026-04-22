@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useState, type RefObject } from 'react'
 import type { ProcessingType, UploadedVideo } from '../types/video'
 import { UploadVideoList, ProcessedVideoList } from './videoList'
 import { VideoUploadButton } from './videoListButtons'
@@ -15,14 +15,16 @@ interface VideoPanelProps {
 }
 
 const VideoPanel = ({ uploadedVideos, processedVideos, onRemove, onRemoveProcessed, fileMap, processingType }: VideoPanelProps) => {
-    const [activeTab, setActiveTab] = useState<PanelTab>('queue')
+    // Track which tab the user last explicitly selected, and how many processed videos existed then.
+    // If processedCount grows beyond that snapshot, auto-switch to output.
+    const processedCount = processedVideos[processingType].length
+    const [userTab, setUserTab] = useState<{ tab: PanelTab; atCount: number } | null>(null)
 
-    // Auto-switch to Output when a new video completes
-    useEffect(() => {
-        if (processedVideos[processingType].length > 0) {
-            setActiveTab('output')
-        }
-    }, [processedVideos[processingType].length])
+    const activeTab: PanelTab = (() => {
+        if (userTab === null) return processedCount > 0 ? 'output' : 'queue'
+        if (processedCount > userTab.atCount) return 'output'
+        return userTab.tab
+    })()
 
     const showResolution = processingType !== 'Denoise'
 
@@ -34,13 +36,13 @@ const VideoPanel = ({ uploadedVideos, processedVideos, onRemove, onRemoveProcess
                     label="Queue"
                     count={uploadedVideos[processingType].length}
                     active={activeTab === 'queue'}
-                    onClick={() => setActiveTab('queue')}
+                    onClick={() => setUserTab({ tab: 'queue', atCount: processedCount })}
                 />
                 <TabButton
                     label="Output"
                     count={processedVideos[processingType].length}
                     active={activeTab === 'output'}
-                    onClick={() => setActiveTab('output')}
+                    onClick={() => setUserTab({ tab: 'output', atCount: processedCount })}
                 />
             </div>
 

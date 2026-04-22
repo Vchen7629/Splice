@@ -40,7 +40,7 @@ const PROGRESS_BAR: Record<JobStatus, string> = {
 }
 
 const STAGE_PROGRESS: Record<string, number> = {
-    '':                 5,
+    '':                 0,
     'scene-detector':   33,
     'transcoder':       77,
     'video-recombiner': 90,
@@ -63,7 +63,9 @@ const VideoProgressBar = ({ video }: { video: UploadedVideo }) => {
         }
 
         const stage = video.stage ?? ''
-        const pct = STAGE_PROGRESS[stage] ?? 5
+        const pct = stage === 'video-upscaling' && video.jobProgress !== undefined
+            ? video.jobProgress
+            : STAGE_PROGRESS[stage] ?? 5
 
         if (video.status === 'error')    return { pct: 100, label: 'Failed' }
         if (video.status === 'degraded') return { pct, label: 'Service degraded' }
@@ -74,7 +76,7 @@ const VideoProgressBar = ({ video }: { video: UploadedVideo }) => {
     const { pct } = getProgress(video)
 
     return (
-        <div className="pt-0.5 h-[2px] w-full rounded-full bg-[var(--bg-progress)]">
+        <div className="mt-0.5 h-[2px] w-full rounded-full bg-[var(--bg-progress)]">
             <div
                 className={`h-full rounded-full transition-all duration-500 ${PROGRESS_BAR[video.status]}`}
                 style={{ width: `${pct}%` }}
