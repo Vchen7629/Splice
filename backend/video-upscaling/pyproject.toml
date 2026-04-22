@@ -13,7 +13,8 @@ dependencies = [
     "torchvision",
     "basicsr-fixed",
     "pydantic-settings>=2.13.1",
-    "shared_python"
+    "shared_python",
+    "types-requests>=2.33.0.20260408",
 ]
 
 [tool.uv.sources]
@@ -63,5 +64,6 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=7.1.0",
+    "testcontainers[nats]>=4.0.0",
     "ruff>=0.15.11",
 ]

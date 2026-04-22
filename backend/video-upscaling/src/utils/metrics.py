@@ -19,9 +19,11 @@ def log_timing(
         ("batch infer     ", t_infer),
         ("encode queue put", t_enq),
     ]:
-        print(
-            f"  {label}  {val:6.2f}s  {100 * val / loop:5.1f}%  ({1000 * val / n_frames:5.1f}ms/frame)"
+        pct = f"{100 * val / loop:5.1f}%" if loop > 0 else "  N/A "
+        mspf = (
+            f"{1000 * val / n_frames:5.1f}ms/frame" if n_frames > 0 else "   N/A      "
         )
+        print(f"  {label}  {val:6.2f}s  {pct}  ({mspf})")
     print(f"  {'loop total     '}  {loop:6.2f}s")
     print(f"  encode thread wait  {t_enc:6.2f}s")
     print(
