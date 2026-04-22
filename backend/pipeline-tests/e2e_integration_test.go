@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"pipeline-tests/helpers"
+
+	shelpers "shared/test"
 	"testing"
 	"time"
 	"github.com/stretchr/testify/assert"
@@ -18,7 +20,7 @@ import (
 var sharedFilerURL string
 
 func TestMain(m *testing.M) {
-	filerURL, cleanup := helpers.StartSeaweedFSFiler()
+	filerURL, cleanup := shelpers.StartSeaweedFSFiler()
 	sharedFilerURL = filerURL
 
 	code := m.Run()
