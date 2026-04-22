@@ -231,7 +231,7 @@ jobs:
 
   shared-go-ci:
     needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared.go == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared_go == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -259,7 +259,7 @@ jobs:
 
   shared-python-ci:
     needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared.python == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared_python == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -303,8 +303,8 @@ jobs:
         needs.path-filter.outputs.video_recombiner == 'true' ||
         needs.path-filter.outputs.video_upload == 'true' ||
         needs.path-filter.outputs.video_status == 'true' ||
-        needs.path-filter.outputs.shared.go == 'true' ||
-        needs.path-filter.outputs.shared.python == 'true'
+        needs.path-filter.outputs.shared_go == 'true' ||
+        needs.path-filter.outputs.shared_python == 'true'
       )
     steps:
       - uses: actions/checkout@v4
