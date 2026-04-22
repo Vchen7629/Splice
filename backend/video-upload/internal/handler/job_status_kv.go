@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"os"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
-
-var osExit = os.Exit
 
 func updateJobStatusKV(ctx context.Context, jobID string, kv jetstream.KeyValue, logger *slog.Logger) error {
 	status, err := json.Marshal(struct {

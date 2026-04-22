@@ -97,7 +97,6 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-
 	processType := r.FormValue("process_type")
 	if targetRes == "" {
 		http.Error(w, "missing process_type field", http.StatusBadRequest)

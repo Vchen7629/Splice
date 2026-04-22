@@ -111,7 +111,7 @@ func TestUploadVideo(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newVideoHandler("http://localhost:1", &test.MockJS{})
-			req := test.NewUploadRequest(t, "/jobs", tc.fileName, tc.content, tc.targetRes)
+			req := test.NewUploadRequest(t, "/jobs", tc.fileName, tc.content, tc.targetRes, "1080p", "Transcode")
 			rec := httptest.NewRecorder()
 
 			h.uploadVideoRoute(rec, req)
@@ -124,7 +124,7 @@ func TestUploadVideo(t *testing.T) {
 	t.Run("Returns 500 when saving the video file fails", func(t *testing.T) {
 		// Null byte in path causes os.MkdirAll to fail
 		h := newVideoHandler("\x00", &test.MockJS{})
-		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -137,7 +137,7 @@ func TestUploadVideo(t *testing.T) {
 		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
 		server, _ := startTestServer(t, kv)
 
-		req := test.NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
 		w := httptest.NewRecorder()
 		server.Handler.ServeHTTP(w, req)
 
@@ -148,7 +148,7 @@ func TestUploadVideo(t *testing.T) {
 	t.Run("Does not publish to NATS when saving fails", func(t *testing.T) {
 		js := &test.MockJS{}
 		h := newVideoHandler("\x00", js)
-		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p")
+		req := test.NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)

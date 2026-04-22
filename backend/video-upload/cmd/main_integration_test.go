@@ -91,7 +91,7 @@ func TestStartHttpApi(t *testing.T) {
 		{
 			name: "POST /jobs/upload is wired to the upload handler",
 			buildReq: func() *http.Request {
-				return test.NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", test.TestVideoBytes(t), "1080p")
+				return test.NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", test.TestVideoBytes(t), "1080p", "1080p", "Transcode")
 			},
 			wantStatus: http.StatusCreated,
 		},
@@ -128,7 +128,7 @@ func TestUploadPipeline(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", test.TestVideoBytes(t), "720p")
+		req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", test.TestVideoBytes(t), "720p", "1080p", "Transcode")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -167,7 +167,7 @@ func TestUploadPipeline(t *testing.T) {
 		jobIDs := make([]string, 3)
 
 		for i := range jobIDs {
-			req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", test.TestVideoBytes(t), "1080p")
+			req := test.NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", test.TestVideoBytes(t), "1080p", "1080p", "Transcode")
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close()
