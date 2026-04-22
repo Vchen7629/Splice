@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"os"
 	shandler "shared/handler"
+	stest "shared/test"
 	"testing"
 	"time"
 	"transcoder-worker/internal/service"
 	"transcoder-worker/internal/test"
-	stest "shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"

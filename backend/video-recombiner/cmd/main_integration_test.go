@@ -9,11 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"shared/handler"
+	stest "shared/test"
 	"syscall"
 	"testing"
 	"time"
 	"video-recombiner/internal/test"
-	stest "shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -58,20 +58,9 @@ func TestRunCombinerI(t *testing.T) {
 	})
 
 	t.Run("no stream returns error", func(t *testing.T) {
-		ctx := context.Background()
+		js, nc := test.SetupNats(t)
 
-		container, err := natstc.Run(ctx, "nats:2.10-alpine")
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-		url, err := container.ConnectionString(ctx)
-		require.NoError(t, err)
-
-		nc, err := nats.Connect(url)
-		require.NoError(t, err)
-		t.Cleanup(nc.Close)
-
-		js, err := jetstream.New(nc)
+		err := js.DeleteStream(context.Background(), "jobs")
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)

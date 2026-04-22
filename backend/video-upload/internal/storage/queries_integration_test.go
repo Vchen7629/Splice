@@ -7,10 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"shared/test"
 	"testing"
 	"video-upload/internal/storage"
-	"video-upload/internal/test"
-	stest "shared/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +18,7 @@ import (
 var sharedFilerUrl string
 
 func TestMain(m *testing.M) {
-	filerURL, cleanup := stest.StartSeaweedFSFiler()
+	filerURL, cleanup := test.StartSeaweedFSFiler()
 	sharedFilerUrl = filerURL
 
 	code := m.Run()
@@ -165,9 +164,11 @@ func TestGetProcessedVideo(t *testing.T) {
 
 		seedReq, err := http.NewRequest(http.MethodPut, sharedFilerUrl+"/job123/"+fileName+"/processed", test.OpenTestVideo(t))
 		require.NoError(t, err)
+
 		seedReq.Header.Set("Content-Type", "application/octet-stream")
 		seedResp, err := http.DefaultClient.Do(seedReq)
 		require.NoError(t, err)
+
 		seedResp.Body.Close()
 		require.Less(t, seedResp.StatusCode, 400)
 

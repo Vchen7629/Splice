@@ -12,10 +12,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"shared/handler"
+	stest "shared/test"
 	"testing"
 	"time"
 	"video-upload/internal/test"
-	stest "shared/test"
 
 	nats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"

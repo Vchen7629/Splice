@@ -9,12 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"shared/handler"
+	stest "shared/test"
 	"syscall"
 	"testing"
 	"time"
 	"transcoder-worker/internal/service"
 	"transcoder-worker/internal/test"
-	stest "shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
