@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"shared/test"
+	stest "shared/test"
 	"testing"
 	"video-upload/internal/storage"
+	"video-upload/internal/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ import (
 var sharedFilerUrl string
 
 func TestMain(m *testing.M) {
-	filerURL, cleanup := test.StartSeaweedFSFiler()
+	filerURL, cleanup := stest.StartSeaweedFSFiler()
 	sharedFilerUrl = filerURL
 
 	code := m.Run()

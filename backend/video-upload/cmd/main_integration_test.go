@@ -42,7 +42,7 @@ type serverEnv struct {
 
 func setupServer(t *testing.T) *serverEnv {
 	t.Helper()
-	js, nc := test.SetupNats(t)
+	js, nc := stest.SetupNats(t)
 	kv := test.SetupKV(t, js)
 
 	cfg := &Config{HTTPPort: test.FreePort(t), StorageURL: sharedStorageURL}
@@ -210,7 +210,7 @@ func TestGracefulShutdown(t *testing.T) {
 	})
 
 	t.Run("NATS drain completes without error on a healthy connection", func(t *testing.T) {
-		_, nc := test.SetupNats(t)
+		_, nc := stest.SetupNats(t)
 
 		assert.NoError(t, nc.Drain())
 	})
@@ -218,7 +218,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 // runs and shuts down cleanly on SIGINT
 func TestMainFuncLifecycle(t *testing.T) {
-	js, nc := test.SetupNats(t)
+	js, nc := stest.SetupNats(t)
 	test.SetupKV(t, js) // ConnectJobStatusKV expects the bucket to already exist
 
 	port := test.FreePort(t)
