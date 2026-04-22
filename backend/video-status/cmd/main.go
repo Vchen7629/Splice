@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	shandler "shared/handler"
 	"shared/middleware"
 	"shared/service"
 	"syscall"
 	"video-status/internal/handler"
-	shandler "shared/handler"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -78,7 +78,7 @@ func main() {
 	jobCompleteSub.Stop()
 
 	shandler.ShutdownHttpServer(server, logger)
-	
+
 	err = nc.Drain()
 	if err != nil {
 		logger.Error("nats drain error", "err", err)
