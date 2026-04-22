@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"os"
 	shandler "shared/handler"
+	stest "shared/test"
 	"testing"
 	"time"
 	"video-recombiner/internal/handler"
 	"video-recombiner/internal/test"
-	stest "shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -123,7 +123,7 @@ func TestMessageHandlingI(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js)
 
-		videoFile := test.OpenTestVideo(t)
+		videoFile := stest.OpenTestVideo(t)
 		videoData, err := os.ReadFile(videoFile.Name())
 		require.NoError(t, err)
 
