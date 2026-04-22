@@ -15,6 +15,7 @@ import (
 	"time"
 	"video-upload/internal/handler"
 	"video-upload/internal/test"
+	stest "shared/test"
 
 	nats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -25,7 +26,7 @@ import (
 var sharedStorageURL string
 
 func TestMain(m *testing.M) {
-	url, cleanup := test.StartSeaweedFSFiler()
+	url, cleanup := stest.StartSeaweedFSFiler()
 	sharedStorageURL = url
 	code := m.Run()
 	cleanup()

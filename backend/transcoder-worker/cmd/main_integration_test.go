@@ -14,6 +14,7 @@ import (
 	"time"
 	"transcoder-worker/internal/service"
 	"transcoder-worker/internal/test"
+	stest "shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -25,7 +26,7 @@ import (
 var sharedFilerURL string
 
 func TestMain(m *testing.M) {
-	filerURL, cleanup := test.StartSeaweedFSFiler()
+	filerURL, cleanup := stest.StartSeaweedFSFiler()
 	sharedFilerURL = filerURL
 
 	code := m.Run()
