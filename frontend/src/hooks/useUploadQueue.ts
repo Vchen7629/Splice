@@ -1,7 +1,7 @@
 import { useRef } from "react"
 import { VideoService } from "../api/services/video"
 import { useVideoQueueStore } from "../state/videoQueue"
-import type { ProcessingType } from "../types/video"
+import type { ProcessingType } from "../types/file"
 
 export function useUploadQueue(processingType: ProcessingType) {
     const abortRefs = useRef<Map<number, () => void>>(new Map())
