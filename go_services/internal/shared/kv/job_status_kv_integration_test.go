@@ -5,7 +5,7 @@ package kv
 import (
 	"context"
 	"os"
-	"shared/test"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"

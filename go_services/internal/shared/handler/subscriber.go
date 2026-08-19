@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"shared/kv"
+	"splice.com/go_services/internal/shared/kv"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"

@@ -3,7 +3,7 @@
 package kv
 
 import (
-	"shared/test"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

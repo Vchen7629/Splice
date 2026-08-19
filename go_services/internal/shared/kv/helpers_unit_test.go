@@ -4,8 +4,8 @@ package kv_test
 
 import (
 	"errors"
-	"shared/kv"
-	"shared/test"
+	"splice.com/go_services/internal/shared/kv"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 )
 

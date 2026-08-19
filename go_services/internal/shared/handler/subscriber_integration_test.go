@@ -4,8 +4,8 @@ package handler_test
 
 import (
 	"context"
-	"shared/handler"
-	"shared/test"
+	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 	"time"
 
