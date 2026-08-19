@@ -24,7 +24,7 @@ pythonpath = ["src"]
 [tool.pyrefly]
 python-version = "3.13"
 untyped-def-behavior = "check-and-infer-return-any"
-search-path = [".", "../shared/python/src"]
+search-path = [".", "../shared/src"]
 venv = ".venv"
 
 [tool.pyrefly.errors]
