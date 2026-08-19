@@ -85,7 +85,7 @@ const FileUploadPanel = ({ activeFeature, queue, outputCount, dropzone, onStartU
  * Shows N files ready/in progress/finished
  */
 const QueueSummary = ({ queue, outputCount, verb }: { queue: UploadedFile[]; outputCount: number; verb: string }) => {
-    const working = queue.filter(v => v.status === 'processing' || v.status === 'uploading')
+    const working = queue.filter(v => v.status === 'processing' || v.status === 'uploading' || v.status === 'degraded')
     const pending = queue.filter(v => v.status === 'pending')
 
     const [count, line] = working.length > 0

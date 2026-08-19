@@ -14,7 +14,8 @@ export function useFileDrop(onFiles: (files: File[]) => void) {
         setIsDragging(true)
     }
 
-    function handleDragLeave() {
+    function handleDragLeave(e: DragEvent<HTMLElement>) {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
         setIsDragging(false)
     }
 

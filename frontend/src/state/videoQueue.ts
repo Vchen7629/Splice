@@ -13,8 +13,6 @@ interface VideoQueueStore {
     resetVideo: (processingType: ProcessingType, id: number) => void
 }
 
-const completingIds = new Set<number>()
-
 /** Replaces one processingType's list within a queues record, leaving the others untouched. */
 function withUpdatedQueue(
     queues: Record<ProcessingType, UploadedFile[]>,
@@ -78,17 +76,19 @@ export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
             )
         })),
 
-    markComplete: (processingType, video) => {
-        if (completingIds.has(video.id)) return
+    markComplete: (processingType, video) => 
+        set(state => {
+            const current = state.uploadedVideos[processingType]
+                .find(v => v.id === video.id)
+            if (!current) return {}
 
-        completingIds.add(video.id)
-        set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                list.filter(v => v.id !== video.id)
-            ),
-            processedVideos: withUpdatedQueue(state.processedVideos, processingType, list =>
-                [...list, { ...video, status: 'complete' }]
-            ),
-        }))
-    },
+            return {
+                uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
+                    list.filter(v => v.id !== video.id)
+                ),
+                processedVideos: withUpdatedQueue(state.processedVideos, processingType, list =>
+                    [...list, { ...current, status: 'complete' }]
+                ),
+            }
+        }),
 }))
