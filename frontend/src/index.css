@@ -1,54 +1,148 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-header-bg: var(--bg-header);
-  --color-panel: var(--bg-panel);
-  --color-progress: var(--bg-progress);
-  --color-row-bg: var(--bg-row);
-  --color-line: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-btn: var(--accent-btn);
-  --color-accent-bg: var(--bg-accent);
-  --color-accent-border: var(--border-accent);
-  --color-text-1: var(--text);
-  --color-border-1: var(--border-1);
-  --color-input-bg: var(--bg-input);
+  --color-bg:          var(--bg);
+  --color-panel:       var(--panel);
+  --color-row:         var(--row);
+  --color-header-bg:   var(--header-bg);
+  --color-input-bg:    var(--input-bg);
+  --color-track:       var(--track);
+
+  --color-line:        var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-fg-strong:   var(--fg-strong);
+  --color-fg:          var(--fg);
+  --color-fg-muted:    var(--fg-muted);
+  --color-fg-faint:    var(--fg-faint);
+
+  --color-accent:       var(--accent);
+  --color-accent-soft:  var(--accent-soft);
+  --color-accent-line:  var(--accent-line);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent:    var(--on-accent);
+
+  /* Status stays conventional in every palette — legibility is not a style axis. */
+  --color-status-idle:   var(--status-idle);
+  --color-status-upload: var(--status-upload);
+  --color-status-work:   var(--status-work);
+  --color-status-done:   var(--status-done);
+  --color-status-fail:   var(--status-fail);
+  --color-status-warn:   var(--status-warn);
+
+  /* Type scale. One ramp, roughly a minor third, anchored on a 13px UI body — dense
+     enough for a tool without the 9–12px mush the app started with. Optical tracking:
+     tightens as size grows, opens up as it shrinks. Components use these names only. */
+  --text-eyebrow: 0.625rem;      /* 10px — overlines, stage labels */
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.12em;
+
+  --text-meta: 0.75rem;          /* 12px — mono data, counts, sizes */
+  --text-meta--line-height: 1.35;
+  --text-meta--letter-spacing: 0.005em;
+
+  --text-caption: 0.8125rem;     /* 13px — filenames, secondary UI */
+  --text-caption--line-height: 1.4;
+
+  --text-body: 0.875rem;         /* 14px — default reading size */
+  --text-body--line-height: 1.55;
+
+  --text-lead: 1rem;             /* 16px — stage subtitles */
+  --text-lead--line-height: 1.5;
+  --text-lead--letter-spacing: -0.005em;
+
+  --text-title: 1.125rem;        /* 18px — wordmark */
+  --text-title--line-height: 1.25;
+  --text-title--letter-spacing: -0.018em;
+
+  --text-display: 1.75rem;       /* 28px — empty-state headline */
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.022em;
+
+  --text-hero: 4rem;             /* 64px — the live count */
+  --text-hero--line-height: 1;
+  --text-hero--letter-spacing: -0.04em;
+}
+
+:root,
+html[data-palette="studio"] {
+  color-scheme: light;
+
+  --bg:        #E7E7E4;
+  --panel:     #F6F6F4;
+  --row:       #EFEFEC;
+  --header-bg: rgba(246, 246, 244, 0.85);
+  --input-bg:  #FFFFFF;
+  --track:     #D8D8D3;
+
+  --line:        #D5D5D0;
+  --line-strong: #B4B4AD;
+
+  --fg-strong: #16181A;
+  --fg:        #3C4045;
+  --fg-muted:  #6B7075;
+  --fg-faint:  #9A9E9F;
+
+  /* Bright amber cannot carry text on a light ground, so light mode uses the
+     darker end of the same hue and reserves the bright tone for dark mode. */
+  --accent:       #9A5B0B;
+  --accent-soft:  rgba(154, 91, 11, 0.09);
+  --accent-line:  rgba(154, 91, 11, 0.28);
+  --accent-solid: #B26410;
+  --accent-hover: #96530A;
+  --on-accent:    #FFFFFF;
+
+  --status-idle:   #9A9E9F;
+  --status-upload: #1E6BAD;
+  --status-work:   #9A5B0B;
+  --status-done:   #17753C;
+  --status-fail:   #B32218;
+  --status-warn:   #C2500C;
+}
+
+
+html[data-palette="darkroom"] {
+  color-scheme: dark;
+
+  --bg:        #0A0E0C;
+  --panel:     #111614;
+  --row:       #0D1210;
+  --header-bg: rgba(17, 22, 20, 0.85);
+  --input-bg:  #0D1210;
+  --track:     #1F2622;
+
+  --line:        #1E2521;
+  --line-strong: #313A35;
+
+  --fg-strong: #F2EFE8;
+  --fg:        #B9B5AB;
+  --fg-muted:  #7C7970;
+  --fg-faint:  #57554F;
+
+  --accent:       #F5B23C;
+  --accent-soft:  rgba(245, 178, 60, 0.09);
+  --accent-line:  rgba(245, 178, 60, 0.26);
+  --accent-solid: #C97A12;
+  --accent-hover: #E08E1C;
+  --on-accent:    #14100A;
+
+  --status-idle:   #57554F;
+  --status-upload: #6FA8DC;
+  --status-work:   #F5B23C;
+  --status-done:   #5FBE7A;
+  --status-fail:   #E5564B;
+  --status-warn:   #E8873A;
 }
 
 :root {
-  color-scheme: dark;
-
-  --bg:        #0f0e0c;
-  --bg-header: rgba(15, 14, 12, 0.80);
-  --bg-panel:  #161512;
-  --bg-accent: rgba(251, 191, 36, 0.07);
-  --bg-row:    #121110;
-  --bg-input:  #161512;
-  --bg-progress: #2a2620;
-
-  --accent:        #fbbf24;
-  --accent-glow:   rgba(251, 191, 36, 0.18);
-  --accent-btn:    #d97706;
-  --accent-btn-glow: rgba(217, 119, 6, 0.25);
-
-  --border:   #2a2620;
-  --border-1: #3a3530;
-  --border-accent: rgba(251, 191, 36, 0.22);
-
-  --text:     #a8a29e;
-  --text-dim: #57534e;
-
-  --shadow:    rgba(0, 0, 0, 0.5) 0 8px 24px -4px,
-               rgba(0, 0, 0, 0.3) 0 2px  6px -2px;
-  --shadow-sm: rgba(0, 0, 0, 0.35) 0 2px 8px -2px;
-
   --sans: 'DM Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, 'JetBrains Mono', Consolas, monospace;
 
-  font: 16px/150% var(--sans);
-  letter-spacing: 0.12px;
-  color: var(--text);
+  font: 400 0.875rem/1.55 var(--sans);
+  letter-spacing: 0;
+  color: var(--fg);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -58,9 +152,7 @@
 body {
   margin: 0;
   background-color: var(--bg);
-  /* Faint grid lines — warm-tinted graph paper texture */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M6 0L12 6L6 12L0 6Z' fill='none' stroke='%23c8a96e' stroke-opacity='0.05' stroke-width='0.5'/%3E%3C/svg%3E");
-  background-size: 12px 12px;
+  color: var(--fg);
 }
 
 #root {
@@ -72,16 +164,32 @@ body {
   text-align: left;
 }
 
-.transcode-btn:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 0 24px var(--accent-btn-glow), 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
+/* Arrow is masked rather than drawn, so it inherits the palette's text colour
+   instead of hardcoding one inside a data URI. */
 .resolution-select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' fill='none'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%2378716c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
   padding-right: 18px;
   cursor: pointer;
+}
+
+.select-arrow {
+  width: 8px;
+  height: 5px;
+  background-color: currentColor;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' fill='none'%3E%3Cpath d='M1 1l3 3 3-3' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

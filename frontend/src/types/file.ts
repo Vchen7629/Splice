@@ -2,7 +2,7 @@ export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'e
 
 export type ProcessingType = 'Transcode' | 'Upscale' | 'Denoise' | 'Convert'
 
-export interface UploadedVideo {
+export interface UploadedFile {
     id: number
     name: string
     size: number
