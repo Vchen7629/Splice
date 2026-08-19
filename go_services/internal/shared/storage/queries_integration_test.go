@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"shared/storage"
-	"shared/test"
+	"splice.com/go_services/internal/shared/storage"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

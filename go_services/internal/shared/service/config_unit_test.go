@@ -5,7 +5,7 @@ package service
 import (
 	"os"
 	"path/filepath"
-	"shared/test"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

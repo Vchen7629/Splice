@@ -4,8 +4,8 @@ package handler_test
 
 import (
 	"errors"
-	"shared/handler"
-	"shared/test"
+	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

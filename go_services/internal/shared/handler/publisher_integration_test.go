@@ -5,7 +5,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"shared/test"
+	"splice.com/go_services/internal/shared/test"
 	"testing"
 	"time"
 
