@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import type { ProcessingType, UploadedFile } from "../../types/file";
-import { STATUS_BG } from "./Status";
+import { STATUS_BG } from "./StatusStyles";
 import { formatSize } from "../../utils/fileDisplay";
 import ResolutionSelect from "./ResolutionSelect";
 import PipelineLane from "./PipelineProgress";

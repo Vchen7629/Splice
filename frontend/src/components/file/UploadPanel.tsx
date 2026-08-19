@@ -1,8 +1,8 @@
 import type { ProcessingType, UploadedFile } from "../../types/file";
 import { ALLOWED_EXTENSIONS } from "../../utils/fileUpload";
-import { StatusTag } from "./Status";
 import PipelineLane from "./PipelineProgress";
 import type { useFileDrop } from "../../hooks/useFileDrop";
+import { STATUS_LABEL } from "./StatusStyles";
 
 interface FileUploadPanelProps {
     activeFeature: ProcessingType
@@ -142,6 +142,17 @@ const ActiveJobsPreview = ({ queue, processingType }: { queue: UploadedFile[]; p
                 </span>
             )}
         </div>
+    )
+}
+
+const StatusTag = ({ status }: { status: UploadedFile['status'] }) => {
+    const label = STATUS_LABEL[status]
+
+    return (
+        <span className={`flex items-center gap-1 font-mono text-meta shrink-0 ${label.color}`}>
+            {label.pulse && <span className="w-1 h-1 rounded-full bg-current animate-pulse" />}
+            {label.text}
+        </span>
     )
 }
 

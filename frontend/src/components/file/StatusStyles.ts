@@ -18,14 +18,3 @@ export const STATUS_BG: Record<UploadedFile['status'], string> = {
     error:      'bg-status-fail',
     degraded:   'bg-status-warn',
 }
-
-export const StatusTag = ({ status }: { status: UploadedFile['status'] }) => {
-    const label = STATUS_LABEL[status]
-    
-    return (
-        <span className={`flex items-center gap-1 font-mono text-meta shrink-0 ${label.color}`}>
-            {label.pulse && <span className="w-1 h-1 rounded-full bg-current animate-pulse" />}
-            {label.text}
-        </span>
-    )
-}

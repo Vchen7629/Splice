@@ -1,5 +1,5 @@
 import type { ProcessingType, UploadedFile } from '../../types/file'
-import { STATUS_BG } from './Status'
+import { STATUS_BG } from './StatusStyles'
 
 type SegmentState = 'done' | 'active' | 'pending'
 
