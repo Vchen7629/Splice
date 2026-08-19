@@ -5,7 +5,7 @@ from typing import Generator
 from typing import AsyncGenerator
 from nats.js import JetStreamContext
 from testcontainers.nats import NatsContainer
-import nats  # type: ignore[import-untyped]
+import python_services.python.tests.fixtures.nats as nats  # type: ignore[import-untyped]
 import json
 import pytest
 import pytest_asyncio

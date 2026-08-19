@@ -1,4 +1,4 @@
-from shared_core.logging import get_logger
+from python_services.python.src.shared_core.logging import get_logger
 import os
 import requests
 
