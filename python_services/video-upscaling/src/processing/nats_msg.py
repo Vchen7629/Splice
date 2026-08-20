@@ -4,6 +4,7 @@ from nats.js import JetStreamContext
 from shared_core.logging import get_logger
 from shared_handler.nats import publisher
 from shared_handler.kv import update_job_status
+from shared_handler.kv import update_job_failed
 from shared_handler.kv import check_already_processed
 from shared_handler.messages import ProcessJobMessage
 from shared_handler.messages import UpscaleCompleteMsg
@@ -117,7 +118,11 @@ async def process_msg(
         return
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
-        await msg.nak()
+        if "metadata" in locals():
+            await update_job_failed(
+                job_status_kv, metadata.job_id, str(e), settings.SERVICE_NAME
+            )
+        await msg.ack()
 
 
 async def _finalize_job(
