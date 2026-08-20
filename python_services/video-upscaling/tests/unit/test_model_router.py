@@ -19,8 +19,24 @@ def test_from_string_parses_valid_resolution(s: str, expected: Resolution) -> No
     assert Resolution.from_string(s) == expected
 
 
-@pytest.mark.parametrize("s", ["144p", "4k", "", "abcp"])
-def test_from_string_raises_for_unknown_resolution(s: str) -> None:
+@pytest.mark.parametrize(
+    "s,expected",
+    [
+        ("144p", Resolution.R_280P),  # nearest to an off-scale detected height
+        (
+            "1040p",
+            Resolution.R_1080P,
+        ),  # e.g. a screen-capture with a non-standard height
+        ("4k", Resolution.R_2160P),
+        ("4K", Resolution.R_2160P),
+    ],
+)
+def test_from_string_snaps_to_nearest_resolution(s: str, expected: Resolution) -> None:
+    assert Resolution.from_string(s) == expected
+
+
+@pytest.mark.parametrize("s", ["", "abcp"])
+def test_from_string_raises_for_unparseable_resolution(s: str) -> None:
     with pytest.raises(ValueError):
         Resolution.from_string(s)
 

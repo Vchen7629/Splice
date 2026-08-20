@@ -19,7 +19,7 @@ class Resolution(IntEnum):
     def from_string(cls, s: str) -> "Resolution":
         s = s.strip().lower()
         h = 2160 if s == "4k" else int(s.rstrip("p"))
-        
+
         return min(cls, key=lambda r: abs(r.value - h))
 
 

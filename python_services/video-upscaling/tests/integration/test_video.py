@@ -108,13 +108,13 @@ def test_recombine_video_audio_output_has_audio_stream(recombined_video: Path) -
     ],
 )
 def test_video_upscale_produces_output_file(
-    one_frame_video: Path, tmp_path: Path, filename: str, scale: int
+    one_frame_video: Path, filename: str, scale: int
 ) -> None:
-    output = str(tmp_path / f"upscaled_{scale}x.mp4")
-    video_upscale(str(one_frame_video), output, WEIGHTS_DIR / filename, scale)
+    output = Path("/tmp/upscaled_noaudio.mp4")
+    video_upscale(str(one_frame_video), WEIGHTS_DIR / filename, scale)
 
-    assert Path(output).exists()
-    assert Path(output).stat().st_size > 0
+    assert output.exists()
+    assert output.stat().st_size > 0
 
 
 @requires_cuda
@@ -126,12 +126,12 @@ def test_video_upscale_produces_output_file(
     ],
 )
 def test_video_upscale_output_has_correct_resolution(
-    one_frame_video: Path, tmp_path: Path, filename: str, scale: int
+    one_frame_video: Path, filename: str, scale: int
 ) -> None:
     src_w, src_h, _, _ = extract_video_info(str(one_frame_video))
-    output = str(tmp_path / f"upscaled_{scale}x.mp4")
+    output = "/tmp/upscaled_noaudio.mp4"
 
-    video_upscale(str(one_frame_video), output, WEIGHTS_DIR / filename, scale)
+    video_upscale(str(one_frame_video), WEIGHTS_DIR / filename, scale)
 
     out_w, out_h, _, _ = extract_video_info(output)
     assert out_w == src_w * scale

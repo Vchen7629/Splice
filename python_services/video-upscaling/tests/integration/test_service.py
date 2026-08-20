@@ -60,7 +60,9 @@ async def test_full_job_publishes_upscale_complete_msg(
 ) -> None:
     """Full flow: message published -> video fetched from SeaweedFS -> downscaled -> UpscaleCompleteMsg on downstream subject."""
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
-    monkeypatch.setattr("processing.nats_msg.settings.BASE_STORAGE_URL", seaweedfs_url)
+    monkeypatch.setattr(
+        "src.processing.nats_msg.settings.BASE_STORAGE_URL", seaweedfs_url
+    )
 
     nc, js = patched_start_service
     job_id = str(uuid.uuid4())
@@ -100,7 +102,9 @@ async def test_full_job_uploads_output_to_storage(
 ) -> None:
     """After processing, output video is PUT to SeaweedFS at the expected URL."""
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
-    monkeypatch.setattr("processing.nats_msg.settings.BASE_STORAGE_URL", seaweedfs_url)
+    monkeypatch.setattr(
+        "src.processing.nats_msg.settings.BASE_STORAGE_URL", seaweedfs_url
+    )
 
     nc, js = patched_start_service
     job_id = str(uuid.uuid4())
@@ -117,7 +121,7 @@ async def test_full_job_uploads_output_to_storage(
         done.set()
         return result
 
-    with patch("processing.nats_msg.upload_video", side_effect=spy_upload):
+    with patch("src.processing.nats_msg.upload_video", side_effect=spy_upload):
         await _run_service_until_processed(
             nc,
             _make_payload(

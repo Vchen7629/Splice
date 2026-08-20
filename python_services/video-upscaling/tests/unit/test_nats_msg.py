@@ -93,7 +93,6 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
 
     nats_msg_patches["upscale"].assert_called_once_with(
         "/tmp/video.mp4",
-        "../temp_output/abc/video.mp4",
         model_path,
         4,
         ANY,
@@ -116,49 +115,67 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
 
 
 @pytest.mark.asyncio
-async def test_invalid_json_naks(nats_msg_patches: dict[str, Any]) -> None:
+async def test_invalid_json_acks_without_updating_kv(
+    nats_msg_patches: dict[str, Any],
+) -> None:
     msg = AsyncMock()
     msg.data = b"not valid json"
 
     await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
 
-    msg.nak.assert_called_once()
-    msg.ack.assert_not_called()
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
+    nats_msg_patches["update_failed"].assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_fetch_video_raises_naks(nats_msg_patches: dict[str, Any]) -> None:
+async def test_fetch_video_raises_updates_kv_and_acks(
+    nats_msg_patches: dict[str, Any],
+) -> None:
     nats_msg_patches["fetch"].side_effect = RuntimeError("storage down")
     msg = make_msg()
 
     await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
 
-    msg.nak.assert_called_once()
-    msg.ack.assert_not_called()
+    nats_msg_patches["update_failed"].assert_called_once_with(
+        ANY, "job-123", "storage down", settings.SERVICE_NAME
+    )
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_video_upscale_raises_naks(nats_msg_patches: dict[str, Any]) -> None:
+async def test_video_upscale_raises_updates_kv_and_acks(
+    nats_msg_patches: dict[str, Any],
+) -> None:
     nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
     nats_msg_patches["upscale"].side_effect = RuntimeError("gpu oom")
     msg = make_msg()
 
     await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
 
-    msg.nak.assert_called_once()
-    msg.ack.assert_not_called()
+    nats_msg_patches["update_failed"].assert_called_once_with(
+        ANY, "job-123", "gpu oom", settings.SERVICE_NAME
+    )
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_video_downscale_raises_naks(nats_msg_patches: dict[str, Any]) -> None:
+async def test_video_downscale_raises_updates_kv_and_acks(
+    nats_msg_patches: dict[str, Any],
+) -> None:
     nats_msg_patches["select"].return_value = None
     nats_msg_patches["downscale"].side_effect = RuntimeError("ffmpeg failed")
     msg = make_msg(source_resolution="1080p", target_resolution="480p")
 
     await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
 
-    msg.nak.assert_called_once()
-    msg.ack.assert_not_called()
+    nats_msg_patches["update_failed"].assert_called_once_with(
+        ANY, "job-123", "ffmpeg failed", settings.SERVICE_NAME
+    )
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
 
 
 @pytest.mark.asyncio
