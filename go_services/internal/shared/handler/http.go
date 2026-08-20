@@ -26,8 +26,12 @@ func StartHealthHttpServer(logger *slog.Logger, httpPort string) *http.Server {
 	})
 
 	server := &http.Server{
-		Addr:    ":" + httpPort,
-		Handler: router,
+		Addr:              ":" + httpPort,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

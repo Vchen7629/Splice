@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var httpClient = &http.Client{Timeout: 30*time.Second}
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // save the video chunk to seaweedfs storage
 func UploadVideoChunk(url, filePath string) (string, error) {
