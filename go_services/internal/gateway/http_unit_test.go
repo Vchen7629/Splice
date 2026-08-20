@@ -285,7 +285,7 @@ func TestPollJobStatus_HealthCheck(t *testing.T) {
 		})
 	}
 
-	t.Run("updateJobStatusKV failure during health check returns early", func(t *testing.T) {
+	t.Run("updateJobStatusKV failure during health check serves", func(t *testing.T) {
 		kv := NewMockKV()
 		kv.Seed("job-1", mustMarshalStatus(t, JobStatus{State: StateProcessing, Stage: "scene-detector"}))
 		kv.PutErr = errors.New("kv unavailable")
@@ -298,7 +298,9 @@ func TestPollJobStatus_HealthCheck(t *testing.T) {
 		h.PollJobStatus(rec, req)
 
 		require.Equal(t, http.StatusOK, rec.Code)
-		assert.Empty(t, rec.Body.String())
+		var resp jobStatusResponse
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+		assert.Equal(t, StateDegraded, resp.State) // service down -> degraded, served even though KV persist failed
 	})
 }
 
