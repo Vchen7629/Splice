@@ -1,4 +1,5 @@
 import { useRef } from "react"
+import { toast } from "sonner"
 import { VideoService } from "../api/services/video"
 import { useVideoQueueStore } from "../state/videoQueue"
 import type { ProcessingType } from "../types/file"
@@ -40,6 +41,7 @@ export function useUploadQueue(processingType: ProcessingType) {
                     abortRefs.current.delete(video.id)
                     if (err.name !== 'AbortError') {
                         updateVideoStatus(processingType, video.id, { status: 'error', error: err.message })
+                        toast.error(`${file.name} failed to upload`, { description: err.message })
                     }
                 })
         })

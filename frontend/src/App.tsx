@@ -69,7 +69,22 @@ function App() {
 
   return (
     <>
-      <Toaster position='bottom-right' theme={mode}/>
+      <Toaster
+        position='bottom-right'
+        theme={mode}
+        toastOptions={{
+          unstyled: true,
+          classNames: {
+            toast:
+              'flex items-start gap-3 w-full rounded-lg border border-line bg-panel px-4 py-3.5 shadow-lg',
+            title: 'text-caption font-medium text-fg-strong',
+            description: 'text-meta text-fg-muted mt-0.5',
+            error: 'border-l-2 border-l-status-fail',
+            success: 'border-l-2 border-l-status-done',
+            closeButton: 'bg-panel border-line text-fg-muted hover:text-fg-strong',
+          },
+        }}
+      />
       <AppLayout
         header={
           <Header
