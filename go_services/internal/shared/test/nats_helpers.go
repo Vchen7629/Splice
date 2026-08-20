@@ -80,7 +80,7 @@ func SetupNats(t *testing.T) (jetstream.JetStream, *nats.Conn) {
 func SetupKV(t *testing.T, js jetstream.JetStream, bucketName string) jetstream.KeyValue {
 	t.Helper()
 	kv, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-		Bucket: "job-status",
+		Bucket: bucketName,
 	})
 	require.NoError(t, err)
 	return kv
