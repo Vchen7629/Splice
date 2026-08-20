@@ -17,13 +17,13 @@ interface Segment {
 const STAGES: Record<'upscale' | 'default', { key: string; label: string }[]> = {
     upscale: [
         { key: 'scene-detector',   label: 'Detect' },
-        { key: 'file-upscaling',  label: 'Upscale' },
-        { key: 'file-recombiner', label: 'Recombine' },
+        { key: 'video-upscaling',  label: 'Upscale' },
+        { key: 'video-recombiner', label: 'Recombine' },
     ],
     default: [
         { key: 'scene-detector',   label: 'Detect' },
         { key: 'transcoder',       label: 'Transcode' },
-        { key: 'file-recombiner', label: 'Recombine' },
+        { key: 'video-recombiner', label: 'Recombine' },
     ],
 }
 
@@ -46,10 +46,12 @@ function pipelineSegments(file: UploadedFile, processingType: ProcessingType): S
         if (i < activeIdx) return { ...stage, state: 'done' as const, fill: 100 }
         if (i > activeIdx) return { ...stage, state: 'pending' as const, fill: 0 }
 
-        // Only file-upscaling reports intra-stage progress; everything else shows an
-        // indeterminate half-fill rather than a number the backend never sent.
-        const fill = stage.key === 'file-upscaling' && file.jobProgress !== undefined
-            ? file.jobProgress
+        // Only video-upscaling reports intra-stage progress; everything else shows an
+        // indeterminate half-fill rather than a number the backend never sent. Default
+        // video-upscaling to 0 (not 50) while waiting for its first progress poll, so
+        // the bar doesn't jump to a fake midpoint and then snap back down.
+        const fill = stage.key === 'video-upscaling'
+            ? file.jobProgress ?? 0
             : 50
 
         return { ...stage, state: 'active' as const, fill }
