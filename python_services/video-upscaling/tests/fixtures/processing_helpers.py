@@ -3,7 +3,7 @@ from typing import Any
 from typing import Generator
 from unittest.mock import patch
 from unittest.mock import MagicMock
-from processing.video import recombine_video_audio
+from src.processing.video import recombine_video_audio
 import pytest
 import subprocess
 import numpy as np
