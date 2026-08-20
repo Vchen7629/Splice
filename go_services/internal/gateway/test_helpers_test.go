@@ -75,11 +75,10 @@ func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte,
 }
 
 // NewDownloadRequest builds a GET request with a JSON body containing job_id and file_name.
-// Used by upload_unit_test.go and upload_integration_test.go.
-func NewDownloadRequest(t *testing.T, jobID, fileName string) *http.Request {
+func NewDownloadRequest(t *testing.T, target, jobID, fileName string) *http.Request {
 	t.Helper()
 	body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, jobID, fileName)
-	req, err := http.NewRequest(http.MethodGet, "/jobs", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	return req

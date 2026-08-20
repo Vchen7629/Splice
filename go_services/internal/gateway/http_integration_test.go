@@ -303,7 +303,7 @@ func newDownloadVideoServer(t *testing.T, storageURL string) *httptest.Server {
 	t.Helper()
 	h := &videoHandler{logger: stest.SilentLogger(), storageURL: storageURL}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /jobs", h.downloadVideoRoute)
+	mux.HandleFunc("POST /jobs/download", h.downloadVideoRoute)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts
@@ -484,9 +484,7 @@ func TestDownloadVideoFlow(t *testing.T) {
 		content := []byte("fake processed video bytes")
 		seedProcessedVideo(t, sharedFilerUrl, "job-1", "output.mp4", content)
 
-		req, err := http.NewRequest(http.MethodGet, ts.URL+"/jobs", NewDownloadRequest(t, "job-1", "output.mp4").Body)
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
+		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "job-1", "output.mp4")
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -501,9 +499,7 @@ func TestDownloadVideoFlow(t *testing.T) {
 	t.Run("Returns correct Content-Disposition and Content-Type headers", func(t *testing.T) {
 		seedProcessedVideo(t, sharedFilerUrl, "job-2", "output.mp4", []byte("data"))
 
-		req, err := http.NewRequest(http.MethodGet, ts.URL+"/jobs", NewDownloadRequest(t, "job-2", "output.mp4").Body)
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
+		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "job-2", "output.mp4")
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -514,9 +510,7 @@ func TestDownloadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("Returns 500 when the processed video does not exist in storage", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, ts.URL+"/jobs", NewDownloadRequest(t, "no-such-job", "output.mp4").Body)
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
+		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "no-such-job", "output.mp4")
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
