@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/middleware"
@@ -34,6 +35,10 @@ func StartHttpApi(
 	server := &http.Server{
 		Addr:    ":" + httpPort,
 		Handler: Cors(middleware.ApiRequestLogging(router)),
+		ReadHeaderTimeout: 10*time.Second,
+		IdleTimeout: 120*time.Second,
+		ReadTimeout: 15*time.Minute,
+		WriteTimeout: 15*time.Minute,
 	}
 
 	go func() {
