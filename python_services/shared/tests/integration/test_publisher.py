@@ -2,6 +2,7 @@ from typing import Any
 from nats.js.client import JetStreamContext
 from shared_handler.messages import VideoChunkMessage
 from shared_handler.nats import publisher
+import asyncio
 import pytest
 
 
@@ -30,6 +31,12 @@ async def test_publishes_all_messages_with_correct_payload(
 
     for msg in MSGS:
         await publisher(js, msg, "jobs.video.chunks", service_name="scene-detector")
+
+    async def _wait_for_delivery() -> None:
+        while len(nats_video_chunks_subscriber) < len(MSGS):
+            await asyncio.sleep(0.05)
+
+    await asyncio.wait_for(_wait_for_delivery(), timeout=5)
 
     assert len(nats_video_chunks_subscriber) == 2
     assert nats_video_chunks_subscriber[0] == {

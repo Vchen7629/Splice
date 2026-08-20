@@ -68,6 +68,7 @@ def seeded_video(seaweedfs_url: str) -> Generator[Tuple[str, str], None, None]:
             storage_url,
             data=f,
             headers={"Content-Type": "application/octet-stream"},
+            timeout=20,
         )
     response.raise_for_status()
 

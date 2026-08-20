@@ -1,18 +1,10 @@
 from typing import Any
-from socket import socket
 from shared_handler.http import start_health_server
 import pytest
 
-
-def _free_port() -> int:
-    with socket() as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
 @pytest.fixture
 def live_http_server() -> Any:
-    port = _free_port()
-    server = start_health_server(port)
+    server = start_health_server(0)
+    port = server.server_address[1]
     yield f"http://localhost:{port}"
     server.shutdown()

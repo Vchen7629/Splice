@@ -111,6 +111,7 @@ def test_video_upscale_produces_output_file(
     one_frame_video: Path, filename: str, scale: int
 ) -> None:
     output = Path("/tmp/upscaled_noaudio.mp4")
+    output.unlink(missing_ok=True)
     video_upscale(str(one_frame_video), WEIGHTS_DIR / filename, scale)
 
     assert output.exists()
@@ -130,6 +131,7 @@ def test_video_upscale_output_has_correct_resolution(
 ) -> None:
     src_w, src_h, _, _ = extract_video_info(str(one_frame_video))
     output = "/tmp/upscaled_noaudio.mp4"
+    Path(output).unlink(missing_ok=True)
 
     video_upscale(str(one_frame_video), WEIGHTS_DIR / filename, scale)
 

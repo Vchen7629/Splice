@@ -98,9 +98,9 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 
 	_, err = io.Copy(outFile, resp.Body)
 	if err != nil {
-		err := removeAll(jobDir)
-		if err != nil {
-			return "", fmt.Errorf("error removing all files: %w", err)
+		rmErr := removeAll(jobDir)
+		if rmErr != nil {
+			return "", fmt.Errorf("error removing all files: %w (error removing all files: %v)", err, rmErr)
 		}
 		return "", fmt.Errorf("error writing video to file: %w", err)
 	}

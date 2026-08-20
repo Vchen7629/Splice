@@ -4,6 +4,7 @@ package storage
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -202,7 +203,8 @@ func TestGetVideoChunkIoCopyError(t *testing.T) {
 			os.RemoveAll("/tmp/" + jobID)
 		})
 
-		removeAll = func(_ string) error { return errors.New("remove failed") }
+		rmErr := errors.New("remove failed")
+		removeAll = func(_ string) error { return rmErr }
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			hj, ok := w.(http.Hijacker)
@@ -218,5 +220,7 @@ func TestGetVideoChunkIoCopyError(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error removing all files")
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "original copy failure reason must not be lost")
+		assert.Contains(t, err.Error(), rmErr.Error())
 	})
 }
