@@ -17,12 +17,12 @@ jobs:
     outputs:
         frontend: ${{ steps.changes.outputs.frontend }}
         scene_detector: ${{ steps.changes.outputs.scene_detector }}
-        transcoder_worker: ${{ steps.changes.outputs.transcoder_worker }}
-        video_recombiner: ${{ steps.changes.outputs.video_recombiner }}
-        video_upload: ${{ steps.changes.outputs.video_upload }}
-        video_status: ${{ steps.changes.outputs.video_status }}
-        shared_go: ${{ steps.changes.outputs.shared_go }}
+        video_upscaling: ${{ steps.changes.outputs.video_upscaling }}
         shared_python: ${{ steps.changes.outputs.shared_python }}
+        gateway: ${{ steps.changes.outputs.gateway }}
+        transcoder: ${{ steps.changes.outputs.transcoder }}
+        recombiner: ${{ steps.changes.outputs.recombiner }}
+        shared_go: ${{ steps.changes.outputs.shared_go }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -32,19 +32,29 @@ jobs:
             frontend:
               - 'frontend/**'
             scene_detector:
-              - 'backend/scene-detector/src/**'
-            transcoder_worker:
-            - 'backend/transcoder-worker/**'
-            video_recombiner:
-              - 'backend/video-recombiner/**'
-            video_upload:
-              - 'backend/video-upload/**'
-            video_status:
-              - 'backend/video-status/**'
-            shared_go:
-              - 'backend/shared/go/**'
+              - 'python_services/scene-detector/**'
+            video_upscaling:
+              - 'python_services/video-upscaling/**'
             shared_python:
-              - 'backend/shared/python/**'
+              - 'python_services/shared/**'
+            gateway:
+              - 'go_services/cmd/gateway/**'
+              - 'go_services/internal/gateway/**'
+              - 'go_services/go.mod'
+              - 'go_services/go.sum'
+            transcoder:
+              - 'go_services/cmd/transcoder/**'
+              - 'go_services/internal/transcoder/**'
+              - 'go_services/go.mod'
+              - 'go_services/go.sum'
+            recombiner:
+              - 'go_services/cmd/recombiner/**'
+              - 'go_services/internal/recombiner/**'
+              - 'go_services/go.mod'
+              - 'go_services/go.sum'
+            shared_go:
+              - 'go_services/internal/shared/**'
+
   frontend-ci:
     needs: path-filter
     if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.frontend == 'true' }}
@@ -57,15 +67,15 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '>=23.6.1'
-      
+
       - name: Install dependencies
         working-directory: frontend
         run: npm install --dev
 
-      - name: Run Linting 
+      - name: Run Linting
         working-directory: frontend
         run: npm run lint
-  
+
   scene-detector-ci:
     needs: path-filter
     if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.scene_detector == 'true' }}
@@ -78,12 +88,12 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.8.19"
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      
+
       - name: Install ffmpeg dependency
         run: |
           sudo apt-get update
@@ -91,171 +101,57 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./backend/scene-detector
-      
+        working-directory: ./python_services/scene-detector
+
       - name: Run Linter and Formatting
         run: |
           uv run ruff check .
           uv run ruff format --check
-        working-directory: ./backend/scene-detector
-      
+        working-directory: ./python_services/scene-detector
+
       - name: Run Type Checking
         run: uv run pyrefly check
-        working-directory: ./backend/scene-detector
-      
+        working-directory: ./python_services/scene-detector
+
       - name: Run Unit/Integration Tests
         run: make test_all
-        working-directory: ./backend/scene-detector
+        working-directory: ./python_services/scene-detector
 
-  transcoder-worker-ci:
+  video-upscaling-ci:
     needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.transcoder_worker == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.video_upscaling == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
-          go-version: v1.26.2
-          cache: 'true'
-      
-      - name: Install ffmpeg dependency
+          version: "0.8.19"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/video-upscaling
+
+      - name: Run Linter and Formatting
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-      
-      - name: Download Go modules
-        working-directory: ./backend/transcoder-worker
-        run: go mod download
-      
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.11
-          working-directory: ./backend/transcoder-worker
-      
-      - name: run tests
-        working-directory: ./backend/transcoder-worker/cmd
+          uv run ruff check .
+          uv run ruff format --check
+        working-directory: ./python_services/video-upscaling
+
+      - name: Run Type Checking
+        run: uv run pyrefly check
+        working-directory: ./python_services/video-upscaling
+
+      - name: Run Unit/Integration Tests
         run: make test_all
-
-  video-recombiner-ci:
-    needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.video_recombiner == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: v1.26.2
-          cache: 'true'
-      
-      - name: Install ffmpeg dependency
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-      
-      - name: Download Go modules
-        working-directory: ./backend/video-recombiner
-        run: go mod download
-      
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.11
-          working-directory: ./backend/video-recombiner
-      
-      - name: run tests
-        working-directory: ./backend/video-recombiner/cmd
-        run: make test_all
-  
-  video-upload-ci:
-    needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.video_upload == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: v1.26.2
-          cache: 'true'
-
-      - name: Download Go modules
-        working-directory: ./backend/video-upload
-        run: go mod download
-      
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.11
-          working-directory: ./backend/video-upload
-      
-      - name: run tests
-        working-directory: ./backend/video-upload/cmd
-        run: make test_all
-
-  video-status-ci:
-    needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.video_status == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: v1.26.2
-          cache: 'true'
-
-      - name: Download Go modules
-        working-directory: ./backend/video-status
-        run: go mod download
-      
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.11
-          working-directory: ./backend/video-status
-      
-      - name: run tests
-        working-directory: ./backend/video-status/cmd
-        run: make test_all
-
-  shared-go-ci:
-    needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared_go == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: v1.26.2
-          cache: 'true'
-
-      - name: Download Go modules
-        working-directory: ./backend/shared/go
-        run: go mod download
-      
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.11
-          working-directory: ./backend/shared/go
-      
-      - name: run tests
-        working-directory: ./backend/shared/go
-        run: make test_all
+        working-directory: ./python_services/video-upscaling
 
   shared-python-ci:
     needs: path-filter
@@ -269,7 +165,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.8.19"
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -277,21 +173,115 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./backend/shared/python
-      
+        working-directory: ./python_services/shared
+
       - name: Run Linter and Formatting
         run: |
           uv run ruff check .
           uv run ruff format --check
-        working-directory: ./backend/shared/python
-      
+        working-directory: ./python_services/shared
+
       - name: Run Type Checking
         run: uv run pyrefly check
-        working-directory: ./backend/shared/python
-      
+        working-directory: ./python_services/shared
+
       - name: Run Unit/Integration Tests
         run: make test_all
-        working-directory: ./backend/shared/python
+        working-directory: ./python_services/shared
+
+  gateway-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.gateway == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ./go_services/cmd/gateway
+
+      - name: run tests
+        working-directory: ./go_services/cmd/gateway
+        run: make test_all
+
+  transcoder-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.transcoder == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ./go_services/cmd/transcoder
+
+      - name: run tests
+        working-directory: ./go_services/cmd/transcoder
+        run: make test_all
+
+  recombiner-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.recombiner == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ./go_services/cmd/recombiner
+
+      - name: run tests
+        working-directory: ./go_services/cmd/recombiner
+        run: make test_all
 
   coverage:
     needs: path-filter
@@ -299,65 +289,83 @@ jobs:
     if: |
       github.event_name == 'push' && (
         needs.path-filter.outputs.scene_detector == 'true' ||
-        needs.path-filter.outputs.transcoder_worker == 'true' ||
-        needs.path-filter.outputs.video_recombiner == 'true' ||
-        needs.path-filter.outputs.video_upload == 'true' ||
-        needs.path-filter.outputs.video_status == 'true' ||
-        needs.path-filter.outputs.shared_go == 'true' ||
-        needs.path-filter.outputs.shared_python == 'true'
+        needs.path-filter.outputs.video_upscaling == 'true' ||
+        needs.path-filter.outputs.shared_python == 'true' ||
+        needs.path-filter.outputs.gateway == 'true' ||
+        needs.path-filter.outputs.transcoder == 'true' ||
+        needs.path-filter.outputs.recombiner == 'true'
       )
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-      
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.19"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Install ffmpeg dependency
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
+      - name: Install scene-detector project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/scene-detector
+
       - name: Run scene-detector coverage
-        working-directory: ./backend/scene-detector
+        working-directory: ./python_services/scene-detector
         run: make coverage
 
-      - uses: actions/setup-go@v5
+      - name: Install video-upscaling project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/video-upscaling
+
+      - name: Run video-upscaling coverage
+        working-directory: ./python_services/video-upscaling
+        run: make coverage
+
+      - name: Install shared-python project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/shared
+
+      - name: Run shared-python coverage
+        working-directory: ./python_services/shared
+        run: make coverage
+
+      - uses: actions/setup-go@v6
         with:
-          go-version-file: 'backend/transcoder-worker/go.mod'
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
 
-      - name: Run backend transcoder-worker coverage
-        working-directory: ./backend/transcoder-worker/cmd
-        run: make coverage
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
 
-      - name: Run video-recombiner coverage
-        working-directory: ./backend/video-recombiner/cmd
-        run: make coverage
-      
-      - name: Run video_upload coverage
-        working-directory: ./backend/video-upload/cmd
+      - name: Run gateway coverage
+        working-directory: ./go_services/cmd/gateway
         run: make coverage
 
-      - name: Run video_status coverage
-        working-directory: ./backend/video-status/cmd
-        run: make coverage
-      
-      - name: Run shared go coverage
-        working-directory: ./backend/shared/go
-        run: make coverage
-      
-      - name: Run shared python coverage
-        working-directory: ./backend/shared/python
+      - name: Run transcoder coverage
+        working-directory: ./go_services/cmd/transcoder
         run: make coverage
 
-      - name: Upload coverage to Codecov                                                                       
-        uses: codecov/codecov-action@v4                                                                        
-        with:                                                                                                  
+      - name: Run recombiner coverage
+        working-directory: ./go_services/cmd/recombiner
+        run: make coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
           files: |
-            ./backend/transcoder-worker/cmd/coverage.out,
-            ./backend/video-recombiner/cmd/coverage.out,
-            ./backend/video-upload/cmd/coverage.out,
-            ./backend/video-status/cmd/coverage.out,
-            ./backend/scene-detector/coverage.xml,
-            ./backend/shared/go/coverage.out,
-            ./backend/shared/python/coverage.out                                                                      
+            ./go_services/cmd/gateway/coverage.out,
+            ./go_services/cmd/transcoder/coverage.out,
+            ./go_services/cmd/recombiner/coverage.out,
+            ./python_services/scene-detector/coverage.xml,
+            ./python_services/video-upscaling/coverage.xml,
+            ./python_services/shared/coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
