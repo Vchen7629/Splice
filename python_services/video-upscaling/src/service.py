@@ -20,13 +20,13 @@ async def start_service() -> None:
 
     nc, js = await nats_connect(settings.SERVICE_NAME)
 
-    await check_js_stream_exists(js, settings.SUB_SUBJECT)
-    await check_js_stream_exists(js, settings.PUB_SUBJECT)
-
-    job_status_kv = await connect_kv(js, "job-status")
-    msg_processed_kv = await create_kv(js, "upscale-processed")
-
     try:
+        await check_js_stream_exists(js, settings.SUB_SUBJECT)
+        await check_js_stream_exists(js, settings.PUB_SUBJECT)
+
+        job_status_kv = await connect_kv(js, "job-status")
+        msg_processed_kv = await create_kv(js, "upscale-processed")
+
         await consumer(
             js,
             msg_processed_kv,
