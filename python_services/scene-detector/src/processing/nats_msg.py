@@ -3,6 +3,7 @@ from nats.js.kv import KeyValue
 from nats.aio.msg import Msg
 from shared_core.logging import get_logger
 from shared_handler.kv import update_job_status
+from shared_handler.kv import update_job_failed
 from shared_handler.kv import check_already_processed
 from shared_handler.nats import publisher
 from ..core.settings import settings
@@ -37,4 +38,8 @@ async def process_msg(
         await msg.ack()
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
-        await msg.nak()
+        if "metadata" in locals():
+            await update_job_failed(
+                job_status_kv, metadata.job_id, str(e), settings.SERVICE_NAME
+            )
+        await msg.ack()

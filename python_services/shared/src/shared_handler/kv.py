@@ -92,3 +92,24 @@ async def update_job_status(
         await job_status_kv.put(job_id, status)
     except Exception as e:
         logger.error("failed to update job status stage", job_id=job_id, err=str(e))
+
+
+async def update_job_failed(
+    job_status_kv: KeyValue,
+    job_id: str,
+    error: str,
+    service_name: str,
+) -> None:
+    """
+    Writes FAILED with the underlying error message to the job-status KV bucket
+
+    On Exception logs the error
+    """
+    logger = get_logger(service_name)
+
+    try:
+        payload = {"state": "FAILED", "error": error}
+        status = json.dumps(payload).encode()
+        await job_status_kv.put(job_id, status)
+    except Exception as e:
+        logger.error("failed to update job status to failed", job_id=job_id, err=str(e))
