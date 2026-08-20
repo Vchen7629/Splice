@@ -8,7 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+var httpClient = &http.Client{Timeout: 30*time.Second}
 
 // save the video chunk to seaweedfs storage
 func UploadVideoChunk(url, filePath string) (string, error) {
@@ -29,7 +32,7 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seaweedfs: %w", err)
 	}
@@ -51,7 +54,7 @@ var removeAll = os.RemoveAll
 
 // fetch the video chunk seaweedfs storage
 func GetVideoChunk(storageURL, fileName string) (string, error) {
-	resp, err := http.Get(storageURL)
+	resp, err := httpClient.Get(storageURL)
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seedweedfs, %w", err)
 	}

@@ -3,12 +3,11 @@ package storage
 import (
 	"fmt"
 	"log/slog"
-	"net/http"
 )
 
 // send an http request to shared to storage to see if its reachable
 func CheckHealth(storageURL string, logger *slog.Logger) error {
-	resp, err := http.Get(storageURL + "/dir/status")
+	resp, err := httpClient.Get(storageURL + "/dir/status")
 
 	if err != nil {
 		return fmt.Errorf("error connecting to seedweedfs: %w", err)
