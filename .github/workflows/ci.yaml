@@ -392,7 +392,7 @@ jobs:
         run: make coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: |
             ./go_services/cmd/gateway/coverage.out,
@@ -401,5 +401,5 @@ jobs:
             ./go_services/cmd/shared/coverage.out,
             ./python_services/scene-detector/coverage.xml,
             ./python_services/video-upscaling/coverage.xml,
-            ./python_services/shared/coverage.xml
+            ./python_services/shared/coverage.xml,
           token: ${{ secrets.CODECOV_TOKEN }}
