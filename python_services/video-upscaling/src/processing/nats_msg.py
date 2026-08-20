@@ -140,6 +140,10 @@ async def process_msg(
             except Exception:
                 await msg.nak()
                 return
+            finally:
+                shutil.rmtree(f"../temp_output/{metadata.job_id}", ignore_errors=True)
+                shutil.rmtree(f"../temp/{metadata.job_id}", ignore_errors=True)
+                logger.debug("removed temp dirs", job_id=metadata.job_id)
         await msg.ack()
 
 
