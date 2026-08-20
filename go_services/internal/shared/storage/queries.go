@@ -65,13 +65,15 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 		}
 	}()
 
-	switch resp.StatusCode {
-	case http.StatusNotFound:
-		return "", fmt.Errorf("video not found")
-	case http.StatusForbidden:
-		return "", fmt.Errorf("access denied")
-	case http.StatusInternalServerError:
-		return "", fmt.Errorf("error accessing seedweedfs")
+	if resp.StatusCode != http.StatusOK {
+		switch resp.StatusCode {
+		case http.StatusNotFound:
+			return "", fmt.Errorf("video not found")
+		case http.StatusForbidden:
+			return "", fmt.Errorf("access denied")
+		case http.StatusInternalServerError:
+			return "", fmt.Errorf("error accessing seedweedfs")
+		}
 	}
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
