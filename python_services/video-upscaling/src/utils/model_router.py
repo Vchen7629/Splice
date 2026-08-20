@@ -13,10 +13,14 @@ class Resolution(IntEnum):
     R_960P = 960
     R_1080P = 1080
     R_1440P = 1440
+    R_2160P = 2160
 
     @classmethod
     def from_string(cls, s: str) -> "Resolution":
-        return cls(int(s.rstrip("p")))
+        s = s.strip().lower()
+        h = 2160 if s == "4k" else int(s.rstrip("p"))
+        
+        return min(cls, key=lambda r: abs(r.value - h))
 
 
 def select_model(source_res: str, target_res: str) -> Optional[tuple[Path, int]]:
