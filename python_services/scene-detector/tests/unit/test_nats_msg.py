@@ -68,12 +68,14 @@ _one_chunk = [
     ],
     ids=["process_job_fails", "publish_fails"],
 )
-async def test_naks_on_failure(
+async def test_updates_kv_and_acks_on_failure(
     mock_kv: AsyncMock,
     msg: AsyncMock,
     process_job_kwargs: dict[str, Any],
     publish_kwargs: dict[str, Any],
 ) -> None:
+    job_status_kv = AsyncMock(spec=KeyValue)
+
     with (
         patch(
             "src.processing.nats_msg.process_job",
@@ -86,12 +88,13 @@ async def test_naks_on_failure(
             **publish_kwargs,
         ),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext), mock_kv, AsyncMock(spec=KeyValue), msg
-        )
+        await process_msg(AsyncMock(spec=JetStreamContext), mock_kv, job_status_kv, msg)
 
-    msg.nak.assert_called_once()
-    msg.ack.assert_not_called()
+    job_id, payload = job_status_kv.put.call_args_list[-1][0]
+    assert job_id == "1"
+    assert json.loads(payload)["state"] == "FAILED"
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
 
 
 @pytest.mark.asyncio
