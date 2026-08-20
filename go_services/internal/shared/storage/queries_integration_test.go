@@ -52,7 +52,7 @@ func TestGetVideoChunkIntegration(t *testing.T) {
 
 func TestUploadVideoChunk(t *testing.T) {
 	t.Run("uploads file properly", func(t *testing.T) {
-		videoFile := test.OpenTestVideo(t)
+		videoFile := test.OpenTestVideo(t, "../test/testvideo.mp4")
 		fileName := filepath.Base(videoFile.Name())
 		uploadURL := fmt.Sprintf("%s/job-upload/processed/%s", sharedFilerUrl, fileName)
 
@@ -72,7 +72,7 @@ func TestUploadVideoChunk(t *testing.T) {
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		expected, err := io.ReadAll(test.OpenTestVideo(t))
+		expected, err := io.ReadAll(test.OpenTestVideo(t, "../test/testvideo.mp4"))
 		require.NoError(t, err)
 		assert.Equal(t, expected, body)
 	})

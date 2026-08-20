@@ -11,10 +11,9 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 	tc "github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
-
 
 // SetupNatsNoJetStream starts a plain NATS container without JetStream enabled
 // and returns the connection. Use this to test behaviour when JetStream is unavailable.
