@@ -11,7 +11,6 @@ dependencies = [
     "realesrgan>=0.3.0",
     "torch",
     "torchvision",
-    "basicsr-fixed",
     "pydantic-settings>=2.13.1",
     "shared_python",
     "types-requests>=2.33.0.20260408",
@@ -50,7 +49,7 @@ implicit-any = "error"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "src"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 filterwarnings = [
     "ignore::DeprecationWarning:testcontainers",
