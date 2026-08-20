@@ -22,6 +22,9 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
             "src.processing.nats_msg.update_job_status", new_callable=AsyncMock
         ) as mock_update_status,
         patch(
+            "src.processing.nats_msg.update_job_failed", new_callable=AsyncMock
+        ) as mock_update_failed,
+        patch(
             "src.processing.nats_msg.fetch_video", return_value="/tmp/job-123/video.mp4"
         ) as mock_fetch,
         patch("src.processing.nats_msg.select_model") as mock_select,
@@ -40,6 +43,7 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
         yield {
             "check": mock_check,
             "update_status": mock_update_status,
+            "update_failed": mock_update_failed,
             "fetch": mock_fetch,
             "select": mock_select,
             "upscale": mock_upscale,
@@ -57,6 +61,7 @@ def mock_nats() -> tuple[MagicMock, MagicMock]:
     mock_js.create_key_value = AsyncMock()
     mock_js.key_value = AsyncMock()
     mock_nc = MagicMock()
+    mock_nc.is_closed = False
     mock_nc.drain = AsyncMock()
     return mock_nc, mock_js
 

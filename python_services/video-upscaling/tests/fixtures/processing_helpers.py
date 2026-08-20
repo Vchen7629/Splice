@@ -96,7 +96,6 @@ def video_upscale_patches() -> Generator[dict[str, Any], Any, None]:
         ) as mock_flush,
         patch("src.processing.video.encode_worker") as mock_worker,
         patch("src.processing.video.threading.Thread", return_value=mock_thread) as _,
-        patch("src.processing.video.recombine_video_audio") as mock_recombine,
         patch("src.processing.video.settings") as mock_settings,
     ):
         mock_settings.BATCH_SIZE = 4
@@ -107,6 +106,5 @@ def video_upscale_patches() -> Generator[dict[str, Any], Any, None]:
             "encoder": mock_enc,
             "flush": mock_flush,
             "worker": mock_worker,
-            "recombine": mock_recombine,
             "settings": mock_settings,
         }
