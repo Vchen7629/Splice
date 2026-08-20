@@ -50,10 +50,28 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 	return url, nil
 }
 
+// validatePathSegment rejects path segments that could escape the intended                                                                                                           
+// base directory (empty, ".", "..", or containing a path separator), while                                                                                                           
+// allowing ordinary file/job names such as "my.video.mp4" or "clip (1).mov".
+func validatePathSegment(name string) error {
+	if name == "" || name == "." || name == ".." {
+		return fmt.Errorf("invalid path segment: %q", name)
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("path segment must not contain path seperators: %q", name)
+	}
+	return nil
+}
+
 var removeAll = os.RemoveAll
 
 // fetch the video chunk seaweedfs storage
 func GetVideoChunk(storageURL, fileName string) (string, error) {
+	err := validatePathSegment(fileName)
+	if err != nil {
+		return "", err
+	}
+
 	resp, err := httpClient.Get(storageURL)
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seedweedfs, %w", err)
@@ -77,6 +95,11 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 	}
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
+	// validate filename so external malicious filenames doesnt get through
+	err = validatePathSegment(fileName)
+	if err != nil {
+		return "", err
+	}
 	jobDir := filepath.Join("/tmp/" + fileName)
 
 	err = os.MkdirAll(jobDir, 0755)
