@@ -20,7 +20,12 @@ async def test_calls_process_msg_for_published_message(
     job_status_kv = await js.create_key_value(
         config=KeyValueConfig(bucket="test-consumer-job-status-1")
     )
-    process_msg = AsyncMock()
+    processed = asyncio.Event()
+
+    async def _process_msg(*args: Any, **kwargs: Any) -> None:
+        processed.set()
+
+    process_msg = AsyncMock(side_effect=_process_msg)
 
     task = asyncio.create_task(
         consumer(
@@ -33,12 +38,14 @@ async def test_calls_process_msg_for_published_message(
             process_msg,
         )
     )
-    await nc.publish("jobs.video.scene-split", b"test-payload")
-    await asyncio.sleep(0.5)
-    task.cancel()
     try:
-        await task
-    except asyncio.CancelledError:
-        pass
+        await nc.publish("jobs.video.scene-split", b"test-payload")
+        await asyncio.wait_for(processed.wait(), timeout=5)
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     assert process_msg.call_count == 1
