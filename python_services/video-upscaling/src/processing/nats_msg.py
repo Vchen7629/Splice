@@ -89,6 +89,14 @@ async def process_msg(
             model=model_path,
         )
 
+        # video_upscale always encodes to h264/mp4 regardless of the source
+        # container, so the output must be saved with an .mp4 extension
+        # reusing the source filename's extension (e.g. .webm) produces a
+        # container/codec mismatch when recombine_video_audio muxes with -c copy
+        stem = os.path.splitext(os.path.basename(local_video_path))[0]
+        temp_file_loc = f"../temp_output/{metadata.job_id}/{stem}.mp4"
+        os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
+
         loop = asyncio.get_event_loop()
 
         def on_progress(pct: int) -> None:

@@ -42,6 +42,19 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     fps_num, fps_den = fps_frac.split("/")
     fps = float(fps_num) / float(fps_den)
 
+    if nb_frames == "N/A":
+        # some containers (e.g. webm from MediaRecorder) don't store a frame
+        # count or duration in the header, so it has to be counted by decoding
+        count_probe = subprocess.run([
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-count_frames",
+            "-show_entries", "stream=nb_read_frames",
+            "-of", "csv=p=0",
+            video_path
+        ], capture_output=True, text=True, check=True)
+        nb_frames = count_probe.stdout.strip()
+
     return int(w), int(h), fps, int(nb_frames)
 
 def recombine_video_audio(video_path: str, output_path: str) -> None:
