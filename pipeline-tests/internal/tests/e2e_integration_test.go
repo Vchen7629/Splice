@@ -55,7 +55,17 @@ func startSeaweedFSFiler() (string, func()) {
 	return endpoint, func() { _ = container.Terminate(ctx) }
 }
 
+// kills leftover gateway/transcoder-worker/video-recombiner processes from a 
+// previous run that panicked or timed out before its t.Cleanup hooks could run 
+// (e.g. `panic: test timed out`). 
+func killOrphanedServices() {
+	cmd := exec.Command("pkill", "-9", "-f", "bins/(gateway|transcoder-worker|video-recombiner)")
+	_ = cmd.Run() // exit status 1 just means nothing matched; nothing to report either way
+}
+
 func TestMain(m *testing.M) {
+	killOrphanedServices()
+
 	filerURL, cleanup := startSeaweedFSFiler()
 	sharedFilerURL = filerURL
 

@@ -15,14 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BuildBinaries(t *testing.T, binDir string) (videoUpload, transcoderWorker, videoRecombiner, videoStatus string) {
+func BuildBinaries(t *testing.T, binDir string) (gateway, transcoderWorker, videoRecombiner string) {
 	t.Helper()
 
 	services := []struct{ src, name string }{
-		{"../../../go_services/cmd/gateway", "video-upload"},
+		{"../../../go_services/cmd/gateway", "gateway"},
 		{"../../../go_services/cmd/transcoder", "transcoder-worker"},
 		{"../../../go_services/cmd/recombiner", "video-recombiner"},
-		{"../../../go_services/cmd/gateway", "video-status"},
 	}
 
 	bins := make([]string, len(services))
@@ -35,7 +34,7 @@ func BuildBinaries(t *testing.T, binDir string) (videoUpload, transcoderWorker, 
 		bins[i] = dest
 	}
 
-	return bins[0], bins[1], bins[2], bins[3]
+	return bins[0], bins[1], bins[2]
 }
 
 func StartGoService(t *testing.T, binary, cwd string, env map[string]string) {
@@ -76,19 +75,20 @@ func StartSceneDetector(t *testing.T, cwd, natsURL, filerURL string) {
 	})
 }
 
-// SetupPipeline starts all services and returns the video-upload base URL, video-status base URL, and nats URL.
-// numTranscoderWorkers controls how many competing worker instances are started.
+// SetupPipeline starts all services and returns the gateway base URL (handling both
+// upload and status routes), the same URL again for callers still expecting a separate
+// status base URL, and the nats URL. numTranscoderWorkers controls how many competing
+// worker instances are started.
 //
 // Directory layout under t.TempDir():
 //
 //	bins/                       compiled Go binaries
 //	services/
 //	  .env                      empty — satisfies godotenv.Load("../.env")
-//	  video-upload/
+//	  gateway/
 //	  scene-detector/
 //	  transcoder-worker-{n}/    one CWD per worker instance
 //	  video-recombiner/
-//	  video-status/
 func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (string, string, string) {
 	t.Helper()
 
@@ -98,10 +98,9 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 
 	cwds := []string{
 		binDir, servicesDir,
-		filepath.Join(servicesDir, "video-upload"),
+		filepath.Join(servicesDir, "gateway"),
 		filepath.Join(servicesDir, "scene-detector"),
 		filepath.Join(servicesDir, "video-recombiner"),
-		filepath.Join(servicesDir, "video-status"),
 	}
 	for i := range numTranscoderWorkers {
 		cwds = append(cwds, filepath.Join(servicesDir, fmt.Sprintf("transcoder-worker-%d", i)))
@@ -112,12 +111,24 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 	require.NoError(t, os.WriteFile(filepath.Join(servicesDir, ".env"), nil, 0o644))
 
 	natsURL, _ := StartNats(t)
-	uploadBin, transcoderBin, recombinerBin, statusBin := BuildBinaries(t, binDir)
+	gatewayBin, transcoderBin, recombinerBin := BuildBinaries(t, binDir)
 
 	sharedEnv := map[string]string{
 		"NATS_URL":         natsURL,
 		"BASE_STORAGE_URL": filerURL,
 	}
+
+	// gateway must start first: it creates the job-status KV bucket that
+	// recombiner and transcoder-worker connect to at startup. If either of
+	// them starts before the bucket exists, they os.Exit(1) immediately.
+	gatewayPort := FreePort(t)
+	StartGoService(t, gatewayBin, filepath.Join(servicesDir, "gateway"), map[string]string{
+		"NATS_URL":    natsURL,
+		"STORAGE_URL": filerURL,
+		"HTTP_PORT":   fmt.Sprintf("%d", gatewayPort),
+	})
+	gatewayURL := fmt.Sprintf("http://127.0.0.1:%d", gatewayPort)
+	WaitForHTTP(t, gatewayURL+"/jobs/probe/status", 10*time.Second)
 
 	StartGoService(t, recombinerBin, filepath.Join(servicesDir, "video-recombiner"), sharedEnv)
 	StartSceneDetector(t, filepath.Join(servicesDir, "scene-detector"), natsURL, filerURL)
@@ -130,24 +141,7 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 		StartGoService(t, transcoderBin, cwd, sharedEnv)
 	}
 
-	uploadPort := FreePort(t)
-	StartGoService(t, uploadBin, filepath.Join(servicesDir, "video-upload"), map[string]string{
-		"NATS_URL":    natsURL,
-		"STORAGE_URL": filerURL,
-		"HTTP_PORT":   fmt.Sprintf("%d", uploadPort),
-	})
-
-	statusPort := FreePort(t)
-	StartGoService(t, statusBin, filepath.Join(servicesDir, "video-status"), map[string]string{
-		"NATS_URL":  natsURL,
-		"HTTP_PORT": fmt.Sprintf("%d", statusPort),
-	})
-
-	uploadURL := fmt.Sprintf("http://127.0.0.1:%d", uploadPort)
-	statusURL := fmt.Sprintf("http://127.0.0.1:%d", statusPort)
-	WaitForHTTP(t, uploadURL+"/jobs/probe/status", 10*time.Second)
-	WaitForHTTP(t, statusURL+"/jobs/probe/status", 10*time.Second)
-	return uploadURL, statusURL, natsURL
+	return gatewayURL, gatewayURL, natsURL
 }
 
 func PollJobStatus(t *testing.T, baseURL, jobID string) string {
