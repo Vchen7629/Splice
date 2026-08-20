@@ -107,11 +107,18 @@ async def test_drain_called_even_if_consumer_raises(service_patches: Any) -> Non
 async def test_raises_on_startup_failure(
     service_patches: Any, setup_js: Any, match: str | None
 ) -> None:
-    _, mock_js = service_patches
+    mock_nc, mock_js = service_patches
     setup_js(mock_js)
 
-    with pytest.raises(RuntimeError, match=match):
-        await start_service()
+    with patch("src.service.start_health_server") as mock_health:
+        mock_server = MagicMock()
+        mock_health.return_value = mock_server
+
+        with pytest.raises(RuntimeError, match=match):
+            await start_service()
+
+    mock_server.shutdown.assert_called_once()
+    mock_nc.drain.assert_called_once()
 
 
 @pytest.mark.asyncio
