@@ -65,4 +65,5 @@ dev = [
     "pytest-cov>=7.1.0",
     "testcontainers[nats]>=4.0.0",
     "ruff>=0.15.11",
+    "pyrefly>=1.2.0",
 ]
