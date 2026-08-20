@@ -38,7 +38,7 @@ async def start_service() -> None:
         )
     finally:
         health_server.shutdown()
-        if not nc.is_closed():
+        if not nc.is_closed:
             await nc.drain()
 
 
