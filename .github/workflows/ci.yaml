@@ -283,6 +283,34 @@ jobs:
         working-directory: ./go_services/cmd/recombiner
         run: make test_all
 
+  shared-go-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared_go == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ./go_services/cmd/shared
+
+      - name: run tests
+        working-directory: ./go_services/cmd/shared
+        run: make test_all
+
   coverage:
     needs: path-filter
     runs-on: ubuntu-latest
@@ -293,7 +321,8 @@ jobs:
         needs.path-filter.outputs.shared_python == 'true' ||
         needs.path-filter.outputs.gateway == 'true' ||
         needs.path-filter.outputs.transcoder == 'true' ||
-        needs.path-filter.outputs.recombiner == 'true'
+        needs.path-filter.outputs.recombiner == 'true' ||
+        needs.path-filter.outputs.shared_go == 'true'
       )
     steps:
       - uses: actions/checkout@v4
@@ -358,6 +387,10 @@ jobs:
         working-directory: ./go_services/cmd/recombiner
         run: make coverage
 
+      - name: Run shared-go coverage
+        working-directory: ./go_services/cmd/shared
+        run: make coverage
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -365,6 +398,7 @@ jobs:
             ./go_services/cmd/gateway/coverage.out,
             ./go_services/cmd/transcoder/coverage.out,
             ./go_services/cmd/recombiner/coverage.out,
+            ./go_services/cmd/shared/coverage.out,
             ./python_services/scene-detector/coverage.xml,
             ./python_services/video-upscaling/coverage.xml,
             ./python_services/shared/coverage.xml
