@@ -80,3 +80,58 @@ type MockMsg struct {
 func (m *MockMsg) Data() []byte { return m.Payload }
 func (m *MockMsg) Nak() error   { m.NakCalled = true; return m.NakErr }
 func (m *MockMsg) Ack() error   { m.AckCalled = true; return m.AckErr }
+
+// MockConsumer stubs jetstream.Consumer. After Consume is called, Ctx holds the
+// returned ConsumeContext so tests can inspect it.
+type MockConsumer struct {
+	jetstream.Consumer
+	ConsumeErr error
+	Ctx        *MockConsumeCtx
+}
+
+func (m *MockConsumer) Consume(_ jetstream.MessageHandler, _ ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
+	if m.ConsumeErr != nil {
+		return nil, m.ConsumeErr
+	}
+	m.Ctx = &MockConsumeCtx{}
+	return m.Ctx, nil
+}
+
+// MockConsumerWithMsg is like MockConsumer but delivers a single Msg to the
+// handler immediately when Consume is called, useful for testing message-handling paths.
+type MockConsumerWithMsg struct {
+	jetstream.Consumer
+	ConsumeErr error
+	Msg        jetstream.Msg
+	Ctx        *MockConsumeCtx
+}
+
+func (m *MockConsumerWithMsg) Consume(h jetstream.MessageHandler, _ ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
+	if m.ConsumeErr != nil {
+		return nil, m.ConsumeErr
+	}
+	m.Ctx = &MockConsumeCtx{}
+	if m.Msg != nil {
+		h(m.Msg)
+	}
+	return m.Ctx, nil
+}
+
+// MockConsumeCtx stubs jetstream.ConsumeContext.
+type MockConsumeCtx struct {
+	jetstream.ConsumeContext
+	Stopped bool
+}
+
+func (m *MockConsumeCtx) Stop() { m.Stopped = true }
+
+// MockDrainer stubs the ncDrainer interface used in runProcessing/runCombiner.
+type MockDrainer struct {
+	DrainCalled bool
+	DrainErr    error
+}
+
+func (m *MockDrainer) Drain() error {
+	m.DrainCalled = true
+	return m.DrainErr
+}

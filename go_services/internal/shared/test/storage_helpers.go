@@ -44,18 +44,34 @@ func StartSeaweedFSFiler() (string, func()) {
 	return endpoint, func() { _ = container.Terminate(ctx) }
 }
 
-const testVideoPath = "../test/testvideo.mp4"
-
-// helper to open the test video
-func OpenTestVideo(t *testing.T) *os.File {
+// OpenTestVideo opens the shared testvideo.mp4 fixture. path is relative to
+// the package under test (e.g. "../test/testvideo.mp4" from internal/shared/storage,
+// or "../shared/test/testvideo.mp4" from a sibling package like internal/recombiner).
+func OpenTestVideo(t *testing.T, path string) *os.File {
 	t.Helper()
-	f, err := os.Open(testVideoPath)
+	f, err := os.Open(path)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		err := f.Close()
 		require.NoError(t, err)
 	})
 	return f
+}
+
+// SeedUnprocessedVideo uploads content to the filer's unprocessed job path
+// and returns the storage URL it was written to.
+func SeedUnprocessedVideo(t *testing.T, filerURL, jobID, fileName string, content []byte) string {
+	t.Helper()
+	url := fmt.Sprintf("%s/%s/%s", filerURL, jobID, fileName)
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(content))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	err = resp.Body.Close()
+	require.NoError(t, err)
+	require.Less(t, resp.StatusCode, 400)
+	return url
 }
 
 func SeedProcessedVideo(t *testing.T, filerURL, jobID, fileName string, content []byte) {
