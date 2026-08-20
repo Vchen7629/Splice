@@ -31,7 +31,9 @@ def test_no_scene_boundaries_copies_original_as_single_chunk() -> None:
         tempfile.TemporaryDirectory() as output_dir,
     ):
         src = os.path.join(src_dir, "myvideo.mp4")
-        open(src, "wb").close()
+        src_bytes = b"fake-video-bytes"
+        with open(src, "wb") as f:
+            f.write(src_bytes)
 
         with (
             patch("src.processing.video.detect", return_value=[]),
@@ -41,4 +43,8 @@ def test_no_scene_boundaries_copies_original_as_single_chunk() -> None:
 
         mock_split.assert_not_called()
 
-    assert result == [os.path.join(output_dir, "myvideo.mp4")]
+        expected_output = os.path.join(output_dir, "myvideo.mp4")
+        assert result == [expected_output]
+        assert os.path.exists(expected_output)
+        with open(expected_output, "rb") as f:
+            assert f.read() == src_bytes

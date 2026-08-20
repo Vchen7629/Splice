@@ -69,7 +69,10 @@ def uploaded_test_video(
     storage_url = f"{seaweedfs_url}/test-job/tiny.mp4"
     with open(tiny, "rb") as f:
         requests.put(
-            storage_url, data=f, headers={"Content-Type": "application/octet-stream"}
+            storage_url,
+            data=f,
+            headers={"Content-Type": "application/octet-stream"},
+            timeout=10,
         ).raise_for_status()
     return storage_url
 

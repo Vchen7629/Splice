@@ -21,7 +21,7 @@ def test_upload_chunks_happy_path(seaweedfs_url: str, chunk_files: list[str]) ->
     assert len(storage_urls) == len(chunk_files)
     for url in storage_urls:
         assert url.startswith(f"{seaweedfs_url}/{job_id}/")
-        resp = requests.get(url)
+        resp = requests.get(url, timeout=20)
         assert resp.status_code == 200
 
 
