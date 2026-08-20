@@ -1,4 +1,5 @@
 from shared_core.logging import get_logger
+from shared_core.settings import settings
 import os
 import requests
 
@@ -24,7 +25,7 @@ def fetch_video(storage_url: str, service_name: str) -> str:
     logger = get_logger(service_name)
 
     try:
-        response = requests.get(storage_url)
+        response = requests.get(storage_url, timeout=settings.STORAGE_READ_TIMEOUT_S)
         response.raise_for_status()
     except requests.ConnectionError as e:
         logger.error(
@@ -85,6 +86,7 @@ def upload_video(
                 storage_url,
                 data=f,
                 headers={"Content-Type": "application/octet-stream"},
+                timeout=settings.STORAGE_READ_TIMEOUT_S
             )
         response.raise_for_status()
     except requests.ConnectionError as e:

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     ACK_WAIT_S: int = 30
 
     BASE_STORAGE_URL: str = "http://localhost:8888"
+    STORAGE_CONNECT_TIMEOUT_S: float = 5
+    STORAGE_READ_TIMEOUT_S: float = 30
 
 
 settings = Settings()
