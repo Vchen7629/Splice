@@ -55,6 +55,8 @@ func UploadVideo(t *testing.T, baseURL, videoPath, targetResolution string) stri
 	_, err = fw.Write(data)
 	require.NoError(t, err)
 	require.NoError(t, w.WriteField("target_resolution", targetResolution))
+	require.NoError(t, w.WriteField("source_resolution", "320x240"))
+	require.NoError(t, w.WriteField("process_type", "Transcode"))
 	require.NoError(t, w.Close())
 
 	resp, err := http.Post(baseURL+"/jobs/upload", w.FormDataContentType(), &body)
