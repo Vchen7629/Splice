@@ -1,5 +1,5 @@
-from python_services.python.src.shared_core.logging import get_logger
-from python_services.python.src.shared_core.settings import settings
+from shared_core.logging import get_logger
+from shared_core.settings import settings
 import requests
 
 

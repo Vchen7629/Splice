@@ -9,10 +9,10 @@ from shared_handler.messages import ProcessJobMessage
 from shared_handler.messages import UpscaleCompleteMsg
 from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
-from core.settings import settings
-from processing.video import video_upscale
-from processing.video import video_downscale
-from src.utils.model_router import select_model
+from ..core.settings import settings
+from .video import video_upscale
+from .video import video_downscale
+from ..utils.model_router import select_model
 import os
 import shutil
 import asyncio
