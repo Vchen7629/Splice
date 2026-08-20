@@ -57,22 +57,33 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
 
     return int(w), int(h), fps, int(nb_frames)
 
-def recombine_video_audio(video_path: str, output_path: str) -> None:
+def recombine_video_audio(
+    video_path: str, output_path: str, target_res: str | None = None
+) -> None:
     """
     Use ffmpeg to recombine the no audio upscaled video with the original audio
 
     Args:
         video_path: path to the original video with audio
         output_path: the path to save the combined video to
+        target_res: if given scales the video to exact resolution
     """
-    subprocess.run([
+    cmd = [
         "ffmpeg", "-y",
         "-i", "/tmp/upscaled_noaudio.mp4",
         "-i", video_path,
         "-map", "0:v", "-map", "1:a?",
-        "-c", "copy",
-        output_path
-    ], check=True, stderr=subprocess.DEVNULL)
+    ]
+
+    if target_res is not None:
+        tgt_res = Resolution.from_string(target_res)
+        cmd += ["-vf", f"scale=-2:{tgt_res}", "-c:v", "libx264", "-crf", "18", "-c:a", "copy"]
+    else:
+        cmd += ["-c", "copy"]
+
+    cmd.append(output_path)
+
+    subprocess.run(cmd, check=True, stderr=subprocess.DEVNULL)
 
 def video_decoder(video_path: str) -> Popen[bytes]:
     """
