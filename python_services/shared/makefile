@@ -9,3 +9,9 @@ integration:
 coverage:
 	uv run pytest --cov=src --cov-report= tests/unit/
 	uv run pytest --cov=src --cov-report=xml:coverage.xml --cov-append tests/integration/
+
+lint:
+	uv run ruff check
+
+format:
+	uv run ruff format
