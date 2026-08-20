@@ -3,6 +3,7 @@ from src.processing.video import video_decoder
 from src.processing.video import video_upscale
 from src.processing.video import video_downscale
 from src.processing.video import extract_video_info
+from src.processing.video import recombine_video_audio
 from tests.fixtures.processing_helpers import TEST_VIDEO
 import torch
 import pytest
@@ -77,6 +78,31 @@ def test_video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
 def test_recombine_video_audio_produces_output_file(recombined_video: Path) -> None:
     assert recombined_video.exists()
     assert recombined_video.stat().st_size > 0
+
+
+def test_recombine_video_audio_scales_to_target_resolution(
+    one_frame_video: Path, tmp_path: Path
+) -> None:
+    """The upscale model only produces 2x/4x scale factors, which frequently
+    don't match the resolution the caller actually asked for (e.g. a 720p
+    source upscaled for a "4K" target only gets a 2x model, producing
+    1440p). When a target_res is given, recombine_video_audio must scale the
+    real output to that exact resolution."""
+    src_w, src_h, _, _ = extract_video_info(str(one_frame_video))
+    assert src_h != 1440, (
+        "fixture height must differ from the target to prove scaling happened"
+    )
+
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(one_frame_video), "/tmp/upscaled_noaudio.mp4"],
+        check=True,
+        stderr=subprocess.DEVNULL,
+    )
+    output = tmp_path / "recombined.mp4"
+    recombine_video_audio(str(TEST_VIDEO), str(output), target_res="1440p")
+
+    _, out_h, _, _ = extract_video_info(str(output))
+    assert out_h == 1440
 
 
 def test_recombine_video_audio_output_has_audio_stream(recombined_video: Path) -> None:
