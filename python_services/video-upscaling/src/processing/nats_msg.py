@@ -13,6 +13,7 @@ from shared_storage.queries import upload_video
 from ..core.settings import settings
 from .video import video_upscale
 from .video import video_downscale
+from .video import recombine_video_audio
 from ..utils.model_router import select_model
 import os
 import shutil
@@ -114,12 +115,17 @@ async def process_msg(
         await asyncio.to_thread(
             video_upscale,
             local_video_path,
-            temp_file_loc,
             model_path,
             resolution_scale,
             on_progress,
         )
         logger.debug("upscaled video", job_id=metadata.job_id)
+
+        await update_job_status(
+            job_status_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
+        )
+        await asyncio.to_thread(recombine_video_audio, local_video_path, temp_file_loc)
+        logger.debug("recombined video with audio", job_id=metadata.job_id)
 
         await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
 

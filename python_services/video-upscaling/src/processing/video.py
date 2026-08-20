@@ -162,12 +162,11 @@ def video_downscale(video_path: str, target_res: str, output_path: str) -> None:
 
 def video_upscale(
     video_path: str, 
-    output_path: str, 
     model_path: Path, 
     scale: int, 
     on_progress: Callable[[int], None] | None = None
 ) -> None:
-    """Upscale a video using the model"""
+    """Upscale a video using the model, writing audio-less result to /tmp/upscaled_noaudio.mp4"""
     w, h, fps, total_frames = extract_video_info(video_path)
 
     out_w, out_h = w * scale, h * scale
@@ -233,5 +232,3 @@ def video_upscale(
     t_enc = time.perf_counter() - t_enc_start
 
     log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
-
-    recombine_video_audio(video_path, output_path)
