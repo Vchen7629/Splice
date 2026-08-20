@@ -33,12 +33,12 @@ func StartHttpApi(
 	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 
 	server := &http.Server{
-		Addr:    ":" + httpPort,
-		Handler: Cors(middleware.ApiRequestLogging(router)),
-		ReadHeaderTimeout: 10*time.Second,
-		IdleTimeout: 120*time.Second,
-		ReadTimeout: 15*time.Minute,
-		WriteTimeout: 15*time.Minute,
+		Addr:              ":" + httpPort,
+		Handler:           Cors(middleware.ApiRequestLogging(router)),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ReadTimeout:       15 * time.Minute,
+		WriteTimeout:      15 * time.Minute,
 	}
 
 	go func() {
