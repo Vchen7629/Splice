@@ -61,6 +61,12 @@ func WriteEnvFile(t *testing.T, content string) {
 	}
 
 	path := filepath.Join("..", ".env")
+	previous, err := os.ReadFile(path)
+	if err == nil {
+		t.Cleanup(func() { require.NoError(t, os.WriteFile(path, previous, 0600)) })
+	} else {
+		require.True(t, os.IsNotExist(err), "unexpected error reading %s: %v", path, err)
+		t.Cleanup(func() { _ = os.Remove(path) })
+	}
 	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
-	t.Cleanup(func() { _ = os.Remove(path) })
 }
