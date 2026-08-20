@@ -29,7 +29,9 @@ async def _split_into_chunks(
             "ffmpeg error while splitting video", job_id=job_id, err=str(e)
         )
         raise
-    
+
+    return chunk_paths
+
 
 async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     """
@@ -58,7 +60,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
             fetch_video, metadata.storage_url, settings.SERVICE_NAME
         )
 
-        chunk_paths = _split_into_chunks(local_video_path, chunks_dir, metadata.job_id)
+        chunk_paths = await _split_into_chunks(local_video_path, chunks_dir, metadata.job_id)
         
         storage_urls = await asyncio.gather(
             *[
