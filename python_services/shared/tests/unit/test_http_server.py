@@ -1,5 +1,5 @@
 from typing import Any
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 from unittest.mock import MagicMock, create_autospec, patch
 from shared_handler.http import start_health_server
 from shared_handler.http import HealthEnpointHandler
@@ -39,7 +39,7 @@ def test_endpoint(
 
 
 def test_start_health_server() -> None:
-    mock_server = MagicMock(spec=HTTPServer)
+    mock_server = MagicMock(spec=ThreadingHTTPServer)
     real_thread_cls = threading.Thread
     created_threads: list[MagicMock] = []
     captured_kwargs: list[dict[str, Any]] = []
@@ -51,7 +51,7 @@ def test_start_health_server() -> None:
         return t
 
     with (
-        patch("shared_handler.http.HTTPServer", return_value=mock_server),
+        patch("shared_handler.http.ThreadingHTTPServer", return_value=mock_server),
         patch("shared_handler.http.threading.Thread", side_effect=capture_thread),
     ):
         result = start_health_server(9099)

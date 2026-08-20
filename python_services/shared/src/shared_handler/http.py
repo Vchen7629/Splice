@@ -1,4 +1,4 @@
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 from http.server import BaseHTTPRequestHandler
 import json
 import threading
@@ -17,8 +17,8 @@ class HealthEnpointHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 
-def start_health_server(port: int) -> HTTPServer:
-    server = HTTPServer(("", port), HealthEnpointHandler)
+def start_health_server(port: int) -> ThreadingHTTPServer:
+    server = ThreadingHTTPServer(("", port), HealthEnpointHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
