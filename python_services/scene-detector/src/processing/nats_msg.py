@@ -35,7 +35,6 @@ async def process_msg(
             await publisher(js, chunk_msg, settings.PUB_SUBJECT, settings.SERVICE_NAME)
 
         await msg_processed_kv.put(metadata.job_id, b"done")
-        await msg.ack()
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
         if "metadata" in locals():
@@ -47,3 +46,6 @@ async def process_msg(
                 await msg.nak()
                 return
         await msg.ack()
+        return
+
+    await msg.ack()

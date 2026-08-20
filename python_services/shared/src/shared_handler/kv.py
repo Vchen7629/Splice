@@ -114,3 +114,4 @@ async def update_job_failed(
         await job_status_kv.put(job_id, status)
     except Exception as e:
         logger.error("failed to update job status to failed", job_id=job_id, err=str(e))
+        raise
