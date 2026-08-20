@@ -4,7 +4,17 @@ dev:
 	docker compose wait nats-init
 	until curl -sf http://localhost:8888/ > /dev/null; do echo "waiting for seaweedfs filer..."; sleep 1; done
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-gateway.pid; cd go_services/cmd/gateway && exec go run .' > /tmp/splice-gateway.log 2>&1 &
-	until curl -s -o /dev/null http://localhost:8080/; do echo "waiting for gateway..."; sleep 1; done
+	gateway_ready=0; \
+	for i in $$(seq 1 60); do \
+		if curl -s -o /dev/null http://localhost:8080/; then gateway_ready=1; break; fi; \
+		if ! kill -0 "$$(cat /tmp/splice-gateway.pid 2>/dev/null)" 2>/dev/null; then break; fi; \
+		echo "waiting for gateway..."; sleep 1; \
+	done; \
+	if [ "$$gateway_ready" != "1" ]; then \
+		echo "gateway failed to start, see /tmp/splice-gateway.log"; \
+		cat /tmp/splice-gateway.log; \
+		exit 1; \
+	fi
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-scene-detector.pid; cd python_services/scene-detector && exec uv run -m src.service' > /tmp/splice-scene-detector.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-video-upscaling.pid; cd python_services/video-upscaling && PYTHONPATH=src exec uv run -m src.service' > /tmp/splice-video-upscaling.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-transcoder.pid; cd go_services/cmd/transcoder && exec go run .' > /tmp/splice-transcoder.log 2>&1 &
