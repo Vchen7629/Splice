@@ -86,7 +86,7 @@ def upload_video(
                 storage_url,
                 data=f,
                 headers={"Content-Type": "application/octet-stream"},
-                timeout=settings.STORAGE_READ_TIMEOUT_S
+                timeout=settings.STORAGE_READ_TIMEOUT_S,
             )
         response.raise_for_status()
     except requests.ConnectionError as e:

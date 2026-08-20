@@ -18,8 +18,7 @@ def check_storage_health(service_name: str) -> None:
 
     try:
         response = requests.get(
-            settings.BASE_STORAGE_URL + "/",
-            timeout=settings.STORAGE_CONNECT_TIMEOUT_S
+            settings.BASE_STORAGE_URL + "/", timeout=settings.STORAGE_CONNECT_TIMEOUT_S
         )
         response.raise_for_status()
     except requests.ConnectionError as e:
