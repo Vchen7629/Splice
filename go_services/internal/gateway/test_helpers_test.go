@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -91,7 +92,7 @@ type MockKV struct {
 	jetstream.KeyValue
 	GetErr    error
 	PutErr    error
-	PutCalled bool
+	PutCalled atomic.Bool
 	entries   map[string][]byte
 }
 
@@ -119,7 +120,7 @@ func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, er
 }
 
 func (m *MockKV) Put(_ context.Context, _ string, _ []byte) (uint64, error) {
-	m.PutCalled = true
+	m.PutCalled.Store(true)
 	return 0, m.PutErr
 }
 

@@ -304,7 +304,7 @@ func TestListenAdvisoriesFailure_KVPutFails(t *testing.T) {
 		publishAdvisory(t, sharedNC, "jobs", "transcoder-worker", seq)
 
 		require.Eventually(t, func() bool {
-			return mockKV.PutCalled
+			return mockKV.PutCalled.Load()
 		}, 5*time.Second, 100*time.Millisecond, "expected KV Put to be called")
 	})
 }
@@ -401,7 +401,7 @@ func TestListenJobComplete(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Eventually(t, func() bool {
-			return mockKV.PutCalled
+			return mockKV.PutCalled.Load()
 		}, 5*time.Second, 100*time.Millisecond, "expected KV Put to be called")
 	})
 }
