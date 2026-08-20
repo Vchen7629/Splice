@@ -1,13 +1,13 @@
 //go:build integration
 
-package e2e
+package tests
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"pipeline-tests/helpers"
+	"pipeline-tests/internal/helpers"
 	"testing"
 	"time"
 

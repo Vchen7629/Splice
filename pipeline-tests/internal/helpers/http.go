@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func FreePort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")

@@ -15,21 +15,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func BuildBinaries(t *testing.T, binDir string) (videoUpload, transcoderWorker, videoRecombiner, videoStatus string) {
 	t.Helper()
 
 	services := []struct{ src, name string }{
-		{"../video-upload", "video-upload"},
-		{"../transcoder-worker", "transcoder-worker"},
-		{"../video-recombiner", "video-recombiner"},
-		{"../video-status", "video-status"},
+		{"../../../go_services/cmd/gateway", "video-upload"},
+		{"../../../go_services/cmd/transcoder", "transcoder-worker"},
+		{"../../../go_services/cmd/recombiner", "video-recombiner"},
+		{"../../../go_services/cmd/gateway", "video-status"},
 	}
 
 	bins := make([]string, len(services))
 	for i, svc := range services {
 		dest := filepath.Join(binDir, svc.name)
-		cmd := exec.Command("go", "build", "-o", dest, "./cmd/main.go")
+		cmd := exec.Command("go", "build", "-o", dest, "./main.go")
 		cmd.Dir = svc.src
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "build failed for %s:\n%s", svc.src, out)
@@ -55,7 +54,7 @@ func StartGoService(t *testing.T, binary, cwd string, env map[string]string) {
 
 func StartSceneDetector(t *testing.T, cwd, natsURL, filerURL string) {
 	t.Helper()
-	sceneDetectorRoot, err := filepath.Abs("../scene-detector")
+	sceneDetectorRoot, err := filepath.Abs("../../../python_services/scene-detector")
 	require.NoError(t, err)
 
 	cmd := exec.Command(
