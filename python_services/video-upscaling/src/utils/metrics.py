@@ -1,5 +1,5 @@
 # Todo: Replace this with prometheus timing metrics later
-from core.settings import settings
+from ..core.settings import settings
 
 
 def log_timing(
