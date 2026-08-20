@@ -569,7 +569,7 @@ func TestDownloadVideo(t *testing.T) {
 
 	t.Run("Returns 500 when storage is unreachable", func(t *testing.T) {
 		h := newVideoHandler("http://localhost:1", &MockJS{})
-		req := NewDownloadRequest(t, "abc-123", "video.mp4")
+		req := NewDownloadRequest(t, "/jobs/download", "abc-123", "video.mp4")
 		rec := httptest.NewRecorder()
 
 		h.downloadVideoRoute(rec, req)
