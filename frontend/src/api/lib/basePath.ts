@@ -1,5 +1,3 @@
 import axios from "axios";
 
-export const VideoApi = axios.create({baseURL: 'http://localhost:8080'});
-
-export const StatusApi = axios.create({baseURL: 'http://localhost:8085'});
+export const GatewayApi = axios.create({baseURL: 'http://localhost:8080'});
