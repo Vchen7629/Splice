@@ -103,13 +103,14 @@ async def update_job_failed(
     """
     Writes FAILED with the underlying error message to the job-status KV bucket
 
-    On Exception logs the error
+    Raises:
+        Exception: re-raised if the KV write fails, after logging
     """
     logger = get_logger(service_name)
 
+    payload = {"state": "FAILED", "error": error}
+    status = json.dumps(payload).encode()
     try:
-        payload = {"state": "FAILED", "error": error}
-        status = json.dumps(payload).encode()
         await job_status_kv.put(job_id, status)
     except Exception as e:
         logger.error("failed to update job status to failed", job_id=job_id, err=str(e))
