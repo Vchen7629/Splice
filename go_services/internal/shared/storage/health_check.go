@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 )
 
 // send an http request to shared to storage to see if its reachable
@@ -20,7 +21,7 @@ func CheckHealth(storageURL string, logger *slog.Logger) error {
 		}
 	}()
 
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("seedweedfs returned status %d", resp.StatusCode)
 	}
 
