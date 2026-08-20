@@ -1,10 +1,10 @@
 //go:build integration
 
-package e2e
+package tests
 
 import (
 	"path/filepath"
-	"pipeline-tests/helpers"
+	"pipeline-tests/internal/helpers"
 	"sync"
 	"testing"
 	"time"
