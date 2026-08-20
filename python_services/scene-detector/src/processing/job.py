@@ -13,6 +13,24 @@ import shutil
 logger = get_logger(settings.SERVICE_NAME)
 
 
+async def _split_into_chunks(
+    local_video_path: str, chunks_dir: str, job_id: str
+) -> list[str]:
+    """split the video into chunks in a thread and raise on errors"""
+    try:
+        chunk_paths = await asyncio.to_thread(
+            split_into_chunks, local_video_path, chunks_dir
+        )
+    except VideoOpenFailure as e:
+        logger.error("could not open video", job_id=job_id, err=str(e))
+        raise
+    except OSError as e:
+        logger.error(
+            "ffmpeg error while splitting video", job_id=job_id, err=str(e)
+        )
+        raise
+    
+
 async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     """
     takes in the msg from NATS subcriber, fetches the video from SeaweedFS, splits
@@ -35,40 +53,32 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     temp_dir = f"../temp/{metadata.job_id}"
     chunks_dir = f"../temp/{metadata.job_id}/chunks"
 
-    local_video_path = await asyncio.to_thread(
-        fetch_video, metadata.storage_url, settings.SERVICE_NAME
-    )
-
     try:
-        chunk_paths = await asyncio.to_thread(
-            split_into_chunks, local_video_path, chunks_dir
+        local_video_path = await asyncio.to_thread(
+            fetch_video, metadata.storage_url, settings.SERVICE_NAME
         )
-    except VideoOpenFailure as e:
-        logger.error("could not open video", job_id=metadata.job_id, err=str(e))
-        raise
-    except OSError as e:
-        logger.error(
-            "ffmpeg error while splitting video", job_id=metadata.job_id, err=str(e)
+
+        chunk_paths = _split_into_chunks(local_video_path, chunks_dir, metadata.job_id)
+        
+        storage_urls = await asyncio.gather(
+            *[
+                asyncio.to_thread(
+                    upload_video,
+                    f"{settings.BASE_STORAGE_URL}/{metadata.job_id}/{os.path.basename(path)}",
+                    metadata.job_id,
+                    path,
+                    settings.SERVICE_NAME,
+                )
+                for path in chunk_paths
+            ]
         )
-        raise
 
-    storage_urls = await asyncio.gather(
-        *[
-            asyncio.to_thread(
-                upload_video,
-                f"{settings.BASE_STORAGE_URL}/{metadata.job_id}/{os.path.basename(path)}",
-                metadata.job_id,
-                path,
-                settings.SERVICE_NAME,
-            )
-            for path in chunk_paths
-        ]
-    )
-
-    try:
-        await asyncio.to_thread(lambda: shutil.rmtree(temp_dir))
-    except OSError as e:
-        logger.warning("failed to clean up temp dir", temp_dir=temp_dir, err=str(e))
+    finally:
+        if os.path.exists(temp_dir):
+            try:
+                await asyncio.to_thread(lambda: shutil.rmtree(temp_dir))
+            except OSError as e:
+                logger.warning("failed to clean up temp dir", temp_dir=temp_dir, err=str(e))
 
     return [
         VideoChunkMessage(
