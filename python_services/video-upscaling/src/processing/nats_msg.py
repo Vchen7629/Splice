@@ -133,9 +133,13 @@ async def process_msg(
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
         if "metadata" in locals():
-            await update_job_failed(
-                job_status_kv, metadata.job_id, str(e), settings.SERVICE_NAME
-            )
+            try:
+                await update_job_failed(
+                    job_status_kv, metadata.job_id, str(e), settings.SERVICE_NAME
+                )
+            except Exception:
+                await msg.nak()
+                return
         await msg.ack()
 
 
