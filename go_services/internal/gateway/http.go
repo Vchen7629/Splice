@@ -278,7 +278,6 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 		err := kh.updateJobStatusKV(r.Context(), jobID, status)
 		if err != nil {
 			j.Logger.Error("failed to update job status KV", "job_id", jobID, "err", err)
-			return
 		}
 	}
 
