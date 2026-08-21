@@ -37,8 +37,9 @@ func TestReturnCorrectConfig(t *testing.T) {
 	js, _ := test.SetupNats(t)
 	kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 	jobStatusKV := test.SetupJobStatusKV(t, js)
+	claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-	_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, test.SilentLogger(), t.TempDir())
+	_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, test.SilentLogger(), t.TempDir())
 	require.NoError(t, err)
 
 	stream, err := js.Stream(ctx, "jobs")
@@ -64,8 +65,9 @@ func TestMessageHandlingI(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, test.SilentLogger(), t.TempDir())
+		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -89,8 +91,9 @@ func TestMessageHandlingI(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, test.SilentLogger(), t.TempDir())
+		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -130,8 +133,9 @@ func TestMessageHandlingI(t *testing.T) {
 		test.SeedProcessedVideo(t, sharedFilerURL, "job-combine", "chunk-1.mp4", videoData)
 
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL)
+		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -175,8 +179,9 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		require.NoError(t, err)
 
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL)
+		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		secondComplete := make(chan struct{}, 1)
@@ -209,8 +214,9 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 
 		jobID := "job-idempotency-write"
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL)
+		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		// Partial chunk (TotalChunks:2) so combine never fires — KV write still happens after ack.

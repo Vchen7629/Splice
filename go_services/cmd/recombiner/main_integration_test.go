@@ -38,11 +38,12 @@ func TestRunCombinerI(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL, "0", quit)
+			done <- runCombiner(js, nc, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL, "0", quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -63,7 +64,7 @@ func TestRunCombinerI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runCombiner(js, nc, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), sharedFilerURL, "0", quit)
+		err = runCombiner(js, nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), sharedFilerURL, "0", quit)
 
 		assert.Error(t, err)
 	})
@@ -77,6 +78,7 @@ func TestRunCombinerI(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
@@ -101,7 +103,7 @@ func TestRunCombinerI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, kv, jobStatusKV, test.SilentLogger(), sharedFilerURL, "0", quit)
+			done <- runCombiner(js, nc, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL, "0", quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)

@@ -58,3 +58,36 @@ func ReleaseChunkClaim(claimKV jetstream.KeyValue, jobID string, chunkIndex int)
 
 	return nil
 }
+
+// atomically claims jobID/chunkIndex via claimKV and if claim succeeds runs fn
+// fn should return completed=true when work is durable persisted and false otherwise 
+// so legitimate retry can reclaim the chunk. On success claim is left in place to
+// expire via claimKV TTL rather than released immediately
+func ClaimAndRun(
+	claimKV jetstream.KeyValue, jobID string, chunkIndex int, logger *slog.Logger, fn func() (completed bool),
+) (bool, error) {
+	claimed, err := ClaimChunk(claimKV, jobID, chunkIndex)
+	if err != nil {
+		return false, err
+	}
+
+	if !claimed {
+		return false, nil
+	}
+
+	// track whether processing finished successfully so defer release chunk fires on failure path
+	// this lets a legit retry reclaim the chunk. On success the claim is left to expire via claimKV TTL
+	completed := false
+	defer func() {
+		if !completed {
+			relErr := ReleaseChunkClaim(claimKV, jobID, chunkIndex)
+			if relErr != nil {
+				logger.Error("failed to release chunk claim", "job_id", jobID, "chunk_index", chunkIndex, "err", relErr)
+			}
+		}
+	}()
+
+	completed = fn()
+
+	return true, nil
+}
