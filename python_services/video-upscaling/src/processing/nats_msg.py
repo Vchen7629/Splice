@@ -124,7 +124,12 @@ async def process_msg(
         await update_job_status(
             job_status_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
         )
-        await asyncio.to_thread(recombine_video_audio, local_video_path, temp_file_loc)
+        await asyncio.to_thread(
+            recombine_video_audio,
+            local_video_path,
+            temp_file_loc,
+            metadata.target_resolution,
+        )
         logger.debug("recombined video with audio", job_id=metadata.job_id)
 
         await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
