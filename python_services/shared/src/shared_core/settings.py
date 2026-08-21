@@ -1,11 +1,13 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=ENV_FILE)
+    
     # general config
     LOG_LEVEL: str = "DEBUG"
     LOG_FORMAT: str = "json"
