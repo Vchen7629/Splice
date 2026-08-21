@@ -61,7 +61,6 @@ func RecombineVideo(
 		err = msg.Ack()
 		if err != nil {
 			logger.Error("error acking msg", "err", err)
-			return
 		}
 
 		if ready {

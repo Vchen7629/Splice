@@ -92,6 +92,7 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 		case http.StatusInternalServerError:
 			return "", fmt.Errorf("error accessing seedweedfs")
 		}
+		return "", fmt.Errorf("seedweedfs returned status %d", resp.StatusCode)
 	}
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
@@ -123,7 +124,7 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 	if err != nil {
 		rmErr := removeAll(jobDir)
 		if rmErr != nil {
-			return "", fmt.Errorf("error removing all files: %w (error removing all files: %v)", err, rmErr)
+			return "", fmt.Errorf("error writing video to file: %w (error removing all files: %w)", err, rmErr)
 		}
 		return "", fmt.Errorf("error writing video to file: %w", err)
 	}
