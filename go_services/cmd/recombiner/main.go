@@ -6,16 +6,28 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"splice.com/go_services/internal/recombiner"
 	shandler "splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/kv"
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/storage"
-	"syscall"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+)
+
+const (
+	// bounds how long JetStream waits for an ack before treating chunk transcode as
+	// failed and redelivering it. Must exceed worst-case transcode duration or
+	// Jetstream redelivers work thats still in flight
+	chunkAckWait = 30 * time.Second
+	// bounds how long a chunk claim survives before another worker retries it
+	// Must stay between chunkAckWait and chunkAckWait * MaxDeliver = 3
+	chunkClaimTTL = 60 * time.Second
 )
 
 var osExit = os.Exit
@@ -58,11 +70,12 @@ func main() {
 
 	msgRecievedKV := kv.CreateMsgProcessedKV("recombine-chunk-recieved", js, logger)
 	jobStatusKV := kv.ConnectJobStatus(js, logger)
+	claimKV := kv.CreateChunkClaimKV("recombine-chunk-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runCombiner(js, nc, msgRecievedKV, jobStatusKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
+	err = runCombiner(js, nc, msgRecievedKV, jobStatusKV, claimKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -75,7 +88,7 @@ type ncDrainer interface {
 func runCombiner(
 	js jetstream.JetStream,
 	nc ncDrainer,
-	msgRecievedKV, jobStatusKV jetstream.KeyValue,
+	msgRecievedKV, jobStatusKV, claimKV jetstream.KeyValue,
 	logger *slog.Logger,
 	baseStorageURL, httpPort string,
 	quit <-chan os.Signal,
@@ -84,7 +97,7 @@ func runCombiner(
 
 	server := shandler.StartHealthHttpServer(logger, httpPort)
 
-	consCtx, err := recombiner.RecombineVideo(js, msgRecievedKV, jobStatusKV, logger, baseStorageURL)
+	consCtx, err := recombiner.RecombineVideo(js, msgRecievedKV, jobStatusKV, claimKV, logger, baseStorageURL)
 	if err != nil {
 		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)

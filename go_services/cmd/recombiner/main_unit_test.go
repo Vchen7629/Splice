@@ -24,7 +24,7 @@ func TestRunCombiner(t *testing.T) {
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runCombiner(js, nc, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit)
+		err := runCombiner(js, nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -35,7 +35,7 @@ func TestRunCombiner(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(okJS(), &test.MockDrainer{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit)
+			done <- runCombiner(okJS(), &test.MockDrainer{}, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit)
 		}()
 
 		select {
@@ -60,7 +60,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runCombiner(js, &test.MockDrainer{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit))
+		require.NoError(t, runCombiner(js, &test.MockDrainer{}, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -71,7 +71,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runCombiner(okJS(), nc, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit))
+		require.NoError(t, runCombiner(okJS(), nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -81,7 +81,7 @@ func TestRunCombiner(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runCombiner(okJS(), nc, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit)
+		err := runCombiner(okJS(), nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", "0", quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
@@ -91,7 +91,7 @@ func TestRunCombiner(t *testing.T) {
 		js := &test.MockJS{JStreamNameErr: assert.AnError}
 		quit := make(chan os.Signal, 1)
 
-		runCombiner(js, &test.MockDrainer{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", port, quit) //nolint:errcheck
+		runCombiner(js, &test.MockDrainer{}, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), "http://storage", port, quit) //nolint:errcheck
 
 		// If server was properly shut down, the port should be free to bind again.
 		ln, err := net.Listen("tcp", ":"+port)
