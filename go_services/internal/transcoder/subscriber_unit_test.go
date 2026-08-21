@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	"splice.com/go_services/internal/shared/test"
 	"splice.com/go_services/internal/transcoder"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +33,7 @@ func TestConsumeFailReturnError(t *testing.T) {
 
 	js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
 
-	_, err := transcoder.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
+	_, err := transcoder.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, consumeErr)
@@ -42,7 +44,7 @@ func TestFetchFailureNaks(t *testing.T) {
 	consumer := &test.MockConsumerWithMsg{Msg: msg}
 	js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-	_, err := transcoder.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, test.SilentLogger())
+	_, err := transcoder.ConsumeVideoChunk("http://storage", js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 	require.NoError(t, err)
 	assert.True(t, msg.NakCalled)
@@ -55,7 +57,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetFound: true}
 
-		_, err := transcoder.ConsumeVideoChunk("http://storage", js, kv, &test.MockKV{}, test.SilentLogger())
+		_, err := transcoder.ConsumeVideoChunk("http://storage", js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
@@ -68,7 +70,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetFound: true}
 
-		_, err := transcoder.ConsumeVideoChunk("http://storage", js, kv, &test.MockKV{}, test.SilentLogger())
+		_, err := transcoder.ConsumeVideoChunk("http://storage", js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.Empty(t, kv.PutKey)
@@ -80,7 +82,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := transcoder.ConsumeVideoChunk("http://storage", js, kv, &test.MockKV{}, test.SilentLogger())
+		_, err := transcoder.ConsumeVideoChunk("http://storage", js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.False(t, msg.AckCalled)
@@ -101,7 +103,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{}
 
-		_, _ = transcoder.ConsumeVideoChunk("http://localhost:1", js, kv, &test.MockKV{}, test.SilentLogger())
+		_, _ = transcoder.ConsumeVideoChunk("http://localhost:1", js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 		assert.Empty(t, kv.PutKey, "kv.Put should not be called when processing fails")
 	})

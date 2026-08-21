@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
 	"splice.com/go_services/internal/shared/kv"
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
-	"syscall"
 
 	shandler "splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/storage"
@@ -17,6 +19,16 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+)
+
+const (
+	// bounds how long JetStream waits for an ack before treating chunk transcode as
+	// failed and redelivering it. Must exceed worst-case transcode duration or
+	// Jetstream redelivers work thats still in flight
+	chunkAckWait = 10 * time.Minute
+	// bounds how long a chunk claim survives before another worker retries it
+	// Must stay between chunkAckWait and chunkAckWait * MaxDeliver = 3
+	chunkClaimTTL = 20 * time.Minute
 )
 
 // so tests can patch this to decide when to terminate
@@ -58,13 +70,14 @@ func main() {
 		return
 	}
 
+	claimKV := kv.CreateChunkClaimKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
 	processedKV := kv.CreateMsgProcessedKV("transcode-chunk-job-processed", js, logger)
 	jobStatusKV := kv.ConnectJobStatus(js, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobStatusKV, js, nc, logger, quit)
+	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobStatusKV, claimKV, js, nc, chunkAckWait, logger, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -77,9 +90,10 @@ type ncDrainer interface {
 // run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
 func runProcessing(
 	baseStorageURL, httpPort string,
-	processedKV, jobStatusKV jetstream.KeyValue,
+	processedKV, jobStatusKV, claimKV jetstream.KeyValue,
 	js jetstream.JetStream,
 	nc ncDrainer,
+	chunkAckWait time.Duration,
 	logger *slog.Logger,
 	quit <-chan os.Signal,
 ) error {
@@ -87,7 +101,7 @@ func runProcessing(
 
 	server := shandler.StartHealthHttpServer(logger, httpPort)
 
-	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobStatusKV, logger)
+	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobStatusKV, claimKV, chunkAckWait, logger)
 	if err != nil {
 		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start consumer: %w", err)

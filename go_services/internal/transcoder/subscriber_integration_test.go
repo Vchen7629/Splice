@@ -7,11 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
-	shandler "splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/test"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -68,9 +72,10 @@ func TestConsumeVideoChunk(t *testing.T) {
 		ctx := context.Background()
 		js, _ := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
@@ -91,9 +96,10 @@ func TestConsumeVideoChunk(t *testing.T) {
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -131,9 +137,10 @@ func TestConsumeVideoChunk(t *testing.T) {
 		sub, err := nc.Subscribe("jobs.chunks.complete", func(m *nats.Msg) { received <- m.Data })
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -191,9 +198,10 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 			})
 
 			storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, tc.fileName, tc.videoContent(t))
+			claimKV := test.SetupKV(t, js, "chunk-claims")
 			jobStatusKV := test.SetupJobStatusKV(t, js)
 
-			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, kv, jobStatusKV, test.SilentLogger())
+			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 			require.NoError(t, err)
 
 			publishVideoChunk(t, js, VideoChunkMessage{
@@ -241,9 +249,10 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -264,9 +273,10 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -336,9 +346,10 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) { received <- struct{}{} })
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -366,9 +377,10 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -395,9 +407,10 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		// Seed invalid video so transcoding fails.
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "bad.mp4", []byte("not a video"))
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -409,5 +422,78 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		_, err = kv.Get(context.Background(), fmt.Sprintf("%s.%d", jobID, 0))
 		assert.ErrorIs(t, err, jetstream.ErrKeyNotFound, "kv entry should not exist after failed processing")
+	})
+
+	t.Run("concurrent redelivery does not duplicate a still-in-flight transcode", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
+		jobStatusKV := test.SetupJobStatusKV(t, js)
+
+		jobID := "job-redelivery-race"
+		t.Cleanup(func() {
+			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+			os.RemoveAll("/tmp/temp-processed-" + jobID)
+		})
+
+		// block real ffmpeg call until test releases it, so first attempt is
+		// still "in progress" when AckWait fires and JetStream redelivers to 2nd worker
+		var calls int32
+		release := make(chan struct{})
+		transcodeVideo = func(filePath, targetResolution, jobID string, logger *slog.Logger) (string, error) {
+			atomic.AddInt32(&calls, 1)
+			<-release
+
+			outDir := "/tmp/temp-processed-" + jobID
+			err := os.MkdirAll(outDir, 0755)
+			if err != nil {
+				return "", err
+			}
+			outputPath := filepath.Join(outDir, "test_video.mp4")
+			err = os.WriteFile(outputPath, []byte("fake transcoded output"), 0644)
+			if err != nil {
+				return "", err
+			}
+
+			return outputPath, nil
+		}
+		t.Cleanup(func() { transcodeVideo = TranscodeVideo })
+
+		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
+		require.NoError(t, err)
+		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+
+		received := make(chan []byte, 10)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) { received <- msg.Data })
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		const ackWait = 2 * time.Second // short ackWait so test doesnt take forever
+
+		// Two workers sharing same durable consumer to simulate two scaled out transcoder instances
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, ackWait, test.SilentLogger())
+		require.NoError(t, err)
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, ackWait, test.SilentLogger())
+		require.NoError(t, err)
+
+		publishVideoChunk(t, js, VideoChunkMessage{
+			JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p",
+		})
+
+		// Ackwait expires and triggers a redelivery to idle worker before releasing blocked transcode(s)
+		time.Sleep(ackWait * 3)
+		close(release)
+
+		select {
+		case <-received:
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for chunk complete message")
+		}
+
+		time.Sleep(2 * time.Second) // let duplicate publish arrive if race exists
+
+		assert.Equal(t, int32(1), atomic.LoadInt32(&calls), "chunk should only be transcoded once despite redelivery")
+		assert.Len(t, received, 0, "unexpected duplicate chunk-complete publish")
 	})
 }

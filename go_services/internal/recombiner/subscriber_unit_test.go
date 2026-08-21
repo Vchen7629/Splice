@@ -129,8 +129,9 @@ func TestMessageHandling(t *testing.T) {
 		assert.False(t, msg.NakCalled)
 	})
 
-	t.Run("ack failure does not trigger combine or write kv", func(t *testing.T) {
-		// When Ack returns an error the handler returns early before downloading chunks.
+	t.Run("ack failure still persists kv but does not trigger combine", func(t *testing.T) {
+		// AddChunkProcessed now runs before Ack, so it succeeds even if Ack later
+		// fails. The handler still returns early before combining.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
@@ -150,7 +151,7 @@ func TestMessageHandling(t *testing.T) {
 		assert.NotNil(t, consCtx)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-		assert.Empty(t, kv.PutKey)
+		assert.Equal(t, "job-1.0", kv.PutKey)
 	})
 }
 

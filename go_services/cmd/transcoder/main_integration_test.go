@@ -38,12 +38,13 @@ func TestRunProcessingI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, "0", kv, jobStatusKV, js, nc, test.SilentLogger(), quit)
+			done <- runProcessing(sharedFilerURL, "0", kv, jobStatusKV, claimKV, js, nc, chunkAckWait, test.SilentLogger(), quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -64,6 +65,7 @@ func TestRunProcessingI(t *testing.T) {
 
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
 
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
@@ -87,7 +89,7 @@ func TestRunProcessingI(t *testing.T) {
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, "0", kv, jobStatusKV, js, nc, test.SilentLogger(), quit)
+			done <- runProcessing(sharedFilerURL, "0", kv, jobStatusKV, claimKV, js, nc, chunkAckWait, test.SilentLogger(), quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -145,7 +147,7 @@ func TestRunProcessingI(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		jobStatusKV := test.SetupJobStatusKV(t, js)
 
-		err = runProcessing(sharedFilerURL, "0", &test.MockKV{}, jobStatusKV, js, nc, test.SilentLogger(), quit)
+		err = runProcessing(sharedFilerURL, "0", &test.MockKV{}, jobStatusKV, &test.MockKV{}, js, nc, chunkAckWait, test.SilentLogger(), quit)
 
 		assert.Error(t, err)
 	})

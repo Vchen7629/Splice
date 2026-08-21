@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"time"
+
 	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/kv"
 	"splice.com/go_services/internal/shared/storage"
@@ -17,7 +19,7 @@ const subSubject = "jobs.chunks.complete"
 func RecombineVideo(
 	js jetstream.JetStream, msgRecievedKV, jobStatusKV jetstream.KeyValue, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
-	cons, err := handler.CreateDurableConsumer(js, subSubject, "video-recombiner")
+	cons, err := handler.CreateDurableConsumer(js, subSubject, "video-recombiner", 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -49,15 +51,16 @@ func RecombineVideo(
 
 		ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.StorageURL, payload.TotalChunks)
 
-		err = msg.Ack()
-		if err != nil {
-			logger.Error("error acking msg", "err", err)
-			return
-		}
-
 		err = kv.AddChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to mark job chunk as recieved", "err", err)
+			kv.NakWithErrHandling(logger, msg)
+			return
+		}
+
+		err = msg.Ack()
+		if err != nil {
+			logger.Error("error acking msg", "err", err)
 			return
 		}
 
