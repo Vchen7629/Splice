@@ -57,7 +57,6 @@ func ConsumeVideoChunk(
 
 		if !claimed {
 			logger.Debug("chunk already claimed by another worker, skipping...", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex)
-			kv.AckWithErrHandling(logger, msg)
 			return
 		}
 

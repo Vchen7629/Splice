@@ -7,7 +7,7 @@ ENV_FILE = PROJECT_ROOT / ".env"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE)
-    
+
     # general config
     HTTP_PORT: int = 9098
     SERVICE_NAME: str = "scene-detector"

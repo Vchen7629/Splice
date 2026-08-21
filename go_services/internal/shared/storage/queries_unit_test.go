@@ -219,8 +219,9 @@ func TestGetVideoChunkIoCopyError(t *testing.T) {
 		_, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error writing video to file")
 		assert.Contains(t, err.Error(), "error removing all files")
 		assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "original copy failure reason must not be lost")
-		assert.Contains(t, err.Error(), rmErr.Error())
+		assert.ErrorIs(t, err, rmErr, "cleanup failure reason must not be lost")
 	})
 }
