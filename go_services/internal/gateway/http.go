@@ -111,7 +111,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	}
 
 	processType := r.FormValue("process_type")
-	if targetRes == "" {
+	if processType == "" {
 		http.Error(w, "missing process_type field", http.StatusBadRequest)
 		v.logger.Error("missing process_type field")
 		return
@@ -143,21 +143,25 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
 
+	kh := KVHandler{logger: v.logger, kv: v.kv}
+	err = kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateProcessing, Stage: "upload"})
+	if err != nil {
+		http.Error(w, "failed to record job status", http.StatusInternalServerError)
+		return
+	}
+
 	err = handler.PublishJobComplete(
 		v.js, handler.VideoJobMessage{
 			JobID: result.JobID, TargetResolution: targetRes, SourceResolution: sourceRes, StorageURL: result.StorageURL,
 		}, pubSubject,
 	)
 	if err != nil {
-		http.Error(w, "unable to send process request msg to system", http.StatusInternalServerError)
 		v.logger.Error("error publishing request to nats", "err", err)
-		return
-	}
-
-	kh := KVHandler{logger: v.logger, kv: v.kv}
-	err = kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateProcessing, Stage: "upload"})
-	if err != nil {
-		http.Error(w, "failed to record job status", http.StatusInternalServerError)
+		kvErr := kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateFailed, Stage: "upload"})
+		if kvErr != nil {
+			v.logger.Error("failed to mark job failed after publish error", "err", kvErr)
+		}
+		http.Error(w, "unable to send process request msg to system", http.StatusInternalServerError)
 		return
 	}
 

@@ -89,7 +89,7 @@ func TestIdempotency(t *testing.T) {
 		assert.False(t, msg.NakCalled)
 	})
 
-	t.Run("writes kv with correct key on success", func(t *testing.T) {
+	t.Run("does not write kv when chunk fetch fails", func(t *testing.T) {
 		payload, err := json.Marshal(transcoder.VideoChunkMessage{
 			JobID:            "job-abc",
 			ChunkIndex:       2,

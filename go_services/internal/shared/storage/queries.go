@@ -97,7 +97,7 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
 	// validate filename so external malicious filenames doesnt get through
-	err = validatePathSegment(fileName)
+	err = validatePathSegment(filename)
 	if err != nil {
 		return "", err
 	}
