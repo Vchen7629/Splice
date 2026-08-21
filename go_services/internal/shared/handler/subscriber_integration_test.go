@@ -18,7 +18,7 @@ func TestCorrectConfig(t *testing.T) {
 	ctx := context.Background()
 	js, _ := test.SetupNats(t)
 
-	cons, err := handler.CreateDurableConsumer(js, "jobs.chunks.complete", "video-recombiner")
+	cons, err := handler.CreateDurableConsumer(js, "jobs.chunks.complete", "video-recombiner", 30*time.Second)
 	require.NoError(t, err)
 
 	info, err := cons.Info(ctx)

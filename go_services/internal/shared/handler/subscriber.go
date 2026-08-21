@@ -12,7 +12,7 @@ import (
 )
 
 // creates a durable consumer to listen to nats subject to consume messages
-func CreateDurableConsumer(js jetstream.JetStream, subSubject, consName string) (jetstream.Consumer, error) {
+func CreateDurableConsumer(js jetstream.JetStream, subSubject, consName string, ackWait time.Duration) (jetstream.Consumer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -33,7 +33,7 @@ func CreateDurableConsumer(js jetstream.JetStream, subSubject, consName string) 
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		MaxAckPending: 10, // worker wont recieve more than 10 inflight messages
 		MaxDeliver:    3,
-		AckWait:       30 * time.Second,
+		AckWait:       ackWait,
 	})
 	if err != nil {
 		return nil, err

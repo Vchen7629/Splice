@@ -9,10 +9,14 @@ import (
 // MockKV stubs jetstream.KeyValue for unit tests.
 type MockKV struct {
 	jetstream.KeyValue
-	GetErr   error
-	GetFound bool // if true, Get returns a non-nil entry; if false, returns ErrKeyNotFound
-	PutErr   error
-	PutKey   string
+	GetErr    error
+	GetFound  bool // if true, Get returns a non-nil entry; if false, returns ErrKeyNotFound
+	PutErr    error
+	PutKey    string
+	CreateErr error
+	CreateKey string
+	DeleteErr error
+	DeleteKey string
 }
 
 func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, error) {
@@ -28,6 +32,19 @@ func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, er
 func (m *MockKV) Put(_ context.Context, key string, _ []byte) (uint64, error) {
 	m.PutKey = key
 	return 0, m.PutErr
+}
+
+func (m *MockKV) Create(_ context.Context, key string, _ []byte, _ ...jetstream.KVCreateOpt) (uint64, error) {
+	m.CreateKey = key
+	if m.CreateErr != nil {
+		return 0, m.CreateErr
+	}
+	return 0, nil
+}
+
+func (m *MockKV) Delete(_ context.Context, key string, _ ...jetstream.KVDeleteOpt) error {
+	m.DeleteKey = key
+	return m.DeleteErr
 }
 
 type mockKVEntry struct {

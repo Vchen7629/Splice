@@ -25,7 +25,7 @@ func TestRunProcessing(t *testing.T) {
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, js, nc, test.SilentLogger(), quit)
+		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, js, nc, 30*time.Second, test.SilentLogger(), quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -36,7 +36,7 @@ func TestRunProcessing(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), &test.MockDrainer{}, test.SilentLogger(), quit)
+			done <- runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, okJS(), &test.MockDrainer{}, 30*time.Second, test.SilentLogger(), quit)
 		}()
 
 		select {
@@ -61,7 +61,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, js, &test.MockDrainer{}, test.SilentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, js, &test.MockDrainer{}, 30*time.Second, test.SilentLogger(), quit))
 
 		require.NotNil(t, consumer.Ctx)
 		assert.True(t, consumer.Ctx.Stopped)
@@ -72,7 +72,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), nc, test.SilentLogger(), quit))
+		require.NoError(t, runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, okJS(), nc, 30*time.Second, test.SilentLogger(), quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -86,7 +86,7 @@ func TestRunProcessing(t *testing.T) {
 		js := &test.MockJS{JStreamNameErr: assert.AnError}
 		quit := make(chan os.Signal, 1)
 
-		runProcessing("http://storage", port, &test.MockKV{}, &test.MockKV{}, js, &test.MockDrainer{}, test.SilentLogger(), quit) //nolint:errcheck
+		runProcessing("http://storage", port, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, js, &test.MockDrainer{}, 30*time.Second, test.SilentLogger(), quit) //nolint:errcheck
 
 		// If server was properly shut down, the port should be free to bind again.
 		ln2, err := net.Listen("tcp", ":"+port)
@@ -99,7 +99,7 @@ func TestRunProcessing(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, okJS(), nc, test.SilentLogger(), quit)
+		err := runProcessing("http://storage", "0", &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, okJS(), nc, 30*time.Second, test.SilentLogger(), quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})

@@ -50,8 +50,8 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 	return url, nil
 }
 
-// validatePathSegment rejects path segments that could escape the intended                                                                                                           
-// base directory (empty, ".", "..", or containing a path separator), while                                                                                                           
+// validatePathSegment rejects path segments that could escape the intended
+// base directory (empty, ".", "..", or containing a path separator), while
 // allowing ordinary file/job names such as "my.video.mp4" or "clip (1).mov".
 func validatePathSegment(name string) error {
 	if name == "" || name == "." || name == ".." {

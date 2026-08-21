@@ -4,9 +4,11 @@ package handler_test
 
 import (
 	"errors"
+	"testing"
+	"time"
+
 	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/test"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +43,7 @@ func TestReturnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := handler.CreateDurableConsumer(tc.js, "idk", "idk")
+			_, err := handler.CreateDurableConsumer(tc.js, "idk", "idk", 30*time.Second)
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
