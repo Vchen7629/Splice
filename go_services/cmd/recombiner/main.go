@@ -97,7 +97,7 @@ func runCombiner(
 
 	server := shandler.StartHealthHttpServer(logger, httpPort)
 
-	consCtx, err := recombiner.RecombineVideo(js, msgRecievedKV, jobStatusKV, claimKV, logger, baseStorageURL)
+	consCtx, err := recombiner.RecombineVideo(js, msgRecievedKV, jobStatusKV, claimKV, chunkAckWait, logger, baseStorageURL)
 	if err != nil {
 		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
