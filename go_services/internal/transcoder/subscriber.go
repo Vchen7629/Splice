@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/kv"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -25,18 +25,18 @@ func ConsumeVideoChunk(
 	baseStorageURL string, js jetstream.JetStream, processedKV, jobStatusKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
-	cons, err := handler.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait)
+	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait)
 	if err != nil {
 		return nil, err
 	}
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		payload, ok := handler.UnmarshalJetstreamMsg[VideoChunkMessage](msg, logger)
+		payload, ok := sJetstream.UnmarshalJetstreamMsg[VideoChunkMessage](msg, logger)
 		if !ok {
 			return
 		}
 
-		processed, err := kv.CheckChunkKV(processedKV, payload.JobID, payload.ChunkIndex)
+		processed, err := sJetstream.CheckKeyExist(processedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex))
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
 			return
@@ -44,16 +44,16 @@ func ConsumeVideoChunk(
 
 		if processed {
 			logger.Debug("message already processed, skipping")
-			kv.AckWithErrHandling(logger, msg)
+			sJetstream.AckWithErrHandling(logger, msg)
 			return
 		}
 
-		claimed, err := kv.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
+		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
 			return processChunk(js, processedKV, jobStatusKV, msg, baseStorageURL, payload, logger)
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			kv.NakWithErrHandling(logger, msg)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return
 		}
 
@@ -77,7 +77,11 @@ func processChunk(
 	js jetstream.JetStream, processedKV, jobStatusKV jetstream.KeyValue,
 	msg jetstream.Msg, baseStorageURL string, payload VideoChunkMessage, logger *slog.Logger,
 ) bool {
-	err := kv.UpdateJobStatus(jobStatusKV, "transcoder", payload.JobID, logger)
+	processingMsg, err := handler.MarshalProcessingStatusMsg("transcoder")
+	if err != nil {
+		logger.Error("error marshalling status text", "err", err)
+	}
+	err = sJetstream.PutKeyKV(jobStatusKV, payload.JobID, processingMsg)
 	if err != nil {
 		logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 	}
@@ -87,14 +91,14 @@ func processChunk(
 	filePath, err := storage.GetVideoChunk(payload.StorageURL, fileName)
 	if err != nil {
 		logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
 	outputPath, err := transcodeVideo(filePath, payload.TargetResolution, payload.JobID, logger)
 	if err != nil {
 		logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
@@ -109,13 +113,13 @@ func processChunk(
 			"file_path", outputPath,
 			"err", err,
 		)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
 	const pubSubject = "jobs.chunks.complete"
 
-	err = handler.PublishJobComplete(js, handler.ChunkCompleteMessage{
+	err = sJetstream.PublishJetstreamMsg(js, handler.ChunkCompleteMessage{
 		JobID:       payload.JobID,
 		ChunkIndex:  payload.ChunkIndex,
 		TotalChunks: payload.TotalChunks,
@@ -123,14 +127,14 @@ func processChunk(
 	}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
-	err = kv.AddChunkKV(processedKV, payload.JobID, payload.ChunkIndex)
+	err = sJetstream.PutKeyKV(processedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as processed", "err", err)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 

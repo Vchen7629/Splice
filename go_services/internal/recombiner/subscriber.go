@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/kv"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -20,7 +20,7 @@ func RecombineVideo(
 	js jetstream.JetStream, msgRecievedKV, jobStatusKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
-	cons, err := handler.CreateDurableConsumer(js, subSubject, "video-recombiner", ackWait)
+	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "video-recombiner", ackWait)
 	if err != nil {
 		return nil, err
 	}
@@ -28,12 +28,12 @@ func RecombineVideo(
 	tracker := NewJobTracker()
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		payload, ok := handler.UnmarshalJetstreamMsg[handler.ChunkCompleteMessage](msg, logger)
+		payload, ok := sJetstream.UnmarshalJetstreamMsg[handler.ChunkCompleteMessage](msg, logger)
 		if !ok {
 			return
 		}
 
-		recieved, err := kv.CheckChunkKV(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		recieved, err := sJetstream.CheckKeyExist(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex))
 		if err != nil {
 			logger.Error("failed to check chunk recieved", "err", err)
 			return
@@ -41,16 +41,16 @@ func RecombineVideo(
 
 		if recieved {
 			logger.Debug("message already recieved, skipping")
-			kv.AckWithErrHandling(logger, msg)
+			sJetstream.AckWithErrHandling(logger, msg)
 			return
 		}
 
-		claimed, err := kv.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
+		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
 			return recombineChunks(js, jobStatusKV, msgRecievedKV, msg, tracker, payload, baseStorageURL, logger)
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			kv.NakWithErrHandling(logger, msg)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return
 		}
 		if !claimed {
@@ -73,7 +73,11 @@ func recombineChunks(
 	js jetstream.JetStream, jobStatusKV, msgRecievedKV jetstream.KeyValue, msg jetstream.Msg,
 	tracker *JobTracker, payload handler.ChunkCompleteMessage, baseStorageURL string, logger *slog.Logger,
 ) bool {
-	err := kv.UpdateJobStatus(jobStatusKV, "video-recombiner", payload.JobID, logger)
+	processingMsg, err := handler.MarshalProcessingStatusMsg("video-recombiner")
+	if err != nil {
+		logger.Error("error marshalling status text", "err", err)
+	}
+	err = sJetstream.PutKeyKV(jobStatusKV, payload.JobID, processingMsg)
 	if err != nil {
 		logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 	}
@@ -82,14 +86,14 @@ func recombineChunks(
 
 	// not the triggering chunk: nothing to combine yet, so this chunk's message is fully handled now
 	if !ready {
-		err = kv.AddChunkKV(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 		if err != nil {
 			logger.Error("failed to mark job chunk as recieved", "err", err)
-			kv.NakWithErrHandling(logger, msg)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return false
 		}
 
-		kv.AckWithErrHandling(logger, msg)
+		sJetstream.AckWithErrHandling(logger, msg)
 		return true
 	}
 
@@ -109,7 +113,7 @@ func recombineChunks(
 	}
 	if downloadErr != nil {
 		CleanUpTempFolders(payload.JobID, logger)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
@@ -117,7 +121,7 @@ func recombineChunks(
 	if err != nil {
 		logger.Error("failed to combine chunks", "job_id", payload.JobID, "err", err)
 		CleanUpTempFolders(payload.JobID, logger)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
@@ -128,25 +132,25 @@ func recombineChunks(
 	if err != nil {
 		logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 		CleanUpTempFolders(payload.JobID, logger)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
-	err = kv.AddChunkKV(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+	err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as recieved", "err", err)
-		kv.NakWithErrHandling(logger, msg)
+		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
-	kv.AckWithErrHandling(logger, msg)
+	sJetstream.AckWithErrHandling(logger, msg)
 	tracker.Complete(payload.JobID)
 	CleanUpTempFolders(payload.JobID, logger)
 
 	logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
 
 	const pubSubject = "jobs.complete"
-	err = handler.PublishJobComplete(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
+	err = sJetstream.PublishJetstreamMsg(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
 	}

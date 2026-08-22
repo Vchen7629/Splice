@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"splice.com/go_services/internal/shared/kv"
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
 	shandler "splice.com/go_services/internal/shared/handler"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/transcoder"
 
@@ -70,9 +70,9 @@ func main() {
 		return
 	}
 
-	claimKV := kv.CreateChunkClaimKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
-	processedKV := kv.CreateMsgProcessedKV("transcode-chunk-job-processed", js, logger)
-	jobStatusKV := kv.ConnectJobStatus(js, logger)
+	claimKV := sJetstream.CreateKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
+	processedKV := sJetstream.CreateKV("transcode-chunk-job-processed", js, 3*time.Hour, logger)
+	jobStatusKV := sJetstream.ConnectKV(js, "job-status", logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

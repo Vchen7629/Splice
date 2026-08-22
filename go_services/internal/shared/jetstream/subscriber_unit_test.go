@@ -1,6 +1,6 @@
 //go:build unit
 
-package handler_test
+package jetstream_test
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -43,7 +44,7 @@ func TestReturnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := handler.CreateDurableConsumer(tc.js, "idk", "idk", 30*time.Second)
+			_, err := jetstream.CreateDurableConsumer(tc.js, "idk", "idk", 30*time.Second)
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
@@ -55,7 +56,7 @@ func TestUnmarshalJetstreamMsg(t *testing.T) {
 	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: []byte("not valid json")}
 
-		payload, ok := handler.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+		payload, ok := jetstream.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
 
 		require.False(t, ok)
 		assert.NotNil(t, payload)
@@ -67,7 +68,7 @@ func TestUnmarshalJetstreamMsg(t *testing.T) {
 		nakErr := errors.New("nak failed")
 		msg := &test.MockMsg{Payload: []byte("not valid json"), NakErr: nakErr}
 
-		payload, ok := handler.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+		payload, ok := jetstream.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
 
 		require.False(t, ok)
 		assert.NotNil(t, payload)

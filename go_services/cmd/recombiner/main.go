@@ -11,7 +11,7 @@ import (
 
 	"splice.com/go_services/internal/recombiner"
 	shandler "splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/kv"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/storage"
@@ -69,9 +69,9 @@ func main() {
 		return
 	}
 
-	msgRecievedKV := kv.CreateMsgProcessedKV("recombine-chunk-recieved", js, logger)
-	jobStatusKV := kv.ConnectJobStatus(js, logger)
-	claimKV := kv.CreateChunkClaimKV("recombine-chunk-claims", js, chunkClaimTTL, logger)
+	msgRecievedKV := sJetstream.CreateKV("recombine-chunk-recieved", js, 0, logger) // no ttl for now
+	jobStatusKV := sJetstream.ConnectKV(js, "job-status", logger)
+	claimKV := sJetstream.CreateKV("recombine-chunk-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

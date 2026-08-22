@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/kv"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -107,7 +106,7 @@ func ListenJobComplete(js jetstream.JetStream, jobStatusKV jetstream.KeyValue, l
 	}
 
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
-		payload, ok := handler.UnmarshalJetstreamMsg[jobIDPayload](msg, logger)
+		payload, ok := sJetstream.UnmarshalJetstreamMsg[jobIDPayload](msg, logger)
 		if !ok {
 			return
 		}
@@ -115,14 +114,14 @@ func ListenJobComplete(js jetstream.JetStream, jobStatusKV jetstream.KeyValue, l
 		status, err := json.Marshal(JobStatus{State: StateComplete})
 		if err != nil {
 			logger.Error("failed to marshal complete status", "err", err)
-			kv.NakWithErrHandling(logger, msg)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return
 		}
 
 		_, err = jobStatusKV.Put(context.Background(), payload.JobID, status)
 		if err != nil {
 			logger.Error("failed to write complete status to kv", "job_id", payload.JobID, "err", err)
-			kv.NakWithErrHandling(logger, msg)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return
 		}
 
