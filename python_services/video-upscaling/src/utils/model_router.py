@@ -20,7 +20,7 @@ class Resolution(IntEnum):
         s = s.strip().lower()
         h = 2160 if s == "4k" else int(s.rstrip("p"))
 
-        return min(cls, key=lambda r: abs(r.value - h))
+        return min(cls, key=lambda r: abs(r.value - h))  # pyrefly: ignore[implicit-any-lambda]
 
 
 def select_model(source_res: str, target_res: str) -> Optional[tuple[Path, int]]:

@@ -10,5 +10,5 @@ if "torchvision.transforms.functional_tensor" not in sys.modules:
     from torchvision.transforms import functional as _tv_functional
 
     _shim = ModuleType("torchvision.transforms.functional_tensor")
-    _shim.rgb_to_grayscale = _tv_functional.rgb_to_grayscale
+    setattr(_shim, "rgb_to_grayscale", _tv_functional.rgb_to_grayscale)
     sys.modules["torchvision.transforms.functional_tensor"] = _shim

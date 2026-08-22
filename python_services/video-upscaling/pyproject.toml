@@ -29,7 +29,7 @@ torchvision = [
 python-version = "3.12"
 untyped-def-behavior = "check-and-infer-return-any"
 search-path = [".", "../shared/src"]
-venv = ".venv"
+python-interpreter-path = ".venv/bin/python3"
 
 [tool.uv.workspace]
 members = [
