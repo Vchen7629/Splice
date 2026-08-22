@@ -82,7 +82,7 @@ async def test_drain_called_even_if_consumer_raises(service_patches: Any) -> Non
     "setup_js,match",
     [
         (
-            lambda js: setattr(
+            lambda js: setattr(  # pyrefly: ignore[implicit-any-lambda]
                 js,
                 "find_stream_name_by_subject",
                 AsyncMock(side_effect=js_errors.NotFoundError),
@@ -90,13 +90,13 @@ async def test_drain_called_even_if_consumer_raises(service_patches: Any) -> Non
             None,
         ),
         (
-            lambda js: setattr(
+            lambda js: setattr(  # pyrefly: ignore[implicit-any-lambda]
                 js, "key_value", AsyncMock(side_effect=js_errors.NotFoundError)
             ),
             "job-status KV bucket not found",
         ),
         (
-            lambda js: setattr(
+            lambda js: setattr(  # pyrefly: ignore[implicit-any-lambda]
                 js, "create_key_value", AsyncMock(side_effect=js_errors.APIError())
             ),
             "failed to create upscale-processed KV bucket",

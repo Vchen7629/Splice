@@ -34,7 +34,7 @@ def _patch_cuda() -> Generator[None, None, None]:
         yield
 
     with (
-        patch.object(torch.Tensor, "cuda", lambda self: self),
+        patch.object(torch.Tensor, "cuda", lambda self: self),  # pyrefly: ignore[implicit-any-lambda]
         patch("torch.autocast", _fake_autocast),
     ):
         yield

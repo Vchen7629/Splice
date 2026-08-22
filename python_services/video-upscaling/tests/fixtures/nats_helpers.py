@@ -36,7 +36,7 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
         patch("src.processing.nats_msg.os.makedirs") as _,
         patch(
             "src.processing.nats_msg.asyncio.to_thread",
-            side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs),
+            side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs),  # pyrefly: ignore[implicit-any-lambda]
         ) as _,
     ):
         mock_check.return_value = False
