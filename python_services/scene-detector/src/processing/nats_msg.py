@@ -17,6 +17,7 @@ async def process_msg(
     js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg
 ) -> None:
     """Processes a single scene-split message"""
+    metadata: ProcessJobMessage | None = None
     try:
         metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
 
@@ -37,7 +38,7 @@ async def process_msg(
         await msg_processed_kv.put(metadata.job_id, b"done")
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
-        if "metadata" in locals():
+        if metadata is not None:
             try:
                 await update_job_failed(
                     job_status_kv, metadata.job_id, str(e), settings.SERVICE_NAME
