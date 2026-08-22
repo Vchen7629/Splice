@@ -13,24 +13,6 @@ import shutil
 logger = get_logger(settings.SERVICE_NAME)
 
 
-async def _split_into_chunks(
-    local_video_path: str, chunks_dir: str, job_id: str
-) -> list[str]:
-    """split the video into chunks in a thread and raise on errors"""
-    try:
-        chunk_paths = await asyncio.to_thread(
-            split_into_chunks, local_video_path, chunks_dir
-        )
-    except VideoOpenFailure as e:
-        logger.error("could not open video", job_id=job_id, err=str(e))
-        raise
-    except OSError as e:
-        logger.error("ffmpeg error while splitting video", job_id=job_id, err=str(e))
-        raise
-
-    return chunk_paths
-
-
 async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
     """
     takes in the msg from NATS subcriber, fetches the video from SeaweedFS, splits
@@ -76,10 +58,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
         )
 
     finally:
-        try:
-            await asyncio.to_thread(lambda: shutil.rmtree(temp_dir))
-        except OSError as e:
-            logger.warning("failed to clean up temp dir", temp_dir=temp_dir, err=str(e))
+        await _cleanup_temp_dir(temp_dir, metadata.job_id)
 
     return [
         VideoChunkMessage(
@@ -91,3 +70,42 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
         )
         for i, url in enumerate(storage_urls)
     ]
+
+
+async def _split_into_chunks(
+    local_video_path: str, chunks_dir: str, job_id: str
+) -> list[str]:
+    """split the video into chunks in a thread and raise on errors"""
+    try:
+        chunk_paths = await asyncio.to_thread(
+            split_into_chunks, local_video_path, chunks_dir
+        )
+    except VideoOpenFailure as e:
+        logger.error("could not open video", job_id=job_id, err=str(e))
+        raise
+    except OSError as e:
+        logger.error("ffmpeg error while splitting video", job_id=job_id, err=str(e))
+        raise
+
+    return chunk_paths
+
+
+async def _cleanup_temp_dir(
+    temp_dir: str, job_id: str, retries: int = 3, delay_seconds: float = 1.0
+) -> None:
+    """remove the job's temp dir, retrying a few times"""
+    for attempt in range(1, retries + 1):
+        try:
+            await asyncio.to_thread(shutil.rmtree, temp_dir)
+            return
+        except OSError as e:
+            if attempt == retries:
+                logger.error(
+                    "failed to clean up temp dir after retries",
+                    temp_dir=temp_dir,
+                    job_id=job_id,
+                    attempts=attempt,
+                    err=str(e)
+                )
+                return
+            await asyncio.sleep(delay_seconds)
