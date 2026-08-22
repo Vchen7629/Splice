@@ -20,14 +20,15 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// NOTE: in the future might need to add a keepALive ping by running it in msg.InPRogress so we dont have the guess ttl
 const (
 	// bounds how long JetStream waits for an ack before treating chunk transcode as
 	// failed and redelivering it. Must exceed worst-case transcode duration or
 	// Jetstream redelivers work thats still in flight
-	chunkAckWait = 30 * time.Second
+	chunkAckWait = 5 * time.Minute
 	// bounds how long a chunk claim survives before another worker retries it
 	// Must stay between chunkAckWait and chunkAckWait * MaxDeliver = 3
-	chunkClaimTTL = 60 * time.Second
+	chunkClaimTTL = 10 * time.Minute
 )
 
 var osExit = os.Exit

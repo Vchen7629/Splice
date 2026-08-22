@@ -110,9 +110,10 @@ func TestMessageHandling(t *testing.T) {
 		assert.False(t, msg.NakCalled)
 	})
 
-	t.Run("all chunks ready acks and triggers combine even if download fails", func(t *testing.T) {
-		// TotalChunks=1, ChunkIndex=0 — immediately ready.
-		// HTTP download will fail on invalid URL, but msg must be acked before that.
+	t.Run("triggering chunk naks without acking or persisting kv when download fails", func(t *testing.T) {
+		// TotalChunks=1, ChunkIndex=0 — immediately ready (the triggering chunk).
+		// HTTP download fails on an invalid URL; the msg must be Nak'd (not acked)
+		// and left unmarked in the recieved KV so a redelivery retries the combine.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
@@ -124,22 +125,24 @@ func TestMessageHandling(t *testing.T) {
 		msg := &test.MockMsg{Payload: payload}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		kv := &test.MockKV{}
 
-		consCtx, err := recombiner.RecombineVideo(js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		consCtx, err := recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
-		assert.True(t, msg.AckCalled)
-		assert.False(t, msg.NakCalled)
+		assert.False(t, msg.AckCalled)
+		assert.True(t, msg.NakCalled)
+		assert.Empty(t, kv.PutKey)
 	})
 
-	t.Run("ack failure still persists kv", func(t *testing.T) {
-		// AddChunkProcessed now runs before Ack, so it succeeds even if Ack later
-		// fails.
+	t.Run("ack failure on a non-triggering chunk still persists kv", func(t *testing.T) {
+		// AddChunkKV runs before Ack for a non-triggering chunk, so it succeeds
+		// even if Ack later fails.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
-			TotalChunks: 1,
+			TotalChunks: 2, // not ready — combine never runs
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
 		require.NoError(t, err)

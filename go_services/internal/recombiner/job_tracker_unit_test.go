@@ -52,15 +52,37 @@ func TestAdd(t *testing.T) {
 		assert.Equal(t, "/tmp/chunk-2.mp4", chunks[2])
 	})
 
-	t.Run("deletes job state after completion", func(t *testing.T) {
+	t.Run("keeps job state after ready until Complete is called", func(t *testing.T) {
 		tracker := NewJobTracker()
 
-		tracker.Add("job-1", 0, "/tmp/chunk-0.mp4", 1)
+		ready, _ := tracker.Add("job-1", 0, "/tmp/chunk-0.mp4", 1)
+		require.True(t, ready)
 
 		tracker.mu.Lock()
 		_, exists := tracker.jobs["job-1"]
 		tracker.mu.Unlock()
+		assert.True(t, exists, "job state should survive a ready Add so a retry can still see all chunks")
+
+		tracker.Complete("job-1")
+
+		tracker.mu.Lock()
+		_, exists = tracker.jobs["job-1"]
+		tracker.mu.Unlock()
 		assert.False(t, exists)
+	})
+
+	t.Run("retrying the triggering chunk after ready still returns all chunks", func(t *testing.T) {
+		tracker := NewJobTracker()
+
+		tracker.Add("job-1", 0, "/tmp/chunk-0.mp4", 2)
+		ready, chunks := tracker.Add("job-1", 1, "/tmp/chunk-1.mp4", 2)
+		require.True(t, ready)
+		require.Len(t, chunks, 2)
+
+		// simulate a retry of the triggering chunk's message after a Nak'd combine failure
+		ready, chunks = tracker.Add("job-1", 1, "/tmp/chunk-1.mp4", 2)
+		assert.True(t, ready)
+		assert.Len(t, chunks, 2)
 	})
 
 	t.Run("single chunk job completes immediately", func(t *testing.T) {
@@ -73,11 +95,12 @@ func TestAdd(t *testing.T) {
 		assert.Equal(t, "/tmp/only-chunk.mp4", chunks[0])
 	})
 
-	t.Run("completed job can be re-added as a new job", func(t *testing.T) {
+	t.Run("completed job can be re-added as a new job after Complete", func(t *testing.T) {
 		tracker := NewJobTracker()
 
 		ready, _ := tracker.Add("job-1", 0, "/tmp/chunk-0.mp4", 1)
 		require.True(t, ready)
+		tracker.Complete("job-1")
 
 		ready, chunks := tracker.Add("job-1", 0, "/tmp/new-chunk-0.mp4", 2)
 		assert.False(t, ready)
@@ -122,6 +145,25 @@ func TestAdd(t *testing.T) {
 	})
 }
 
+func TestComplete(t *testing.T) {
+	t.Run("removes job state", func(t *testing.T) {
+		tracker := NewJobTracker()
+		tracker.Add("job-1", 0, "/tmp/chunk-0.mp4", 1)
+
+		tracker.Complete("job-1")
+
+		tracker.mu.Lock()
+		_, exists := tracker.jobs["job-1"]
+		tracker.mu.Unlock()
+		assert.False(t, exists)
+	})
+
+	t.Run("no-op for unknown job", func(t *testing.T) {
+		tracker := NewJobTracker()
+		assert.NotPanics(t, func() { tracker.Complete("unknown") })
+	})
+}
+
 func TestConcurrentAccess(t *testing.T) {
 	t.Run("concurrent adds to the same job do not race", func(t *testing.T) {
 		tracker := NewJobTracker()
@@ -141,7 +183,7 @@ func TestConcurrentAccess(t *testing.T) {
 		tracker.mu.Lock()
 		_, exists := tracker.jobs["shared-job"]
 		tracker.mu.Unlock()
-		assert.False(t, exists, "job should be complete and deleted after all chunks received")
+		assert.True(t, exists, "job state should be retained after ready until Complete is called")
 	})
 
 	t.Run("concurrent adds to different jobs do not race", func(t *testing.T) {

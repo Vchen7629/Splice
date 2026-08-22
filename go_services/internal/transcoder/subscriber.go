@@ -36,13 +36,13 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		exists, err := kv.CheckChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
+		processed, err := kv.CheckChunkKV(processedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
 			return
 		}
 
-		if exists {
+		if processed {
 			logger.Debug("message already processed, skipping")
 			kv.AckWithErrHandling(logger, msg)
 			return
@@ -127,7 +127,7 @@ func processChunk(
 		return false
 	}
 
-	err = kv.AddChunkProcessed(processedKV, payload.JobID, payload.ChunkIndex)
+	err = kv.AddChunkKV(processedKV, payload.JobID, payload.ChunkIndex)
 	if err != nil {
 		logger.Error("failed to mark job chunk as processed", "err", err)
 		kv.NakWithErrHandling(logger, msg)
