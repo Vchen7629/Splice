@@ -29,7 +29,7 @@ func CreateMsgProcessedKV(bucketName string, js jetstream.JetStream, logger *slo
 }
 
 // check if a jobID chunk already is processed, returns a bool based on if it exists in the KV
-func CheckChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) (bool, error) {
+func CheckChunkKV(kv jetstream.KeyValue, jobID string, chunkIndex int) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -45,7 +45,7 @@ func CheckChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) (b
 }
 
 // add a completed job chunk to the KV for idempotency
-func AddChunkProcessed(kv jetstream.KeyValue, jobID string, chunkIndex int) error {
+func AddChunkKV(kv jetstream.KeyValue, jobID string, chunkIndex int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

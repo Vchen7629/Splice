@@ -18,8 +18,10 @@ func NewJobTracker() *JobTracker {
 	}
 }
 
-// record a completed chunk for a job from nats msgs, returns read=true and a map of all chunk paths when all video
-// chunks for the job has been recieved so the subscriber can trigger combiner.go and pass in the mapping to combine all
+// record a completed chunk for a job from nats msgs, returns ready=true and a map of all chunk paths when all video
+// chunks for the job has been recieved so the subscriber can trigger combiner.go and pass in the mapping to combine all.
+// The job's state is kept (not deleted) once ready, so a retry of the triggering chunk after a failed combine attempt
+// can still see every chunk's storage URL. Call Complete once the job has actually finished to release it.
 func (t *JobTracker) Add(jobID string, chunkIndex int, storageURL string, totalChunks int) (ready bool, chunks map[int]string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -36,10 +38,16 @@ func (t *JobTracker) Add(jobID string, chunkIndex int, storageURL string, totalC
 	state.chunks[chunkIndex] = storageURL
 
 	if len(state.chunks) == state.totalChunks {
-		chunks = state.chunks
-		delete(t.jobs, jobID)
-		return true, chunks
+		return true, state.chunks
 	}
 
 	return false, nil
+}
+
+// Complete releases a job's tracked state once it has actually finished (successfully combined and uploaded)
+func (t *JobTracker) Complete(jobID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	delete(t.jobs, jobID)
 }

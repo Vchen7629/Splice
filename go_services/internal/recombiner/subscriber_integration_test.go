@@ -237,4 +237,69 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 			return err == nil
 		}, 10*time.Second, 200*time.Millisecond, "kv entry for received chunk was never written")
 	})
+
+	t.Run("retry after transient combine failure still completes the job", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
+
+		jobID := "job-retry-after-fail"
+
+		videoFile := test.OpenTestVideo(t, "../shared/test/testvideo.mp4")
+		videoData, err := os.ReadFile(videoFile.Name())
+		require.NoError(t, err)
+
+		// chunk-0 is seeded up front; chunk-1 is NOT seeded yet, so its
+		// download fails on the first attempt (simulating a transient
+		// storage hiccup that later resolves).
+		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-0.mp4", videoData)
+
+		jobStatusKV := test.SetupJobStatusKV(t, js)
+		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
+
+		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
+		require.NoError(t, err)
+
+		completed := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.complete", func(_ *nats.Msg) {
+			completed <- struct{}{}
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		ctx := context.Background()
+		chunk1URL := fmt.Sprintf("%s/%s/processed/chunk-1.mp4", sharedFilerURL, jobID)
+
+		publishChunk := func(idx int, storageURL string) {
+			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
+				JobID:       jobID,
+				ChunkIndex:  idx,
+				TotalChunks: 2,
+				StorageURL:  storageURL,
+			})
+			require.NoError(t, err)
+			_, err = js.Publish(ctx, "jobs.chunks.complete", payload)
+			require.NoError(t, err)
+		}
+
+		publishChunk(0, fmt.Sprintf("%s/%s/processed/chunk-0.mp4", sharedFilerURL, jobID))
+		publishChunk(1, chunk1URL)
+
+		// First attempt fails to download chunk-1 since it isn't in storage yet.
+		select {
+		case <-completed:
+			t.Fatal("job completed before chunk-1 was ever available in storage")
+		case <-time.After(2 * time.Second):
+		}
+
+		// The transient failure resolves: chunk-1 becomes available and its
+		// message is redelivered/retried.
+		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-1.mp4", videoData)
+		publishChunk(1, chunk1URL)
+
+		select {
+		case <-completed:
+		case <-time.After(30 * time.Second):
+			t.Fatal("retry after transient failure never completed the job; chunk-1 was skipped as already received")
+		}
+	})
 }

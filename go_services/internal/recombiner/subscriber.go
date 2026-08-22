@@ -33,7 +33,7 @@ func RecombineVideo(
 			return
 		}
 
-		recieved, err := kv.CheckChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		recieved, err := kv.CheckChunkKV(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 		if err != nil {
 			logger.Error("failed to check chunk recieved", "err", err)
 			return
@@ -80,61 +80,75 @@ func recombineChunks(
 
 	ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.StorageURL, payload.TotalChunks)
 
-	err = kv.AddChunkProcessed(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+	// not the triggering chunk: nothing to combine yet, so this chunk's message is fully handled now
+	if !ready {
+		err = kv.AddChunkKV(msgRecievedKV, payload.JobID, payload.ChunkIndex)
+		if err != nil {
+			logger.Error("failed to mark job chunk as recieved", "err", err)
+			kv.NakWithErrHandling(logger, msg)
+			return false
+		}
+
+		kv.AckWithErrHandling(logger, msg)
+		return true
+	}
+
+	localChunks := make(map[int]string)
+	var downloadErr error
+
+	for idx, storageURL := range chunks {
+		fileName := fmt.Sprintf("processed_chunk-%s", payload.JobID)
+
+		localPath, err := storage.GetVideoChunk(storageURL, fileName)
+		if err != nil {
+			logger.Error("failed to download chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
+			downloadErr = err
+			break
+		}
+		localChunks[idx] = localPath
+	}
+	if downloadErr != nil {
+		CleanUpTempFolders(payload.JobID, logger)
+		kv.NakWithErrHandling(logger, msg)
+		return false
+	}
+
+	outputPath, err := CombineChunks(payload.JobID, localChunks)
+	if err != nil {
+		logger.Error("failed to combine chunks", "job_id", payload.JobID, "err", err)
+		CleanUpTempFolders(payload.JobID, logger)
+		kv.NakWithErrHandling(logger, msg)
+		return false
+	}
+
+	fileName := filepath.Base(outputPath)
+	url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
+
+	_, err = storage.UploadVideoChunk(url, outputPath)
+	if err != nil {
+		logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
+		CleanUpTempFolders(payload.JobID, logger)
+		kv.NakWithErrHandling(logger, msg)
+		return false
+	}
+
+	err = kv.AddChunkKV(msgRecievedKV, payload.JobID, payload.ChunkIndex)
 	if err != nil {
 		logger.Error("failed to mark job chunk as recieved", "err", err)
 		kv.NakWithErrHandling(logger, msg)
 		return false
 	}
 
-	err = msg.Ack()
+	kv.AckWithErrHandling(logger, msg)
+	tracker.Complete(payload.JobID)
+	CleanUpTempFolders(payload.JobID, logger)
+
+	logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
+
+	const pubSubject = "jobs.complete"
+	err = handler.PublishJobComplete(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 	if err != nil {
-		logger.Error("error acking msg", "err", err)
-	}
-
-	if ready {
-		localChunks := make(map[int]string)
-		failed := false
-
-		for idx, storageURL := range chunks {
-			fileName := fmt.Sprintf("processed_chunk-%s", payload.JobID)
-
-			localPath, err := storage.GetVideoChunk(storageURL, fileName)
-			if err != nil {
-				logger.Error("failed to download chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
-				failed = true
-				break
-			}
-			localChunks[idx] = localPath
-		}
-		if failed {
-			return true
-		}
-
-		outputPath, err := CombineChunks(payload.JobID, localChunks)
-		if err != nil {
-			logger.Error("failed to combine chunks", "job_id", payload.JobID, "err", err)
-			return true
-		}
-
-		fileName := filepath.Base(outputPath)
-		url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
-
-		_, err = storage.UploadVideoChunk(url, outputPath)
-		if err != nil {
-			logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
-			return true
-		}
-
-		CleanUpTempFolders(payload.JobID, logger)
-
-		logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
-
-		const pubSubject = "jobs.complete"
-		err = handler.PublishJobComplete(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
-		if err != nil {
-			logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
-		}
+		logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
 	}
 
 	return true
