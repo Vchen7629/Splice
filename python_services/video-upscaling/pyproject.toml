@@ -36,6 +36,9 @@ members = [
     "video-upscaling",
 ]
 
+[tool.uv]
+no-build-isolation-package = ["basicsr"]
+
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
