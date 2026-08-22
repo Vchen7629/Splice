@@ -305,7 +305,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11
-          working-directory: ./go_services/cmd/shared
+          working-directory: ./go_services/internal/shared
 
       - name: run tests
         working-directory: ./go_services/cmd/shared
