@@ -98,6 +98,8 @@ async def _cleanup_temp_dir(
         try:
             await asyncio.to_thread(shutil.rmtree, temp_dir)
             return
+        except FileNotFoundError:
+            return
         except OSError as e:
             if attempt == retries:
                 logger.error(
@@ -105,7 +107,7 @@ async def _cleanup_temp_dir(
                     temp_dir=temp_dir,
                     job_id=job_id,
                     attempts=attempt,
-                    err=str(e)
+                    err=str(e),
                 )
                 return
             await asyncio.sleep(delay_seconds)
