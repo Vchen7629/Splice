@@ -77,7 +77,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
 
     finally:
         try:
-            await asyncio.to_thread(shutil.rmtree, temp_dir)
+            await asyncio.to_thread(lambda: shutil.rmtree(temp_dir))
         except OSError as e:
             logger.warning("failed to clean up temp dir", temp_dir=temp_dir, err=str(e))
 

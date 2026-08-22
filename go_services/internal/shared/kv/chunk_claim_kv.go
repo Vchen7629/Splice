@@ -60,7 +60,7 @@ func ReleaseChunkClaim(claimKV jetstream.KeyValue, jobID string, chunkIndex int)
 }
 
 // atomically claims jobID/chunkIndex via claimKV and if claim succeeds runs fn
-// fn should return completed=true when work is durable persisted and false otherwise 
+// fn should return completed=true when work is durable persisted and false otherwise
 // so legitimate retry can reclaim the chunk. On success claim is left in place to
 // expire via claimKV TTL rather than released immediately
 func ClaimAndRun(
