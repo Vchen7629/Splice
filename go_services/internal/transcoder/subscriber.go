@@ -131,6 +131,17 @@ func processChunk(
 		return false
 	}
 
+	defer func() {
+		err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+		}
+		err = removeAll("/tmp/temp-processed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+		}
+	}()
+
 	err = sJetstream.PutKeyKV(processedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as processed", "err", err)
@@ -141,17 +152,6 @@ func processChunk(
 	err = msg.Ack()
 	if err != nil {
 		logger.Error("error acking msg", "err", err)
-		return true
-	}
-
-	err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
-	if err != nil {
-		logger.Warn("error removing the temp unprocessed folder", "err", err)
-		return true
-	}
-	err = removeAll("/tmp/temp-processed-" + payload.JobID)
-	if err != nil {
-		logger.Warn("error removing the temp unprocessed folder", "err", err)
 		return true
 	}
 
