@@ -146,16 +146,16 @@ func recombineChunks(
 		return false
 	}
 
-	sJetstream.AckWithErrHandling(logger, msg)
-	CleanUpTempFolders(payload.JobID, logger)
-
-	logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
-
 	const pubSubject = "jobs.complete"
 	err = sJetstream.PublishJetstreamMsg(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
 	}
+
+	sJetstream.AckWithErrHandling(logger, msg)
+	CleanUpTempFolders(payload.JobID, logger)
+
+	logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)
 
 	return true
 }
