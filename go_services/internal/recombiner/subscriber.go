@@ -25,8 +25,6 @@ func RecombineVideo(
 		return nil, err
 	}
 
-	tracker := NewJobTracker()
-
 	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
 		payload, ok := sJetstream.UnmarshalJetstreamMsg[handler.ChunkCompleteMessage](msg, logger)
 		if !ok {
@@ -46,7 +44,7 @@ func RecombineVideo(
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
-			return recombineChunks(js, jobStatusKV, msgRecievedKV, msg, tracker, payload, baseStorageURL, logger)
+			return recombineChunks(js, jobStatusKV, msgRecievedKV, msg, payload, baseStorageURL, logger)
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -71,7 +69,7 @@ func RecombineVideo(
 // returns a bool: false if any part fails and we want to stop or true if its done
 func recombineChunks(
 	js jetstream.JetStream, jobStatusKV, msgRecievedKV jetstream.KeyValue, msg jetstream.Msg,
-	tracker *JobTracker, payload handler.ChunkCompleteMessage, baseStorageURL string, logger *slog.Logger,
+	payload handler.ChunkCompleteMessage, baseStorageURL string, logger *slog.Logger,
 ) bool {
 	processingMsg, err := handler.MarshalProcessingStatusMsg("video-recombiner")
 	if err != nil {
@@ -82,7 +80,12 @@ func recombineChunks(
 		logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
 	}
 
-	ready, chunks := tracker.Add(payload.JobID, payload.ChunkIndex, payload.StorageURL, payload.TotalChunks)
+	ready, chunks, err := Add(msgRecievedKV, payload, logger)
+	if err != nil {
+		logger.Error("failed to record chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
+		sJetstream.NakWithErrHandling(logger, msg)
+		return false
+	}
 
 	// not the triggering chunk: nothing to combine yet, so this chunk's message is fully handled now
 	if !ready {
@@ -144,7 +147,6 @@ func recombineChunks(
 	}
 
 	sJetstream.AckWithErrHandling(logger, msg)
-	tracker.Complete(payload.JobID)
 	CleanUpTempFolders(payload.JobID, logger)
 
 	logger.Debug("job complete", "job_id", payload.JobID, "output_path", outputPath)

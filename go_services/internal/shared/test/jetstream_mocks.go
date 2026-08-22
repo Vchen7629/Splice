@@ -17,22 +17,47 @@ type MockKV struct {
 	CreateKey string
 	DeleteErr error
 	DeleteKey string
+
+	store map[string][]byte // backs Put/Get/ListKeysFiltered for real put-then-read callers
 }
 
 func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, error) {
 	if m.GetErr != nil {
 		return nil, m.GetErr
 	}
-	if !m.GetFound {
-		return nil, jetstream.ErrKeyNotFound
+	if value, ok := m.store[key]; ok || m.GetFound {
+		return &mockKVEntry{key: key, value: value}, nil
 	}
-	return &mockKVEntry{key: key}, nil
+	return nil, jetstream.ErrKeyNotFound
 }
 
-func (m *MockKV) Put(_ context.Context, key string, _ []byte) (uint64, error) {
+func (m *MockKV) Put(_ context.Context, key string, value []byte) (uint64, error) {
 	m.PutKey = key
-	return 0, m.PutErr
+	if m.PutErr != nil {
+		return 0, m.PutErr
+	}
+	if m.store == nil {
+		m.store = map[string][]byte{}
+	}
+	m.store[key] = value
+	return 0, nil
 }
+
+// ListKeysFiltered ignores filters and returns every stored key; unit tests only ever
+// put one job's keys per MockKV instance, so real filter matching isn't needed.
+func (m *MockKV) ListKeysFiltered(_ context.Context, _ ...string) (jetstream.KeyLister, error) {
+	keys := make(chan string, len(m.store))
+	for key := range m.store {
+		keys <- key
+	}
+	close(keys)
+	return &mockKeyLister{keys: keys}, nil
+}
+
+type mockKeyLister struct{ keys chan string }
+
+func (l *mockKeyLister) Keys() <-chan string { return l.keys }
+func (l *mockKeyLister) Stop() error         { return nil }
 
 func (m *MockKV) Create(_ context.Context, key string, _ []byte, _ ...jetstream.KVCreateOpt) (uint64, error) {
 	m.CreateKey = key
@@ -49,10 +74,12 @@ func (m *MockKV) Delete(_ context.Context, key string, _ ...jetstream.KVDeleteOp
 
 type mockKVEntry struct {
 	jetstream.KeyValueEntry
-	key string
+	key   string
+	value []byte
 }
 
-func (e *mockKVEntry) Key() string { return e.key }
+func (e *mockKVEntry) Key() string   { return e.key }
+func (e *mockKVEntry) Value() []byte { return e.value }
 
 // MockJS stubs jetstream.JetStream. Set StreamNameErr to simulate a lookup failure.
 type MockJS struct {

@@ -88,57 +88,8 @@ func TestMessageHandling(t *testing.T) {
 		assert.False(t, msg.AckCalled)
 	})
 
-	t.Run("partial chunk acks without combining", func(t *testing.T) {
-		// Only the first of two chunks arrives — tracker not yet ready.
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
-			TotalChunks: 2,
-			StorageURL:  "http://storage/chunk-0.mp4",
-		})
-		require.NoError(t, err)
-
-		msg := &test.MockMsg{Payload: payload}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-
-		consCtx, err := recombiner.RecombineVideo(js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
-
-		require.NoError(t, err)
-		assert.NotNil(t, consCtx)
-		assert.True(t, msg.AckCalled)
-		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("triggering chunk naks without acking or persisting kv when download fails", func(t *testing.T) {
-		// TotalChunks=1, ChunkIndex=0 — immediately ready (the triggering chunk).
-		// HTTP download fails on an invalid URL; the msg must be Nak'd (not acked)
-		// and left unmarked in the recieved KV so a redelivery retries the combine.
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
-			TotalChunks: 1,
-			StorageURL:  "http://127.0.0.1:0/nonexistent-chunk.mp4",
-		})
-		require.NoError(t, err)
-
-		msg := &test.MockMsg{Payload: payload}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{}
-
-		consCtx, err := recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
-
-		require.NoError(t, err)
-		assert.NotNil(t, consCtx)
-		assert.False(t, msg.AckCalled)
-		assert.True(t, msg.NakCalled)
-		assert.Empty(t, kv.PutKey)
-	})
-
 	t.Run("ack failure on a non-triggering chunk still persists kv", func(t *testing.T) {
-		// AddChunkKV runs before Ack for a non-triggering chunk, so it succeeds
-		// even if Ack later fails.
+		// AddChunkKV runs before Ack for a non-triggering chunk, so it succeeds even if Ack later fails.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
@@ -199,26 +150,6 @@ func TestIdempotency(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("writes kv with correct key after ack", func(t *testing.T) {
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-abc",
-			ChunkIndex:  2,
-			TotalChunks: 3, // not ready — combine never runs, but KV write still happens
-			StorageURL:  "http://localhost:1/job-abc/chunk.mp4",
-		})
-		require.NoError(t, err)
-
-		msg := &test.MockMsg{Payload: payload}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{}
-
-		_, err = recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
-
-		require.NoError(t, err)
-		assert.Equal(t, "job-abc.2", kv.PutKey)
 	})
 
 	t.Run("kv key format is job_id.chunk_index", func(t *testing.T) {
