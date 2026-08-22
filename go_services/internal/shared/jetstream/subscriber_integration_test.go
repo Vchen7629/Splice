@@ -1,10 +1,10 @@
 //go:build integration
 
-package handler_test
+package jetstream_test
 
 import (
 	"context"
-	"splice.com/go_services/internal/shared/handler"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
 	"testing"
 	"time"
@@ -18,7 +18,7 @@ func TestCorrectConfig(t *testing.T) {
 	ctx := context.Background()
 	js, _ := test.SetupNats(t)
 
-	cons, err := handler.CreateDurableConsumer(js, "jobs.chunks.complete", "video-recombiner", 30*time.Second)
+	cons, err := sJetstream.CreateDurableConsumer(js, "jobs.chunks.complete", "video-recombiner", 30*time.Second)
 	require.NoError(t, err)
 
 	info, err := cons.Info(ctx)

@@ -1,29 +1,31 @@
 //go:build integration
 
-package kv
+package jetstream
 
 import (
 	"context"
 	"os"
-	"splice.com/go_services/internal/shared/test"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"splice.com/go_services/internal/shared/test"
 )
 
-// connects to existing job-status bucket
-func TestConnectJobStatus(t *testing.T) {
+// connects to existing KV bucket
+func TestConnectKV(t *testing.T) {
+	const bucketName = "job-status"
+
 	t.Run("connects to existing job-status bucket", func(t *testing.T) {
 		js, _ := test.SetupNats(t)
 
 		_, err := js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{
-			Bucket: "job-status",
+			Bucket: bucketName,
 		})
 		require.NoError(t, err)
 
-		kv := ConnectJobStatus(js, test.SilentLogger())
+		kv := ConnectKV(js, bucketName, test.SilentLogger())
 
 		assert.NotNil(t, kv)
 	})
@@ -35,7 +37,7 @@ func TestConnectJobStatus(t *testing.T) {
 		osExit = func(c int) { code = c }
 		t.Cleanup(func() { osExit = os.Exit })
 
-		ConnectJobStatus(js, test.SilentLogger())
+		ConnectKV(js, bucketName, test.SilentLogger())
 
 		assert.Equal(t, 1, code)
 	})

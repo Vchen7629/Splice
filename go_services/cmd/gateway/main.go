@@ -12,6 +12,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/gateway"
 	shandler "splice.com/go_services/internal/shared/handler"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/storage"
@@ -62,7 +63,7 @@ func runGateway(cfg *Config, logger *slog.Logger, quit <-chan os.Signal) error {
 		return fmt.Errorf("unable to connect to jetstream: %w", err)
 	}
 
-	jobStatusKV := gateway.CreateJobStatusKV(js, logger)
+	jobStatusKV := sJetstream.CreateKV("job-status", js, 0, logger) // no ttl for now
 
 	advisorySub, err := gateway.ListenAdvisoriesFailure(nc, js, jobStatusKV, logger)
 	if err != nil {

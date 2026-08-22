@@ -1,11 +1,8 @@
-package handler
+package jetstream
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log/slog"
-	"splice.com/go_services/internal/shared/kv"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -40,17 +37,4 @@ func CreateDurableConsumer(js jetstream.JetStream, subSubject, consName string, 
 	}
 
 	return cons, nil
-}
-
-func UnmarshalJetstreamMsg[T any](msg jetstream.Msg, logger *slog.Logger) (T, bool) {
-	var payload T
-
-	err := json.Unmarshal(msg.Data(), &payload)
-	if err != nil {
-		logger.Error("failed to unmarshal msg from jetstream", "err", err)
-		kv.NakWithErrHandling(logger, msg)
-		return payload, false
-	}
-
-	return payload, true
 }

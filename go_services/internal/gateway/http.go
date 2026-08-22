@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/middleware"
 
 	"github.com/go-playground/validator/v10"
@@ -150,7 +151,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = handler.PublishJobComplete(
+	err = sJetstream.PublishJetstreamMsg(
 		v.js, handler.VideoJobMessage{
 			JobID: result.JobID, TargetResolution: targetRes, SourceResolution: sourceRes, StorageURL: result.StorageURL,
 		}, pubSubject,

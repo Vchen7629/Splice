@@ -7,29 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 var osExit = os.Exit
-
-// create a job status kv to publishing the processing stage update msgs
-func CreateJobStatusKV(js jetstream.JetStream, logger *slog.Logger) jetstream.KeyValue {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket:      "job-status",
-		Description: "tracks job state across the pipeline",
-	})
-	if err != nil {
-		logger.Error("failed to create job-status kv bucket", "err", err)
-		osExit(1)
-	}
-
-	return kv
-}
 
 type KVHandler struct {
 	logger *slog.Logger

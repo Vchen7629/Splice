@@ -1,10 +1,11 @@
 //go:build integration
 
-package handler
+package jetstream
 
 import (
 	"context"
 	"encoding/json"
+	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/test"
 	"testing"
 	"time"
@@ -27,19 +28,19 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		msg := ChunkCompleteMessage{
+		msg := handler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  2,
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-2.mp4",
 		}
 
-		err = PublishJobComplete(js, msg, "jobs.chunks.complete")
+		err = PublishJetstreamMsg(js, msg, "jobs.chunks.complete")
 		require.NoError(t, err)
 
 		select {
 		case data := <-received:
-			var got ChunkCompleteMessage
+			var got handler.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &got))
 			assert.Equal(t, msg, got)
 		case <-time.After(3 * time.Second):
@@ -69,7 +70,7 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
 
-		err = PublishJobComplete(js, ChunkCompleteMessage{
+		err = PublishJetstreamMsg(js, handler.ChunkCompleteMessage{
 			JobID:       "job-1",
 			ChunkIndex:  0,
 			TotalChunks: 1,
