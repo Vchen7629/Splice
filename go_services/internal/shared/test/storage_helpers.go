@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -41,7 +42,55 @@ func StartSeaweedFSFiler() (string, func()) {
 		panic("failed to get SeaweedFS filer endpoint: " + err.Error())
 	}
 
-	return endpoint, func() { _ = container.Terminate(ctx) }
+	cleanup := func() { _ = container.Terminate(ctx) }
+
+	err = waitForFilerWritable(endpoint)
+	if err != nil {
+		cleanup()
+		panic("SeaweedFS filer never became writable: " + err.Error())
+	}
+
+	return endpoint, cleanup
+}
+
+// polls the filer with real writes until one succeeds. Makes sure seaweedfs is actually
+// working to prevent flaky tests on slow infrs
+func waitForFilerWritable(filerURL string) error {
+	url := filerURL + "/health-check-tmp"
+	deadline := time.Now().Add(30*time.Second)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader([]byte("ok")))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/octet-stream")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			lastErr = err
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		_ = resp.Body.Close()
+		if resp.StatusCode < 400 {
+			del, err := http.NewRequest(http.MethodDelete, url, nil)
+			if err == nil {
+				if delResp, err := http.DefaultClient.Do(del); err == nil {
+					_ = delResp.Body.Close()
+				}
+			}
+			return nil
+		}
+
+		lastErr = fmt.Errorf("write returned status %d", resp.StatusCode)
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return lastErr
 }
 
 // OpenTestVideo opens the shared testvideo.mp4 fixture. path is relative to
