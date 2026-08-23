@@ -12,6 +12,7 @@ import time
 import threading
 import subprocess
 import numpy as np
+import torch
 
 def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     """
@@ -100,9 +101,10 @@ def video_decoder(video_path: str) -> Popen[bytes]:
     Returns:
         decoder instance
     """
-    # todo: detect cuda and switch between cpu and hwaccel
+    hwaccel_args = ["-hwaccel", "cuda", "-c:v", "h264_cuvid"] if torch.cuda.is_available() else []
+
     return subprocess.Popen([
-        "ffmpeg", "-hwaccel", "cuda", "-c:v", "h264_cuvid",
+        "ffmpeg", *hwaccel_args,
         "-i", video_path,
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
