@@ -55,7 +55,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
                 )
                 for path in chunk_paths
             ],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         for result in results:
