@@ -44,7 +44,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
             local_video_path, chunks_dir, metadata.job_id
         )
 
-        storage_urls = await asyncio.gather(
+        results = await asyncio.gather(
             *[
                 asyncio.to_thread(
                     upload_video,
@@ -54,8 +54,15 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
                     settings.SERVICE_NAME,
                 )
                 for path in chunk_paths
-            ]
+            ],
+            return_exceptions=True
         )
+
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
+
+        storage_urls = results
 
     finally:
         await _cleanup_temp_dir(temp_dir, metadata.job_id)
