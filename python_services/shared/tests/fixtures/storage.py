@@ -23,12 +23,12 @@ def patch_temp_dir(tmp_path: Any, monkeypatch: Any) -> None:
 def _wait_for_seaweedfs(
     host: str, master_port: int, filer_port: int, timeout: int = 60
 ) -> None:
-    """Poll SeaweedFS master and filer HTTP endpoints until both are ready."""
-    endpoints = [
+    """Poll SeaweedFS until master/filer HTTP endpoints respond and filer can accept a write"""
+    status_endpoints = [
         f"http://{host}:{master_port}/dir/status",
         f"http://{host}:{filer_port}/",
     ]
-    for url in endpoints:
+    for url in status_endpoints:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
@@ -40,6 +40,20 @@ def _wait_for_seaweedfs(
             time.sleep(1)
         else:
             raise TimeoutError(f"SeaweedFS not ready at {url} after {timeout}s")
+
+    probe_url = f"http://{host}:{filer_port}/_readiness_probe/{uuid.uuid4()}"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            resp = requests.put(probe_url, data=b"ready", timeout=2)
+            if resp.status_code < 300:
+                requests.delete(probe_url, timeout=2)
+                return
+        except Exception:
+            pass
+        time.sleep(1)
+
+    raise TimeoutError(f"SeaweedFS filer not accepting writes after {timeout}s")
 
 
 @pytest.fixture(scope="session")

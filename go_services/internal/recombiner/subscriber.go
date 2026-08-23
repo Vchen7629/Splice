@@ -143,6 +143,8 @@ func recombineChunks(
 	err = sJetstream.PublishJetstreamMsg(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
+		sJetstream.NakWithErrHandling(logger, msg)
+		return false
 	}
 
 	err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
