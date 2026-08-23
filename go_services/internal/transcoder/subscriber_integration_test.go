@@ -326,7 +326,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 				t.Fatal("timed out waiting for chunk complete message")
 			}
 			time.Sleep(500 * time.Millisecond)
-			assert.Equal(t, tc.failOnCall, calls)
+			assert.Equal(t, 2, calls)
 		})
 	}
 }

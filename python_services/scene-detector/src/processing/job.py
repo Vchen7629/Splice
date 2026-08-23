@@ -96,7 +96,7 @@ async def _cleanup_temp_dir(
     """remove the job's temp dir, retrying a few times"""
     for attempt in range(1, retries + 1):
         try:
-            await asyncio.to_thread(shutil.rmtree, temp_dir)
+            await asyncio.to_thread(lambda: shutil.rmtree(temp_dir))
             return
         except FileNotFoundError:
             return
