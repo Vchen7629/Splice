@@ -135,6 +135,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Install the project
         run: uv sync --locked --all-extras --dev
         working-directory: ./python_services/video-upscaling
