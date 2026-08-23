@@ -89,6 +89,17 @@ func TestTranscodeOutput(t *testing.T) {
 		require.NoError(t, err)
 		assert.DirExists(t, "/tmp/temp-processed-"+jobID)
 	})
+
+	t.Run("normalizes non-mp4 source extension to mp4 output", func(t *testing.T) {
+		jobID := "job-webm-src"
+		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
+
+		outputPath, err := transcoder.TranscodeVideo("../shared/test/testvideo.webm", "720p", jobID, test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.Equal(t, "/tmp/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
+		assert.FileExists(t, outputPath)
+	})
 }
 
 func TestTranscodeErrors(t *testing.T) {
