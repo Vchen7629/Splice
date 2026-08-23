@@ -58,11 +58,11 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
             return_exceptions=True,
         )
 
+        storage_urls: list[str] = []
         for result in results:
             if isinstance(result, BaseException):
                 raise result
-
-        storage_urls = results
+            storage_urls.append(result)
 
     finally:
         await _cleanup_temp_dir(temp_dir, metadata.job_id)
