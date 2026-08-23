@@ -14,53 +14,69 @@ interface Segment {
  * The backend reports a real `stage` per job, and file-upscaling additionally reports
  * a frame-level `progress`. Both pipelines run detect → work → recombine.
  */
-const STAGES: Record<'upscale' | 'default', { key: string; label: string }[]> = {
-    upscale: [
+const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: string; label: string }[]> = {
+    Upscale: [
         { key: 'scene-detector',   label: 'Detect' },
         { key: 'video-upscaling',  label: 'Upscale' },
         { key: 'video-recombiner', label: 'Recombine' },
     ],
-    default: [
+    Transcode: [
         { key: 'scene-detector',   label: 'Detect' },
         { key: 'transcoder',       label: 'Transcode' },
         { key: 'video-recombiner', label: 'Recombine' },
     ],
+    Denoise: [
+        { key: 'scene-detector',   label: 'Detect' },
+        { key: 'denoiser',         label: 'Denoise' },
+        { key: 'video-recombiner', label: 'Recombine' },
+    ],
+    Convert: [
+        { key: 'converter',        label: 'Convert' },
+    ],
 }
+
+const UPLOAD_STEP = { key: 'upload', label: 'Upload'}
 
 /** Maps a file's status/stage to each pipeline segment's visual state and fill %. */
 function pipelineSegments(file: UploadedFile, processingType: ProcessingType): Segment[] {
-    const stages = STAGES[processingType === 'Upscale' ? 'upscale' : 'default']
+    const steps = [UPLOAD_STEP, ...STAGES[processingType]]
 
     if (file.status === 'complete') {
-        return stages.map(s => ({ ...s, state: 'done' as const, fill: 100 }))
+        return steps.map(s => ({ ...s, state: 'done' as const, fill: 100 }))
     }
 
-    if (file.status === 'uploading' || file.status === 'pending') {
-        return stages.map(s => ({ ...s, state: 'pending' as const, fill: 0 }))
+    if (file.status === 'pending') {
+        return steps.map(s => ({ ...s, state: 'pending' as const, fill: 0 }))
     }
 
-    const activeIdx = stages.findIndex(s => s.key === file.stage)
+    if (file.status === 'uploading') {
+        return steps.map((s, i) => i === 0 
+            ? { ...s, state: 'active' as const, fill: file.uploadProgress }
+            : { ...s, state: 'pending' as const, fill: 0})
+    }
 
-    return stages.map((stage, i) => {
-        if (activeIdx === -1) return { ...stage, state: 'pending' as const, fill: 0 }
-        if (i < activeIdx) return { ...stage, state: 'done' as const, fill: 100 }
-        if (i > activeIdx) return { ...stage, state: 'pending' as const, fill: 0 }
+    // Processing: upload is done, find the active backend stage among the rest.
+    const activeIdx = 1 + steps.slice(1).findIndex(s => s.key === file.stage)
 
+    return steps.map((step, i) => {
+        if (i === 0) return { ...step, state: 'done' as const, fill: 100 }
+        if (activeIdx === 0) return { ...step, state: 'pending' as const, fill: 0 }
+        if (i < activeIdx) return { ...step, state: 'done' as const, fill: 100 }
+        if (i > activeIdx) return { ...step, state: 'pending' as const, fill: 0 }
+
+        // TODO: update this in the future to show granular progress
         // Only video-upscaling reports intra-stage progress; everything else shows an
         // indeterminate half-fill rather than a number the backend never sent. Default
         // video-upscaling to 0 (not 50) while waiting for its first progress poll, so
         // the bar doesn't jump to a fake midpoint and then snap back down.
-        const fill = stage.key === 'video-upscaling'
-            ? file.jobProgress ?? 0
-            : 50
+        const fill = step.key === 'video-upscaling' ? file.jobProgress ?? 0 : 50
 
-        return { ...stage, state: 'active' as const, fill }
+        return { ...step, state: 'active' as const, fill }
     })
 }
 
 /**
- * Three-segment track replacing a flat progress bar. Each segment is a real backend
- * stage, so the bar says *where* a job is, not just how far along it is.
+ * 4 segment track with each segment showing where the progress for the current job is
  */
 const PipelineProgress = ({
     file,
@@ -73,24 +89,6 @@ const PipelineProgress = ({
 }) => {
     const segments = pipelineSegments(file, processingType)
     const fillClass = STATUS_BG[file.status]
-
-    if (file.status === 'uploading') {
-        return (
-            <div className="flex flex-col gap-1">
-                <div className="h-[3px] w-full rounded-full bg-track overflow-hidden">
-                    <div
-                        className="h-full rounded-full bg-status-upload transition-all duration-300"
-                        style={{ width: `${file.uploadProgress}%` }}
-                    />
-                </div>
-                {showLabels && (
-                    <span className="font-mono text-eyebrow uppercase text-fg-faint">
-                        Uploading {file.uploadProgress}%
-                    </span>
-                )}
-            </div>
-        )
-    }
 
     return (
         <div className="flex flex-col gap-1">
