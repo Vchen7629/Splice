@@ -18,8 +18,10 @@ func TranscodeVideo(filePath, target_resolution, jobID string, logger *slog.Logg
 	if err != nil {
 		return "", fmt.Errorf("create output dir error: %w", err)
 	}
+	// output must always be mp4 since always re-encoded to h264
 	filename := filepath.Base(filePath)
-	outputPath := filepath.Join(outDir, filename)
+	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
+	outputPath := filepath.Join(outDir, stem+".mp4")
 	height := strings.TrimSuffix(target_resolution, "p")
 
 	cmd := exec.Command(
