@@ -51,9 +51,12 @@ def test_video_downscale_raises_runtime_error_when_ffmpeg_fails() -> None:
 
 
 def test_video_decoder_calls_popen_with_video_path() -> None:
-    with patch(
-        "src.processing.video.subprocess.Popen", return_value=MagicMock()
-    ) as mock_popen:
+    with (
+        patch("src.processing.video.torch.cuda.is_available", return_value=False),
+        patch(
+            "src.processing.video.subprocess.Popen", return_value=MagicMock()
+        ) as mock_popen,
+    ):
         video_decoder("/tmp/input.mp4")
 
         args = mock_popen.call_args[0][0]
@@ -62,23 +65,32 @@ def test_video_decoder_calls_popen_with_video_path() -> None:
 
 def test_video_decoder_returns_popen_instance() -> None:
     mock_proc = MagicMock()
-    with patch("src.processing.video.subprocess.Popen", return_value=mock_proc):
+    with (
+        patch("src.processing.video.torch.cuda.is_available", return_value=False),
+        patch("src.processing.video.subprocess.Popen", return_value=mock_proc),
+    ):
         assert video_decoder("/tmp/input.mp4") is mock_proc
 
 
 def test_video_decoder_opens_stdout_pipe() -> None:
-    with patch(
-        "src.processing.video.subprocess.Popen", return_value=MagicMock()
-    ) as mock_popen:
+    with (
+        patch("src.processing.video.torch.cuda.is_available", return_value=False),
+        patch(
+            "src.processing.video.subprocess.Popen", return_value=MagicMock()
+        ) as mock_popen,
+    ):
         video_decoder("/tmp/input.mp4")
 
         assert mock_popen.call_args[1]["stdout"] == subprocess.PIPE
 
 
 def test_video_decoder_outputs_rgb24() -> None:
-    with patch(
-        "src.processing.video.subprocess.Popen", return_value=MagicMock()
-    ) as mock_popen:
+    with (
+        patch("src.processing.video.torch.cuda.is_available", return_value=False),
+        patch(
+            "src.processing.video.subprocess.Popen", return_value=MagicMock()
+        ) as mock_popen,
+    ):
         video_decoder("/tmp/input.mp4")
 
         args = mock_popen.call_args[0][0]

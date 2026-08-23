@@ -101,13 +101,41 @@ def video_decoder(video_path: str) -> Popen[bytes]:
     Returns:
         decoder instance
     """
-    hwaccel_args = ["-hwaccel", "cuda", "-c:v", "h264_cuvid"] if torch.cuda.is_available() else []
+    hwaccel_args: list[str] = []
+    if torch.cuda.is_available():
+        codec = _probe_video_codec(video_path)
+        cuvid_decoder = _CUVID_DECODERS.get(codec)
+        if cuvid_decoder is not None:
+            hwaccel_args = ["-hwaccel", "cuda", "-c:v", cuvid_decoder]
 
     return subprocess.Popen([
         "ffmpeg", *hwaccel_args,
         "-i", video_path,
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+# maps ffprobe codec_name to matching NVDEC (cuvid) decoder
+_CUVID_DECODERS = {
+    "h264": "h264_cuvid",
+    "hevc": "hevc_cuvid",
+    "vp8": "vp8_cuvid",
+    "vp9": "vp9_cuvid",
+    "mpeg2video": "mpeg2_cuvid",
+    "mpeg4": "mpeg4_cuvid",
+    "av1": "av1_cuvid"
+}
+
+def _probe_video_codec(video_path: str) -> str:
+    """Use ffprobe to get the video stream's codec name"""
+    probe = subprocess.run([
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "csv=p=0",
+        video_path
+    ], capture_output=True, text=True, check=True)
+
+    return probe.stdout.strip()
 
 def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[bytes]:
     """
