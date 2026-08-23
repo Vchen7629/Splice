@@ -97,19 +97,47 @@ def test_video_decoder_outputs_rgb24() -> None:
         assert "rgb24" in args
 
 
+def test_video_upscale_encoder_uses_job_scoped_temp_path(
+    video_upscale_patches: dict[str, Any],
+) -> None:
+    """2 jobs should not write their output to same path which would cause leakage between diff jobs"""
+    video_upscale_patches["decoder"].return_value = make_fake_decoder([])
+    video_upscale("job_id1", "/tmp/input.mp4", Path("/weights/model.pth"), 2)
+    out_path_a = video_upscale_patches["encoder"].call_args[0][3]
+
+    video_upscale_patches["decoder"].return_value = make_fake_decoder([])
+    video_upscale("job_id2", "/tmp/input.mp4", Path("/weights/model.pth"), 2)
+    out_path_b = video_upscale_patches["encoder"].call_args[0][3]
+
+    assert out_path_a == "/tmp/upscaled_noaudio-job_id1.mp4"
+    assert out_path_b == "/tmp/upscaled_noaudio-job_id2.mp4"
+
+
+def test_recombine_video_audio_reads_job_scoped_temp_path() -> None:
+    with patch("src.processing.video.subprocess.run") as mock_run:
+        recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
+        input_a = mock_run.call_args[0][0][mock_run.call_args[0][0].index("-i") + 1]
+
+        recombine_video_audio("job_id2", "/tmp/original.mp4", "/tmp/final.mp4")
+        input_b = mock_run.call_args[0][0][mock_run.call_args[0][0].index("-i") + 1]
+
+    assert input_a == "/tmp/upscaled_noaudio-job_id1.mp4"
+    assert input_b == "/tmp/upscaled_noaudio-job_id2.mp4"
+
+
 def test_recombine_video_audio_calls_subprocess_run() -> None:
     with patch("src.processing.video.subprocess.run") as mock_run:
-        recombine_video_audio("/tmp/original.mp4", "/tmp/final.mp4")
+        recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
 
         mock_run.assert_called_once()
 
 
 def test_recombine_video_audio_passes_correct_paths() -> None:
     with patch("src.processing.video.subprocess.run") as mock_run:
-        recombine_video_audio("/tmp/original.mp4", "/tmp/final.mp4")
+        recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
 
         args = mock_run.call_args[0][0]
-        assert "/tmp/upscaled_noaudio.mp4" in args
+        assert "/tmp/upscaled_noaudio-job_id1.mp4" in args
         assert "/tmp/original.mp4" in args
         assert "/tmp/final.mp4" in args
 
@@ -141,7 +169,7 @@ def test_video_upscale_flushes_all_frames(
 
     video_upscale_patches["flush"].side_effect = capture_flush
 
-    video_upscale("/tmp/input.mp4", Path("/weights/model.pth"), 2)
+    video_upscale("jobid1", "/tmp/input.mp4", Path("/weights/model.pth"), 2)
 
     assert sum(flushed) == n_frames
 
@@ -152,7 +180,7 @@ def test_video_upscale_loads_model_with_correct_args(
     video_upscale_patches["decoder"].return_value = make_fake_decoder([])
 
     model_path = Path("/weights/model.pth")
-    video_upscale("/tmp/input.mp4", model_path, 2)
+    video_upscale("job_id1", "/tmp/input.mp4", model_path, 2)
 
     video_upscale_patches["load"].assert_called_once_with(model_path, 2)
 
@@ -164,8 +192,8 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
     video_upscale_patches["info"].return_value = (w, h, 24.0, 22)
     video_upscale_patches["decoder"].return_value = make_fake_decoder([])
 
-    video_upscale("/tmp/input.mp4", Path("/weights/model.pth"), scale)
+    video_upscale("job_id1", "/tmp/input.mp4", Path("/weights/model.pth"), scale)
 
     video_upscale_patches["encoder"].assert_called_once_with(
-        24.0, w * scale, h * scale, "/tmp/upscaled_noaudio.mp4"
+        24.0, w * scale, h * scale, "/tmp/upscaled_noaudio-job_id1.mp4"
     )

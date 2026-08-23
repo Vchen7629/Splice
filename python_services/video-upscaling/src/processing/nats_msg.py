@@ -115,6 +115,7 @@ async def process_msg(
 
         await asyncio.to_thread(
             video_upscale,
+            metadata.job_id,
             local_video_path,
             model_path,
             resolution_scale,
@@ -127,6 +128,7 @@ async def process_msg(
         )
         await asyncio.to_thread(
             recombine_video_audio,
+            metadata.job_id,
             local_video_path,
             temp_file_loc,
             metadata.target_resolution,
