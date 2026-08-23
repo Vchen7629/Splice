@@ -130,7 +130,9 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	case "Convert":
 		pubSubject = "jobs.video.convert"
 	default:
-		pubSubject = "jobs.video.scene-split"
+		http.Error(w, "invalid process_type field", http.StatusBadRequest)
+		v.logger.Error("invalid process_type field", "process_type", processType)
+		return
 	}
 
 	v.logger.Debug("pubsubject called", "subject", pubSubject)
