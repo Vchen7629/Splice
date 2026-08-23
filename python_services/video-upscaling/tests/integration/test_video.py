@@ -94,12 +94,18 @@ def test_recombine_video_audio_scales_to_target_resolution(
     )
 
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(one_frame_video), "/tmp/upscaled_noaudio.mp4"],
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(one_frame_video),
+            "/tmp/upscaled_noaudio-job_id1.mp4",
+        ],
         check=True,
         stderr=subprocess.DEVNULL,
     )
     output = tmp_path / "recombined.mp4"
-    recombine_video_audio(str(TEST_VIDEO), str(output), target_res="1440p")
+    recombine_video_audio("job_id1", str(TEST_VIDEO), str(output), target_res="1440p")
 
     _, out_h, _, _ = extract_video_info(str(output))
     assert out_h == 1440
@@ -136,9 +142,9 @@ def test_recombine_video_audio_output_has_audio_stream(recombined_video: Path) -
 def test_video_upscale_produces_output_file(
     one_frame_video: Path, filename: str, scale: int
 ) -> None:
-    output = Path("/tmp/upscaled_noaudio.mp4")
+    output = Path("/tmp/upscaled_noaudio-jobid1.mp4")
     output.unlink(missing_ok=True)
-    video_upscale(str(one_frame_video), WEIGHTS_DIR / filename, scale)
+    video_upscale("jobid1", str(one_frame_video), WEIGHTS_DIR / filename, scale)
 
     assert output.exists()
     assert output.stat().st_size > 0
@@ -156,10 +162,10 @@ def test_video_upscale_output_has_correct_resolution(
     one_frame_video: Path, filename: str, scale: int
 ) -> None:
     src_w, src_h, _, _ = extract_video_info(str(one_frame_video))
-    output = "/tmp/upscaled_noaudio.mp4"
+    output = "/tmp/upscaled_noaudio-job_id1.mp4"
     Path(output).unlink(missing_ok=True)
 
-    video_upscale(str(one_frame_video), WEIGHTS_DIR / filename, scale)
+    video_upscale("job_id1", str(one_frame_video), WEIGHTS_DIR / filename, scale)
 
     out_w, out_h, _, _ = extract_video_info(output)
     assert out_w == src_w * scale

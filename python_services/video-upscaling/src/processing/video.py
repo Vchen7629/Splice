@@ -59,19 +59,20 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     return int(w), int(h), fps, int(nb_frames)
 
 def recombine_video_audio(
-    video_path: str, output_path: str, target_res: str | None = None
+    job_id: str, video_path: str, output_path: str, target_res: str | None = None
 ) -> None:
     """
     Use ffmpeg to recombine the no audio upscaled video with the original audio
 
     Args:
+        job_id: the id to identify the temp video with no audio to recombine audio on
         video_path: path to the original video with audio
         output_path: the path to save the combined video to
         target_res: if given scales the video to exact resolution
     """
     cmd = [
         "ffmpeg", "-y",
-        "-i", "/tmp/upscaled_noaudio.mp4",
+        "-i", f"/tmp/upscaled_noaudio-{job_id}.mp4",
         "-i", video_path,
         "-map", "0:v", "-map", "1:a?",
     ]
@@ -202,6 +203,7 @@ def video_downscale(video_path: str, target_res: str, output_path: str) -> None:
 
 
 def video_upscale(
+    job_id: str,
     video_path: str, 
     model_path: Path, 
     scale: int, 
@@ -215,7 +217,7 @@ def video_upscale(
     upsampler = load_model(model_path, scale)
 
     decoder = video_decoder(video_path)
-    encoder = video_encoder(fps, out_w, out_h, "/tmp/upscaled_noaudio.mp4")
+    encoder = video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4")
 
     encode_queue: Queue[Optional[bytes]] = Queue(maxsize=4)
 

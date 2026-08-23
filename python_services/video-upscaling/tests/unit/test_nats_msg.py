@@ -92,6 +92,7 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
     await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
 
     nats_msg_patches["upscale"].assert_called_once_with(
+        "abc",
         "/tmp/video.mp4",
         model_path,
         4,

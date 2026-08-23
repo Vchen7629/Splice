@@ -26,14 +26,20 @@ def one_frame_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture()
 def recombined_video(one_frame_video: Path, tmp_path: Path) -> Path:
-    """Place 1-frame clip at the hardcoded noaudio path, recombine with original audio."""
+    """Place 1-frame clip at the job-scoped noaudio path, recombine with original audio."""
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(one_frame_video), "/tmp/upscaled_noaudio.mp4"],
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(one_frame_video),
+            "/tmp/upscaled_noaudio-job_id1.mp4",
+        ],
         check=True,
         stderr=subprocess.DEVNULL,
     )
     output = tmp_path / "recombined.mp4"
-    recombine_video_audio(str(TEST_VIDEO), str(output))
+    recombine_video_audio("job_id1", str(TEST_VIDEO), str(output))
     return output
 
 
