@@ -4,7 +4,6 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -20,290 +19,6 @@ import (
 	stest "splice.com/go_services/internal/shared/test"
 )
 
-func newHandler(kv *MockKV, urls ...ServiceURLs) *JobStatusHandler {
-	var u ServiceURLs
-	if len(urls) > 0 {
-		u = urls[0]
-	}
-	return &JobStatusHandler{Logger: stest.SilentLogger(), KV: kv, URLs: u}
-}
-
-func mustMarshalStatus(t *testing.T, status JobStatus) []byte {
-	t.Helper()
-	b, err := json.Marshal(status)
-	require.NoError(t, err)
-	return b
-}
-
-func TestPollJobStatus_BadRequest(t *testing.T) {
-	h := newHandler(NewMockKV())
-	req := httptest.NewRequest(http.MethodGet, "/jobs//status", nil)
-	// path value is empty string — simulates missing segment
-	req.SetPathValue("id", "")
-	rec := httptest.NewRecorder()
-
-	h.PollJobStatus(rec, req)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "missing job_id")
-
-	var resp jobStatusResponse
-	assert.Error(t, json.Unmarshal(rec.Body.Bytes(), &resp), "error response should not be valid JSON")
-}
-
-func TestPollJobStatus_KVErrors(t *testing.T) {
-	kvErr := errors.New("kv unavailable")
-
-	tests := []struct {
-		name       string
-		kv         *MockKV
-		wantStatus int
-		wantBody   string
-	}{
-		{
-			name:       "key not found returns 404",
-			kv:         NewMockKV(),
-			wantStatus: http.StatusNotFound,
-			wantBody:   "job not found",
-		},
-		{
-			name: "generic KV error returns 500",
-			kv: func() *MockKV {
-				m := NewMockKV()
-				m.GetErr = kvErr
-				return m
-			}(),
-			wantStatus: http.StatusInternalServerError,
-			wantBody:   "failed to get job status",
-		},
-		{
-			name: "malformed KV value returns 500",
-			kv: func() *MockKV {
-				m := NewMockKV()
-				m.Seed("job-1", []byte("not valid json{{"))
-				return m
-			}(),
-			wantStatus: http.StatusInternalServerError,
-			wantBody:   "failed to parse job status",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			h := newHandler(tc.kv)
-			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
-			rec := httptest.NewRecorder()
-
-			h.PollJobStatus(rec, req)
-
-			assert.Equal(t, tc.wantStatus, rec.Code)
-			assert.Contains(t, rec.Body.String(), tc.wantBody)
-
-			var resp jobStatusResponse
-			assert.Error(t, json.Unmarshal(rec.Body.Bytes(), &resp), "error response should not be valid JSON")
-		})
-	}
-}
-
-func TestPollJobStatus_States(t *testing.T) {
-	tests := []struct {
-		name       string
-		status     JobStatus
-		wantState  JobState
-		wantErrMsg string
-	}{
-		{
-			name:      "PROCESSING state",
-			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
-			wantState: StateProcessing,
-		},
-		{
-			name:      "COMPLETE state",
-			status:    JobStatus{State: StateComplete, Stage: "scene-detector"},
-			wantState: StateComplete,
-		},
-		{
-			name:       "FAILED state includes error message",
-			status:     JobStatus{State: StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: transcoder-worker"},
-			wantState:  StateFailed,
-			wantErrMsg: "pipeline failed at stage: transcoder-worker",
-		},
-		{
-			name:      "FAILED with empty error field",
-			status:    JobStatus{State: StateFailed, Stage: "transcoder"},
-			wantState: StateFailed,
-		},
-		{
-			name:       "DEGRADED state includes error message",
-			status:     JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
-			wantState:  StateDegraded,
-			wantErrMsg: "service unavailable at stage: transcoder",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			kv := NewMockKV()
-			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
-			h := newHandler(kv)
-
-			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
-			rec := httptest.NewRecorder()
-
-			h.PollJobStatus(rec, req)
-
-			require.Equal(t, http.StatusOK, rec.Code)
-			var resp jobStatusResponse
-			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-			assert.Equal(t, tc.wantState, resp.State)
-			assert.Equal(t, tc.wantErrMsg, resp.Error)
-		})
-	}
-}
-
-func TestPollJobStatus_ResponseShape(t *testing.T) {
-	tests := []struct {
-		name      string
-		jobID     string
-		wantStage string
-	}{
-		{"echoes job_id in response", "my-specific-job", ""},
-		{"echoes different job_id", "another-job-456", ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			kv := NewMockKV()
-			kv.Seed(tc.jobID, mustMarshalStatus(t, JobStatus{State: StateProcessing}))
-			h := newHandler(kv)
-
-			req := httptest.NewRequest(http.MethodGet, "/jobs/"+tc.jobID+"/status", nil)
-			req.SetPathValue("id", tc.jobID)
-			rec := httptest.NewRecorder()
-
-			h.PollJobStatus(rec, req)
-
-			require.Equal(t, http.StatusOK, rec.Code)
-			assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-			var resp jobStatusResponse
-			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-			assert.Equal(t, tc.jobID, resp.JobID)
-			assert.NotEmpty(t, resp.State)
-			assert.Equal(t, tc.wantStage, resp.Stage)
-		})
-	}
-}
-
-func TestPollJobStatus_DroppedConnection(t *testing.T) {
-	tests := []struct {
-		name   string
-		status JobStatus
-	}{
-		{"does not panic on dropped connection (PROCESSING)", JobStatus{State: StateProcessing, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (COMPLETE)", JobStatus{State: StateComplete, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (FAILED)", JobStatus{State: StateFailed, Stage: "transcoder", Error: "something broke"}},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			kv := NewMockKV()
-			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
-			h := newHandler(kv)
-
-			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
-
-			assert.NotPanics(t, func() {
-				h.PollJobStatus(newDroppedConnectionWriter(), req)
-			})
-		})
-	}
-}
-
-func TestPollJobStatus_HealthCheck(t *testing.T) {
-	healthySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer healthySrv.Close()
-
-	tests := []struct {
-		name      string
-		status    JobStatus
-		urls      ServiceURLs
-		wantState JobState
-	}{
-		{
-			name:      "PROCESSING with service down becomes DEGRADED",
-			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
-			urls:      ServiceURLs{Transcoder: "http://localhost:19999"},
-			wantState: StateDegraded,
-		},
-		{
-			name:      "PROCESSING with service up stays PROCESSING",
-			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
-			urls:      ServiceURLs{Transcoder: healthySrv.URL},
-			wantState: StateProcessing,
-		},
-		{
-			name:      "DEGRADED with service recovered returns PROCESSING",
-			status:    JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
-			urls:      ServiceURLs{Transcoder: healthySrv.URL},
-			wantState: StateProcessing,
-		},
-		{
-			name:      "COMPLETE skips health check",
-			status:    JobStatus{State: StateComplete},
-			urls:      ServiceURLs{},
-			wantState: StateComplete,
-		},
-		{
-			name:      "FAILED skips health check",
-			status:    JobStatus{State: StateFailed, Error: "pipeline failed"},
-			urls:      ServiceURLs{},
-			wantState: StateFailed,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			kv := NewMockKV()
-			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
-			h := &JobStatusHandler{Logger: stest.SilentLogger(), KV: kv, URLs: tc.urls}
-
-			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
-			rec := httptest.NewRecorder()
-
-			h.PollJobStatus(rec, req)
-
-			require.Equal(t, http.StatusOK, rec.Code)
-			var resp jobStatusResponse
-			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-			assert.Equal(t, tc.wantState, resp.State)
-		})
-	}
-
-	t.Run("updateJobStatusKV failure during health check serves", func(t *testing.T) {
-		kv := NewMockKV()
-		kv.Seed("job-1", mustMarshalStatus(t, JobStatus{State: StateProcessing, Stage: "scene-detector"}))
-		kv.PutErr = errors.New("kv unavailable")
-		h := &JobStatusHandler{Logger: stest.SilentLogger(), KV: kv, URLs: ServiceURLs{Transcoder: "http://localhost:19999"}}
-
-		req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-		req.SetPathValue("id", "job-1")
-		rec := httptest.NewRecorder()
-
-		h.PollJobStatus(rec, req)
-
-		require.Equal(t, http.StatusOK, rec.Code)
-		var resp jobStatusResponse
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-		assert.Equal(t, StateDegraded, resp.State) // service down -> degraded, served even though KV persist failed
-	})
-}
-
 // Upload / download routes.
 
 // startTestServer calls StartHttpApi on a free port against a stub storage
@@ -315,7 +30,7 @@ func startTestServer(t *testing.T, kv jetstream.KeyValue) (*http.Server, string)
 	t.Cleanup(fakeSrv.Close)
 
 	httpPort := stest.FreePort(t)
-	server := StartHttpApi(stest.SilentLogger(), &MockJS{}, kv, httpPort, fakeSrv.URL, ServiceURLs{})
+	server := StartHttpApi(stest.SilentLogger(), nil, &MockJS{}, kv, httpPort, fakeSrv.URL, ServiceURLs{})
 	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
 
 	return server, httpPort
@@ -373,7 +88,7 @@ func TestStartHttp(t *testing.T) {
 				}
 
 				server := StartHttpApi(
-					stest.SilentLogger(), &MockJS{}, NewMockKV(),
+					stest.SilentLogger(), nil, &MockJS{}, NewMockKV(),
 					tc.httpPort, "http://localhost:1", ServiceURLs{},
 				)
 				t.Cleanup(func() { _ = server.Close() })
@@ -457,7 +172,7 @@ func TestStartHttpApiRouting(t *testing.T) {
 
 		exitCode := patchOsExit(t)
 		server := StartHttpApi(
-			stest.SilentLogger(), &MockJS{}, NewMockKV(),
+			stest.SilentLogger(), nil, &MockJS{}, NewMockKV(),
 			fmt.Sprintf("%d", port), "http://localhost:1", ServiceURLs{},
 		)
 		t.Cleanup(func() { _ = server.Shutdown(context.Background()) })

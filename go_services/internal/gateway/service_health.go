@@ -6,34 +6,22 @@ import (
 	"time"
 )
 
-// need this because we are checking the next service
-// from the current processing stage and used for the
-// error msg
-var nextService = map[string]string{
-	"upload":         "scene-detector",
-	"scene-detector": "transcoder",
-	"transcoder":     "video-recombiner",
-}
-
 type ServiceURLs struct {
-	SceneDetector string
-	Transcoder    string
-	Recombiner    string
+	SceneDetector  string
+	Transcoder     string
+	Recombiner     string
+	VideoUpscaling string
 }
 
 func (s ServiceURLs) forStage(stage string) (string, bool) {
-	next, ok := nextService[stage]
-	if !ok {
-		return "", false
-	}
-
 	urls := map[string]string{
 		"scene-detector":   s.SceneDetector,
 		"transcoder":       s.Transcoder,
 		"video-recombiner": s.Recombiner,
+		"video-upscaling":  s.VideoUpscaling,
 	}
 
-	url, ok := urls[next]
+	url, ok := urls[stage]
 	if !ok || url == "" {
 		return "", false
 	}
