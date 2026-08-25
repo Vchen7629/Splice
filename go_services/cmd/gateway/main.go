@@ -21,13 +21,14 @@ import (
 var natsConnect = nats.Connect
 
 type Config struct {
-	NatsURL          string `envconfig:"NATS_URL"           default:"nats://localhost:4222"`
-	ProdMode         bool   `envconfig:"PROD_MODE"          default:"false"`
-	StorageURL       string `envconfig:"STORAGE_URL"        default:"http://localhost:8888"`
-	HTTPPort         string `envconfig:"HTTP_PORT"          default:"8080"`
-	SceneDetectorURL string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
-	TranscoderURL    string `envconfig:"TRANSCODER_URL"     default:"http://localhost:9095"`
-	RecombinerURL    string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
+	NatsURL           string `envconfig:"NATS_URL"           default:"nats://localhost:4222"`
+	ProdMode          bool   `envconfig:"PROD_MODE"          default:"false"`
+	StorageURL        string `envconfig:"STORAGE_URL"        default:"http://localhost:8888"`
+	HTTPPort          string `envconfig:"HTTP_PORT"          default:"8080"`
+	SceneDetectorURL  string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
+	TranscoderURL     string `envconfig:"TRANSCODER_URL"     default:"http://localhost:9095"`
+	RecombinerURL     string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
+	VideoUpscalingURL string `envconfig:"VIDEO_UPSCALING_URL" default:"http://localhost:9101"`
 }
 
 func main() {
@@ -82,11 +83,12 @@ func runGateway(cfg *Config, logger *slog.Logger, quit <-chan os.Signal) error {
 	logger.Debug("starting service...")
 
 	server := gateway.StartHttpApi(
-		logger, js, jobStatusKV, cfg.HTTPPort, cfg.StorageURL,
+		logger, nc, js, jobStatusKV, cfg.HTTPPort, cfg.StorageURL,
 		gateway.ServiceURLs{
-			SceneDetector: cfg.SceneDetectorURL,
-			Transcoder:    cfg.TranscoderURL,
-			Recombiner:    cfg.RecombinerURL,
+			SceneDetector:  cfg.SceneDetectorURL,
+			Transcoder:     cfg.TranscoderURL,
+			Recombiner:     cfg.RecombinerURL,
+			VideoUpscaling: cfg.VideoUpscalingURL,
 		},
 	)
 

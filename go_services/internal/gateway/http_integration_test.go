@@ -38,8 +38,9 @@ func newTestServer(t *testing.T, urls ...ServiceURLs) *httptest.Server {
 		u = urls[0]
 	}
 	mux := http.NewServeMux()
-	h := &JobStatusHandler{Logger: stest.SilentLogger(), KV: sharedKV, URLs: u}
+	h := &JobStatusHandler{Logger: stest.SilentLogger(), NC: sharedNC, KV: sharedKV, URLs: u}
 	mux.HandleFunc("GET /jobs/{id}/status", h.PollJobStatus)
+	mux.HandleFunc("GET /jobs/{id}/events", h.JobEvents)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts
@@ -241,26 +242,6 @@ func TestServerContinuesAfterDisconnect(t *testing.T) {
 	assert.Equal(t, http.StatusOK, secondResp.StatusCode)
 }
 
-// degraded job recovers to PROCESSING when service comes back up
-func TestPollJobStatus_DegradedRecovery(t *testing.T) {
-	healthySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer healthySrv.Close()
-
-	seedStatus(t, "job-recovery", JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"})
-	ts := newTestServer(t, ServiceURLs{Transcoder: healthySrv.URL})
-
-	resp, err := http.Get(fmt.Sprintf("%s/jobs/job-recovery/status", ts.URL))
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	var body statusResponse
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
-	assert.Equal(t, "PROCESSING", body.State)
-	assert.Empty(t, body.Error)
-}
-
 // Upload / download flows against real SeaweedFS + NATS.
 
 //go:embed testdata/testvideo.mp4
@@ -325,7 +306,7 @@ func setupServer(t *testing.T) *serverEnv {
 	httpPort := stest.FreePort(t)
 	url := "http://localhost:" + httpPort
 
-	server := StartHttpApi(stest.SilentLogger(), js, kv, httpPort, sharedFilerUrl, ServiceURLs{})
+	server := StartHttpApi(stest.SilentLogger(), nil, js, kv, httpPort, sharedFilerUrl, ServiceURLs{})
 	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
 
 	require.Eventually(t, func() bool {

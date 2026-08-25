@@ -57,7 +57,7 @@ func StartSeaweedFSFiler() (string, func()) {
 // working to prevent flaky tests on slow infrs
 func waitForFilerWritable(filerURL string) error {
 	url := filerURL + "/health-check-tmp"
-	deadline := time.Now().Add(30*time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	var lastErr error
 
 	for time.Now().Before(deadline) {

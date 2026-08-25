@@ -92,6 +92,7 @@ type MockKV struct {
 	jetstream.KeyValue
 	GetErr    error
 	PutErr    error
+	WatchErr  error
 	PutCalled atomic.Bool
 	entries   map[string][]byte
 }
@@ -123,6 +124,22 @@ func (m *MockKV) Put(_ context.Context, _ string, _ []byte) (uint64, error) {
 	m.PutCalled.Store(true)
 	return 0, m.PutErr
 }
+
+func (m *MockKV) Watch(_ context.Context, _ string, _ ...jetstream.WatchOpt) (jetstream.KeyWatcher, error) {
+	if m.WatchErr != nil {
+		return nil, m.WatchErr
+	}
+
+	return &MockKeyWatcher{updates: make(chan jetstream.KeyValueEntry)}, nil
+}
+
+// stubs jetstream.KeyWatcher. Only used to satisfy MockKV.Watch's success return type
+type MockKeyWatcher struct {
+	updates chan jetstream.KeyValueEntry
+}
+
+func (w *MockKeyWatcher) Updates() <-chan jetstream.KeyValueEntry { return w.updates }
+func (w *MockKeyWatcher) Stop() error                             { return nil }
 
 // MockKVEntry stubs jetstream.KeyValueEntry.
 type MockKVEntry struct {
