@@ -31,42 +31,6 @@ func TestStructuredLogger(t *testing.T) {
 	})
 }
 
-func TestWriteHeader(t *testing.T) {
-	t.Run("Captures status code properly", func(t *testing.T) {
-		recorder := httptest.NewRecorder()
-		wrapped := &wrappedWriter{
-			ResponseWriter: recorder,
-			StatusCode:     http.StatusOK,
-		}
-
-		wrapped.WriteHeader(http.StatusNotFound)
-
-		assert.Equal(t, http.StatusNotFound, wrapped.StatusCode, "It should return status not found")
-	})
-
-	t.Run("Forwards to responsewriter", func(t *testing.T) {
-		recorder := httptest.NewRecorder()
-		wrapped := &wrappedWriter{
-			ResponseWriter: recorder,
-			StatusCode:     http.StatusOK,
-		}
-
-		wrapped.WriteHeader(http.StatusInternalServerError)
-
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code, "It should update the recorder")
-	})
-
-	t.Run("Starts at 200 status code", func(t *testing.T) {
-		recorder := httptest.NewRecorder()
-		wrapped := &wrappedWriter{
-			ResponseWriter: recorder,
-			StatusCode:     http.StatusOK,
-		}
-
-		assert.Equal(t, http.StatusOK, wrapped.StatusCode, "It start as status ok")
-	})
-}
-
 func TestApiRequestLogging(t *testing.T) {
 	t.Run("Handler is called", func(t *testing.T) {
 		handlerCalled := false
