@@ -19,18 +19,6 @@ func StructuredLogger(prodMode bool, serviceName string) *slog.Logger {
 	return slog.New(h).With("service", serviceName)
 }
 
-// wrapper to extend http response writer to expose
-// the status codes
-type wrappedWriter struct {
-	http.ResponseWriter
-	StatusCode int
-}
-
-func (w *wrappedWriter) WriteHeader(statuscode int) {
-	w.ResponseWriter.WriteHeader(statuscode)
-	w.StatusCode = statuscode
-}
-
 // logging middleware to track status codes, the url path, and response latency
 func ApiRequestLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
