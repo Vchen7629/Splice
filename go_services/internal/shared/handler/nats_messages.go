@@ -20,6 +20,13 @@ type JobCompleteMessage struct {
 	JobID string `json:"job_id"`
 }
 
+// published on ephemeral core-NATS subject "progress.{job_id}" for progress tracking
+type ProgressMessage struct {
+	JobID    string `json:"job_id"`
+	Stage    string `json:"stage"`
+	Progress int    `json:"progress"`
+}
+
 // marshal the ProcessingStatusMsg for put the new key value pair into jetstream
 func MarshalProcessingStatusMsg(jobStage string) ([]byte, error) {
 	status, err := json.Marshal(struct {

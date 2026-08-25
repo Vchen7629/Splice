@@ -18,3 +18,9 @@ class ProcessJobMessage(BaseModel):
 
 class UpscaleCompleteMsg(BaseModel):
     job_id: str
+
+
+class ProgressMessage(BaseModel):
+    job_id: str
+    stage: str
+    progress: int
