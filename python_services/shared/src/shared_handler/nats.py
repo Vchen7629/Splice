@@ -18,7 +18,8 @@ import contextlib
 async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[None, None]:
     """Periodically calls msg.in_progress() to extend Jetstream ack
     deadline while long-running work runs under 'msg'."""
-    async def _heartbeat():
+
+    async def _heartbeat() -> None:
         while True:
             await asyncio.sleep(interval)
             await msg.in_progress()

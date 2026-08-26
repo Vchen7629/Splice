@@ -133,7 +133,9 @@ async def process_msg(
             )
             logger.debug("recombined video with audio", job_id=metadata.job_id)
 
-            await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
+            await _finalize_job(
+                js, msg_processed_kv, msg, metadata.job_id, temp_file_loc
+            )
 
             return
     except Exception as e:
