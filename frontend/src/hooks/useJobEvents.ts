@@ -65,6 +65,12 @@ function openJobConnection(job: ActiveJob, connections: Map<string, EventSource>
 
     es.addEventListener('progress', (e: MessageEvent) => {
         const data: ProgressEventData = JSON.parse(e.data)
+        const store = useVideoQueueStore.getState()
+        const current = store.uploadedVideos[job.processingType]
+            .find(video => video.id === job.file.id)
+        
+        if (!current || current.jobId !== data.job_id || current.stage !==data.stage) return
+        
         useVideoQueueStore.getState().updateVideoStatus(job.processingType, job.file.id, { jobProgress: data.progress })
     })
 
