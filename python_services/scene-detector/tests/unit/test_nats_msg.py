@@ -217,10 +217,35 @@ async def test_does_not_write_to_kv_on_failure(
 
 
 @pytest.mark.asyncio
-async def test_update_job_stage_error_logs_and_continues(
+async def test_update_job_stage_error_records_failure_and_acks(
     mock_kv: AsyncMock, msg: AsyncMock
 ) -> None:
-    """When job_mil_kv.put raises, the error is logged and message is still acked"""
+    """When job_milestone_kv.put fails for the stage write but succeeds for the
+    failed-write fallback, the failure is durably recorded and the message is acked."""
+    mock_job_milestone_kv = AsyncMock(spec=KeyValue)
+    mock_job_milestone_kv.put.side_effect = [Exception("kv write failed"), None]
+
+    with (
+        patch(
+            "src.processing.nats_msg.process_job",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
+    ):
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, mock_job_milestone_kv, msg)
+
+    assert mock_job_milestone_kv.put.call_count == 2
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_job_stage_error_naks_when_failure_write_also_fails(
+    mock_kv: AsyncMock, msg: AsyncMock
+) -> None:
+    """When job_milestone_kv.put fails for both the stage write and the failed-write
+    fallback, nothing was durably recorded, so the message is nak'd for redelivery."""
     mock_job_milestone_kv = AsyncMock(spec=KeyValue)
     mock_job_milestone_kv.put.side_effect = Exception("kv write failed")
 
@@ -234,8 +259,8 @@ async def test_update_job_stage_error_logs_and_continues(
     ):
         await process_msg(MOCK_NC, MOCK_JS, mock_kv, mock_job_milestone_kv, msg)
 
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
+    msg.nak.assert_called_once()
+    msg.ack.assert_not_called()
 
 
 @pytest.mark.asyncio
