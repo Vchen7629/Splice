@@ -239,7 +239,11 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
-			rc.Flush()
+			err = rc.Flush()
+			if err != nil {
+				j.Logger.Error("failed to flush SSE event to user", "job_id", jobID, "err", err)
+				return
+			}
 
 			if current.State == StateComplete || current.State == StateFailed {
 				return
@@ -251,7 +255,11 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
-			rc.Flush()
+			err = rc.Flush()
+			if err != nil {
+				j.Logger.Error("failed to flush SSE event to user", "job_id", jobID, "err", err)
+				return
+			}
 
 		case <-ticker.C:
 			launchHealthProbe(current.Stage)
@@ -266,7 +274,11 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
-			rc.Flush()
+			err = rc.Flush()
+			if err != nil {
+				j.Logger.Error("failed to flush SSE event to user", "job_id", jobID, "err", err)
+				return
+			}
 		}
 	}
 }
