@@ -28,7 +28,7 @@ async def connect_kv(js: JetStreamContext, kv_name: str) -> KeyValue:
         return job_status_kv
     except js_errors.NotFoundError:
         raise RuntimeError(
-            "job-status KV bucket not found, check video-status is running"
+            f"{kv_name} KV bucket not found, check video-status is running"
         )
 
 
@@ -67,15 +67,14 @@ async def check_already_processed(kv: KeyValue, job_id: str) -> bool:
         return False
 
 
-async def update_job_status(
-    job_status_kv: KeyValue,
+async def update_job_stage(
+    job_milestone_kv: KeyValue,
     job_id: str,
     stage: str,
     service_name: str,
-    progress: int | None = None,
 ) -> None:
     """
-    Writes PROCESSING for the stage to the job-status KV bucket
+    Writes the current processing stage to the job-milestones KV bucket
 
     Args:
 
@@ -86,22 +85,20 @@ async def update_job_status(
 
     try:
         payload: dict[str, str | int] = {"state": "PROCESSING", "stage": stage}
-        if progress is not None:
-            payload["progress"] = progress
         status = json.dumps(payload).encode()
-        await job_status_kv.put(job_id, status)
+        await job_milestone_kv.put(job_id, status)
     except Exception as e:
-        logger.error("failed to update job status stage", job_id=job_id, err=str(e))
+        logger.error("failed to update job-milestones stage", job_id=job_id, err=str(e))
 
 
 async def update_job_failed(
-    job_status_kv: KeyValue,
+    job_milestone_kv: KeyValue,
     job_id: str,
     error: str,
     service_name: str,
 ) -> None:
     """
-    Writes FAILED with the underlying error message to the job-status KV bucket
+    Writes FAILED with the underlying error message to the job-milestones KV bucket
 
     Raises:
         Exception: re-raised if the KV write fails, after logging
@@ -111,7 +108,9 @@ async def update_job_failed(
     payload = {"state": "FAILED", "error": error}
     status = json.dumps(payload).encode()
     try:
-        await job_status_kv.put(job_id, status)
+        await job_milestone_kv.put(job_id, status)
     except Exception as e:
-        logger.error("failed to update job status to failed", job_id=job_id, err=str(e))
+        logger.error(
+            "failed to update job-milestones to failed", job_id=job_id, err=str(e)
+        )
         raise

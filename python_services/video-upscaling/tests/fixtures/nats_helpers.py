@@ -19,8 +19,8 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
             "src.processing.nats_msg.check_already_processed", new_callable=AsyncMock
         ) as mock_check,
         patch(
-            "src.processing.nats_msg.update_job_status", new_callable=AsyncMock
-        ) as mock_update_status,
+            "src.processing.nats_msg.update_job_stage", new_callable=AsyncMock
+        ) as mock_update_stage,
         patch(
             "src.processing.nats_msg.update_job_failed", new_callable=AsyncMock
         ) as mock_update_failed,
@@ -42,7 +42,7 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
         mock_check.return_value = False
         yield {
             "check": mock_check,
-            "update_status": mock_update_status,
+            "update_stage": mock_update_stage,
             "update_failed": mock_update_failed,
             "fetch": mock_fetch,
             "select": mock_select,
@@ -86,7 +86,7 @@ async def js_context(
         name="videos",
         subjects=[settings.SUB_SUBJECT, settings.PUB_SUBJECT],
     )
-    await js.create_key_value(config=KeyValueConfig(bucket="job-status"))
+    await js.create_key_value(config=KeyValueConfig(bucket="job-milestones"))
     yield nc, js
     await nc.close()
 

@@ -38,7 +38,7 @@ def service_patches(mock_nats: tuple[MagicMock, MagicMock]) -> Any:
             lambda js: setattr(
                 js, "key_value", AsyncMock(side_effect=js_errors.NotFoundError)
             ),
-            "job-status KV bucket not found",
+            "job-milestones KV bucket not found",
         ),
     ],
     ids=["stream_not_found", "kv_creation_fails", "job_status_kv_not_found"],

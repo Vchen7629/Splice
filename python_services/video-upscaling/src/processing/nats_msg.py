@@ -1,19 +1,23 @@
+from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from shared_core.logging import get_logger
 from shared_handler.nats import publisher
-from shared_handler.kv import update_job_status
-from shared_handler.kv import update_job_failed
-from shared_handler.kv import check_already_processed
-from shared_handler.messages import ProcessJobMessage
-from shared_handler.messages import UpscaleCompleteMsg
-from shared_storage.queries import fetch_video
-from shared_storage.queries import upload_video
+from shared_handler.kv import (
+    update_job_stage,
+    update_job_failed,
+    check_already_processed,
+)
+from shared_handler.messages import (
+    ProgressMessage,
+    ProcessJobMessage,
+    UpscaleCompleteMsg,
+)
+from shared_storage.queries import fetch_video, upload_video
+from typing import Callable
 from ..core.settings import settings
-from .video import video_upscale
-from .video import video_downscale
-from .video import recombine_video_audio
+from .video import video_upscale, video_downscale, recombine_video_audio
 from ..utils.model_router import select_model
 import os
 import shutil
@@ -23,7 +27,11 @@ logger = get_logger(settings.SERVICE_NAME)
 
 
 async def process_msg(
-    js: JetStreamContext, msg_processed_kv: KeyValue, job_status_kv: KeyValue, msg: Msg
+    nc: NATSClient,
+    js: JetStreamContext,
+    msg_processed_kv: KeyValue,
+    job_stage_kv: KeyValue,
+    msg: Msg,
 ) -> None:
     """Processes a single video upscale nats message"""
     metadata: ProcessJobMessage | None = None
@@ -35,8 +43,8 @@ async def process_msg(
             await msg.ack()
             return
 
-        await update_job_status(
-            job_status_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
+        await update_job_stage(
+            job_stage_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
         )
 
         local_video_path = await asyncio.to_thread(
@@ -100,18 +108,7 @@ async def process_msg(
         os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
         loop = asyncio.get_event_loop()
-
-        def on_progress(pct: int) -> None:
-            asyncio.run_coroutine_threadsafe(
-                update_job_status(
-                    job_status_kv,
-                    metadata.job_id,
-                    settings.SERVICE_NAME,
-                    settings.SERVICE_NAME,
-                    pct,
-                ),
-                loop,
-            )
+        on_progress = _make_progress_reporter(nc, metadata.job_id, loop)
 
         await asyncio.to_thread(
             video_upscale,
@@ -123,8 +120,8 @@ async def process_msg(
         )
         logger.debug("upscaled video", job_id=metadata.job_id)
 
-        await update_job_status(
-            job_status_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
+        await update_job_stage(
+            job_stage_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
         )
         await asyncio.to_thread(
             recombine_video_audio,
@@ -143,7 +140,7 @@ async def process_msg(
         if metadata is not None:
             try:
                 await update_job_failed(
-                    job_status_kv, metadata.job_id, str(e), settings.SERVICE_NAME
+                    job_stage_kv, metadata.job_id, str(e), settings.SERVICE_NAME
                 )
             except Exception:
                 await msg.nak()
@@ -179,3 +176,33 @@ async def _finalize_job(
     shutil.rmtree(os.path.dirname(temp_file_loc))
     shutil.rmtree(f"../temp/{job_id}", ignore_errors=True)
     logger.debug("removed temp dirs", job_id=job_id)
+
+
+def _make_progress_reporter(
+    nc: NATSClient, job_id: str, loop: asyncio.AbstractEventLoop
+) -> Callable[[int], None]:
+    """Builds on_progress callback for video_upscale
+    Throttles by percent-delta and pubs the progress to Nats subject"""
+    last_progress = -1
+
+    def on_progress(pct: int) -> None:
+        nonlocal last_progress
+        if pct == last_progress:
+            return
+
+        last_progress = pct
+        asyncio.run_coroutine_threadsafe(
+            nc.publish(
+                f"progress.{job_id}",
+                ProgressMessage(
+                    job_id=job_id,
+                    stage=settings.SERVICE_NAME,
+                    progress=pct,
+                )
+                .model_dump_json()
+                .encode(),
+            ),
+            loop,
+        )
+
+    return on_progress

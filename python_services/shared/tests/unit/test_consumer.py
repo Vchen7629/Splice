@@ -1,10 +1,14 @@
 from typing import Any, AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
+from nats.aio.client import Client as NATSClient
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
 from shared_handler.nats import consumer
 import pytest
+
+MOCK_NC = AsyncMock(spec=NATSClient)
+MOCK_KV = AsyncMock(spec=KeyValue)
 
 
 async def async_iter(items: Any) -> AsyncGenerator[Any, None]:
@@ -27,9 +31,10 @@ async def test_calls_process_msg_once_per_message() -> None:
     mock_process_msg = AsyncMock()
 
     await consumer(
+        MOCK_NC,
         mock_js,
-        AsyncMock(spec=KeyValue),
-        AsyncMock(spec=KeyValue),
+        MOCK_KV,
+        MOCK_KV,
         "idk",
         "idk2",
         "idk2",
@@ -48,6 +53,7 @@ async def test_passes_correct_args_to_process_msg() -> None:
     mock_process_msg = AsyncMock()
 
     await consumer(
+        MOCK_NC,
         mock_js,
         mock_kv,
         mock_job_status_kv,
@@ -57,7 +63,9 @@ async def test_passes_correct_args_to_process_msg() -> None:
         mock_process_msg,
     )
 
-    mock_process_msg.assert_called_once_with(mock_js, mock_kv, mock_job_status_kv, msg)
+    mock_process_msg.assert_called_once_with(
+        MOCK_NC, mock_js, mock_kv, mock_job_status_kv, msg
+    )
 
 
 @pytest.mark.asyncio
@@ -67,9 +75,10 @@ async def test_raises_when_subscribe_fails() -> None:
 
     with pytest.raises(APIError):
         await consumer(
+            MOCK_NC,
             mock_js,
-            AsyncMock(spec=KeyValue),
-            AsyncMock(spec=KeyValue),
+            MOCK_KV,
+            MOCK_KV,
             "idk1",
             "idk2",
             "idk2",

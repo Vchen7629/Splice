@@ -2,6 +2,7 @@ from typing import Any
 from unittest.mock import patch
 from unittest.mock import MagicMock
 from unittest.mock import AsyncMock
+from nats.aio.client import Client as NATSClient
 from nats.js.kv import KeyValue
 from nats.js.errors import KeyNotFoundError
 from nats.js.client import JetStreamContext
@@ -10,6 +11,10 @@ from src.processing.nats_msg import process_msg
 from src.core.settings import settings
 import json
 import pytest
+
+MOCK_NC = AsyncMock(spec=NATSClient)
+MOCK_JS = AsyncMock(spec=JetStreamContext)
+MOCK_KV = AsyncMock(spec=KeyValue)
 
 
 def make_mock_msg(data: dict[str, Any]) -> AsyncMock:
@@ -40,9 +45,7 @@ async def test_acks_on_success(mock_kv: AsyncMock, msg: AsyncMock) -> None:
         ),
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext), mock_kv, AsyncMock(spec=KeyValue), msg
-        )
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, MOCK_KV, msg)
 
     msg.ack.assert_called_once()
     msg.nak.assert_not_called()
@@ -88,7 +91,7 @@ async def test_updates_kv_and_acks_on_failure(
             **publish_kwargs,
         ),
     ):
-        await process_msg(AsyncMock(spec=JetStreamContext), mock_kv, job_status_kv, msg)
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, job_status_kv, msg)
 
     job_id, payload = job_status_kv.put.call_args_list[-1][0]
     assert job_id == "1"
@@ -110,12 +113,7 @@ async def test_acks_and_skips_when_job_already_processed(msg: AsyncMock) -> None
         ) as mock_process,
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext),
-            already_processed_kv,
-            AsyncMock(spec=KeyValue),
-            msg,
-        )
+        await process_msg(MOCK_NC, MOCK_JS, already_processed_kv, MOCK_KV, msg)
 
     msg.ack.assert_called_once()
     msg.nak.assert_not_called()
@@ -153,7 +151,7 @@ async def test_passes_chunk_messages_to_publisher(mock_kv: AsyncMock) -> None:
             "src.processing.nats_msg.publisher", new_callable=AsyncMock
         ) as mock_publish,
     ):
-        await process_msg(mock_js, mock_kv, AsyncMock(spec=KeyValue), msg)
+        await process_msg(MOCK_NC, mock_js, mock_kv, MOCK_KV, msg)
 
     mock_publish.assert_called_once_with(
         mock_js, chunk_messages[0], settings.PUB_SUBJECT, settings.SERVICE_NAME
@@ -181,9 +179,7 @@ async def test_writes_to_kv_on_success() -> None:
         ),
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext), mock_kv, AsyncMock(spec=KeyValue), msg
-        )
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, MOCK_KV, msg)
 
     mock_kv.put.assert_called_once_with("abc-123", b"done")
 
@@ -215,20 +211,18 @@ async def test_does_not_write_to_kv_on_failure(
             **publish_kwargs,
         ),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext), mock_kv, AsyncMock(spec=KeyValue), msg
-        )
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, MOCK_KV, msg)
 
     mock_kv.put.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_update_job_status_error_logs_and_continues(
+async def test_update_job_stage_error_logs_and_continues(
     mock_kv: AsyncMock, msg: AsyncMock
 ) -> None:
-    """When job_status_kv.put raises, the error is logged and message is still acked"""
-    mock_job_status_kv = AsyncMock(spec=KeyValue)
-    mock_job_status_kv.put.side_effect = Exception("kv write failed")
+    """When job_mil_kv.put raises, the error is logged and message is still acked"""
+    mock_job_milestone_kv = AsyncMock(spec=KeyValue)
+    mock_job_milestone_kv.put.side_effect = Exception("kv write failed")
 
     with (
         patch(
@@ -238,9 +232,7 @@ async def test_update_job_status_error_logs_and_continues(
         ),
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext), mock_kv, mock_job_status_kv, msg
-        )
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, mock_job_milestone_kv, msg)
 
     msg.ack.assert_called_once()
     msg.nak.assert_not_called()
@@ -275,9 +267,7 @@ async def test_stage_written_to_job_status_kv_before_processing(
         patch("src.processing.nats_msg.process_job", side_effect=fake_process_job),
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
     ):
-        await process_msg(
-            AsyncMock(spec=JetStreamContext), mock_kv, mock_job_status_kv, msg
-        )
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, mock_job_status_kv, msg)
 
     expected_payload = json.dumps(
         {"state": "PROCESSING", "stage": "scene-detector"}
