@@ -3,7 +3,7 @@ from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from shared_core.logging import get_logger
-from shared_handler.nats import publisher
+from shared_handler.nats import publisher, keep_alive
 from shared_handler.kv import (
     update_job_stage,
     update_job_failed,
@@ -47,94 +47,95 @@ async def process_msg(
             job_stage_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
         )
 
-        local_video_path = await asyncio.to_thread(
-            fetch_video, metadata.storage_url, settings.SERVICE_NAME
-        )
-        filename = os.path.basename(local_video_path)
-        temp_file_loc = f"../temp_output/{metadata.job_id}/{filename}"
-        os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
+        async with keep_alive(msg, interval=settings.ACK_WAIT_S / 3):
+            local_video_path = await asyncio.to_thread(
+                fetch_video, metadata.storage_url, settings.SERVICE_NAME
+            )
+            filename = os.path.basename(local_video_path)
+            temp_file_loc = f"../temp_output/{metadata.job_id}/{filename}"
+            os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
-        logger.debug(
-            "fetched unprocessed video",
-            job_id=metadata.job_id,
-            saved_to=local_video_path,
-        )
-
-        res = select_model(metadata.source_resolution, metadata.target_resolution)
-        if res is None:
             logger.debug(
-                "downscaling video",
+                "fetched unprocessed video",
+                job_id=metadata.job_id,
+                saved_to=local_video_path,
+            )
+
+            res = select_model(metadata.source_resolution, metadata.target_resolution)
+            if res is None:
+                logger.debug(
+                    "downscaling video",
+                    job_id=metadata.job_id,
+                    source_res=metadata.source_resolution,
+                    target_res=metadata.target_resolution,
+                )
+
+                # async since its very light ffmpeg subprocess
+                await asyncio.to_thread(
+                    video_downscale,
+                    local_video_path,
+                    metadata.target_resolution,
+                    temp_file_loc,
+                )
+                logger.debug("downscaled video", job_id=metadata.job_id)
+
+                await _finalize_job(
+                    js, msg_processed_kv, msg, metadata.job_id, temp_file_loc
+                )
+
+                return
+
+            logger.debug(
+                "upscaling video",
                 job_id=metadata.job_id,
                 source_res=metadata.source_resolution,
                 target_res=metadata.target_resolution,
             )
 
-            # async since its very light ffmpeg subprocess
-            await asyncio.to_thread(
-                video_downscale,
-                local_video_path,
-                metadata.target_resolution,
-                temp_file_loc,
+            model_path, resolution_scale = res
+            logger.debug(
+                "upscaling with model and resolution",
+                jobid=metadata,
+                scale=resolution_scale,
+                model=model_path,
             )
-            logger.debug("downscaled video", job_id=metadata.job_id)
 
-            await _finalize_job(
-                js, msg_processed_kv, msg, metadata.job_id, temp_file_loc
+            # video_upscale always encodes to h264/mp4 regardless of the source
+            # container, so the output must be saved with an .mp4 extension
+            # reusing the source filename's extension (e.g. .webm) produces a
+            # container/codec mismatch when recombine_video_audio muxes with -c copy
+            stem = os.path.splitext(os.path.basename(local_video_path))[0]
+            temp_file_loc = f"../temp_output/{metadata.job_id}/{stem}.mp4"
+            os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
+
+            loop = asyncio.get_event_loop()
+            on_progress = _make_progress_reporter(nc, metadata.job_id, loop)
+
+            await asyncio.to_thread(
+                video_upscale,
+                metadata.job_id,
+                local_video_path,
+                model_path,
+                resolution_scale,
+                on_progress,
             )
+            logger.debug("upscaled video", job_id=metadata.job_id)
+
+            await update_job_stage(
+                job_stage_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
+            )
+            await asyncio.to_thread(
+                recombine_video_audio,
+                metadata.job_id,
+                local_video_path,
+                temp_file_loc,
+                metadata.target_resolution,
+            )
+            logger.debug("recombined video with audio", job_id=metadata.job_id)
+
+            await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
 
             return
-
-        logger.debug(
-            "upscaling video",
-            job_id=metadata.job_id,
-            source_res=metadata.source_resolution,
-            target_res=metadata.target_resolution,
-        )
-
-        model_path, resolution_scale = res
-        logger.debug(
-            "upscaling with model and resolution",
-            jobid=metadata,
-            scale=resolution_scale,
-            model=model_path,
-        )
-
-        # video_upscale always encodes to h264/mp4 regardless of the source
-        # container, so the output must be saved with an .mp4 extension
-        # reusing the source filename's extension (e.g. .webm) produces a
-        # container/codec mismatch when recombine_video_audio muxes with -c copy
-        stem = os.path.splitext(os.path.basename(local_video_path))[0]
-        temp_file_loc = f"../temp_output/{metadata.job_id}/{stem}.mp4"
-        os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
-
-        loop = asyncio.get_event_loop()
-        on_progress = _make_progress_reporter(nc, metadata.job_id, loop)
-
-        await asyncio.to_thread(
-            video_upscale,
-            metadata.job_id,
-            local_video_path,
-            model_path,
-            resolution_scale,
-            on_progress,
-        )
-        logger.debug("upscaled video", job_id=metadata.job_id)
-
-        await update_job_stage(
-            job_stage_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
-        )
-        await asyncio.to_thread(
-            recombine_video_audio,
-            metadata.job_id,
-            local_video_path,
-            temp_file_loc,
-            metadata.target_resolution,
-        )
-        logger.debug("recombined video with audio", job_id=metadata.job_id)
-
-        await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
-
-        return
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
         if metadata is not None:
