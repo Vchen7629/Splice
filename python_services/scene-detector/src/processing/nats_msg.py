@@ -41,7 +41,9 @@ async def process_msg(
             settings.SERVICE_NAME,
         )
 
-        async with keep_alive(msg, interval=shared_settings.ACK_WAIT_S / 3):
+        async with keep_alive(
+            settings.SERVICE_NAME, msg, interval=shared_settings.ACK_WAIT_S / 3
+        ):
             chunk_messages = await process_job(metadata)
 
             for chunk_msg in chunk_messages:

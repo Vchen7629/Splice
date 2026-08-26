@@ -15,9 +15,12 @@ import contextlib
 
 
 @contextlib.asynccontextmanager
-async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[None, None]:
+async def keep_alive(
+    service_name: str, msg: Msg, interval: float
+) -> AsyncGenerator[None, None]:
     """Periodically calls msg.in_progress() to extend Jetstream ack
     deadline while long-running work runs under 'msg'."""
+    logger = get_logger(service_name)
 
     async def _heartbeat() -> None:
         while True:
@@ -28,7 +31,10 @@ async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
-        task.cancel()
+        try:
+            task.cancel()
+        except Exception as e:  # keep-alive is best-effort
+            logger.warning("failed to extend ack deadline", err=str(e))
         with contextlib.suppress(asyncio.CancelledError):
             await task
 

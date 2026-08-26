@@ -48,7 +48,9 @@ async def process_msg(
             job_stage_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
         )
 
-        async with keep_alive(msg, interval=shared_settings.ACK_WAIT_S / 3):
+        async with keep_alive(
+            settings.SERVICE_NAME, msg, interval=shared_settings.ACK_WAIT_S / 3
+        ):
             local_video_path = await asyncio.to_thread(
                 fetch_video, metadata.storage_url, settings.SERVICE_NAME
             )
