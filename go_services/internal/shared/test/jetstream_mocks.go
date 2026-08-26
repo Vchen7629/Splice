@@ -9,14 +9,20 @@ import (
 // MockKV stubs jetstream.KeyValue for unit tests.
 type MockKV struct {
 	jetstream.KeyValue
-	GetErr    error
-	GetFound  bool // if true, Get returns a non-nil entry; if false, returns ErrKeyNotFound
-	PutErr    error
-	PutKey    string
-	CreateErr error
-	CreateKey string
-	DeleteErr error
-	DeleteKey string
+	GetErr           error
+	GetFound         bool // if true, Get returns a non-nil entry; if false, returns ErrKeyNotFound
+	GetValue         []byte
+	GetEntryRevision uint64
+	PutErr           error
+	PutKey           string
+	CreateErr        error
+	CreateKey        string
+	DeleteErr        error
+	DeleteKey        string
+	UpdateErr        error
+	UpdateKey        string
+	UpdateValue      []byte
+	UpdateRevision   uint64
 
 	store map[string][]byte // backs Put/Get/ListKeysFiltered for real put-then-read callers
 }
@@ -25,10 +31,30 @@ func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, er
 	if m.GetErr != nil {
 		return nil, m.GetErr
 	}
-	if value, ok := m.store[key]; ok || m.GetFound {
+	if value, ok := m.store[key]; ok {
 		return &mockKVEntry{key: key, value: value}, nil
 	}
+	if m.GetFound {
+		return &mockKVEntry{key: key, value: m.GetValue, revision: m.GetEntryRevision}, nil
+	}
 	return nil, jetstream.ErrKeyNotFound
+}
+
+// Update stubs jetstream.KeyValue's revision-based compare-and-swap write. It just
+// records the call and applies it to the backing store; it does not simulate real
+// revision-conflict detection (tests exercise that against a real KV in integration tests).
+func (m *MockKV) Update(_ context.Context, key string, value []byte, revision uint64) (uint64, error) {
+	m.UpdateKey = key
+	m.UpdateValue = value
+	m.UpdateRevision = revision
+	if m.UpdateErr != nil {
+		return 0, m.UpdateErr
+	}
+	if m.store == nil {
+		m.store = map[string][]byte{}
+	}
+	m.store[key] = value
+	return revision + 1, nil
 }
 
 func (m *MockKV) Put(_ context.Context, key string, value []byte) (uint64, error) {
@@ -74,12 +100,14 @@ func (m *MockKV) Delete(_ context.Context, key string, _ ...jetstream.KVDeleteOp
 
 type mockKVEntry struct {
 	jetstream.KeyValueEntry
-	key   string
-	value []byte
+	key      string
+	value    []byte
+	revision uint64
 }
 
-func (e *mockKVEntry) Key() string   { return e.key }
-func (e *mockKVEntry) Value() []byte { return e.value }
+func (e *mockKVEntry) Key() string      { return e.key }
+func (e *mockKVEntry) Value() []byte    { return e.value }
+func (e *mockKVEntry) Revision() uint64 { return e.revision }
 
 // MockJS stubs jetstream.JetStream. Set StreamNameErr to simulate a lookup failure.
 type MockJS struct {

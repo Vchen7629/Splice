@@ -2,6 +2,7 @@ package jetstream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -74,6 +75,71 @@ func PutKeyKV(kv jetstream.KeyValue, key string, value []byte) error {
 	}
 
 	return nil
+}
+
+// For job mileston kv
+
+// ranks pipeline stages so AdvanceMilestone can differentiate forward write from stale one
+var milestoneStageOrder = map[string]int{
+	"upload":           0,
+	"transcoder":       1,
+	"video-recombiner": 2,
+}
+
+type MilestoneStatus struct {
+	State string `json:"state"`
+	Stage string `json:"stage"`
+}
+
+// writes a job's milestone entry only if newStage is not behind currently stored stage and
+// job isnt already in terminal state.
+func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneStatus) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	newValue, err := json.Marshal(newStatus)
+	if err != nil {
+		return fmt.Errorf("failed: %w", err)
+	}
+
+	for {
+		entry, err := kv.Get(ctx, jobID)
+		if errors.Is(err, jetstream.ErrKeyNotFound) {
+			_, err = kv.Create(ctx, jobID, newValue)
+			if errors.Is(err, jetstream.ErrKeyExists) {
+				continue // lost create race, reread and compare against winner
+			}
+			if err != nil {
+				return fmt.Errorf("failed: %w", err)
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed: %w", err)
+		}
+
+		var current struct {
+			State string `json:"state"`
+			Stage string `json:"stage"`
+		}
+		err = json.Unmarshal(entry.Value(), &current)
+		if err != nil {
+			return fmt.Errorf("failed: %w", err)
+		}
+
+		if current.State == "COMPLETE" || current.State == "FAILED" || milestoneStageOrder[current.Stage] >= milestoneStageOrder[newStatus.Stage] {
+			return nil
+		}
+
+		_, err = kv.Update(ctx, jobID, newValue, entry.Revision())
+		if errors.Is(err, jetstream.ErrKeyExists) {
+			continue // revision change concurrently, reread and compare again
+		}
+		if err != nil {
+			return fmt.Errorf("failed: %w", err)
+		}
+		return nil
+	}
 }
 
 // For video/file chunks

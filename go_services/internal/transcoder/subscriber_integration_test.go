@@ -162,6 +162,47 @@ func TestConsumeVideoChunk(t *testing.T) {
 	})
 }
 
+func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testing.T) {
+	js, _ := test.SetupNats(t)
+	kv := test.SetupKV(t, js, "chunk-processed")
+	claimKV := test.SetupKV(t, js, "chunk-claims")
+	jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
+
+	jobID := "job-late-chunk-after-complete"
+	t.Cleanup(func() {
+		os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
+		os.RemoveAll("/tmp/temp-processed-" + jobID)
+	})
+
+	completeStatus, err := json.Marshal(struct {
+		State string `json:"state"`
+	}{State: "COMPLETE"})
+	require.NoError(t, err)
+	_, err = jobMilestoneKV.Put(context.Background(), jobID, completeStatus)
+	require.NoError(t, err)
+
+	storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "not_a_video.mp4", []byte("this is not a video"))
+
+	_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+	require.NoError(t, err)
+
+	publishVideoChunk(t, js, VideoChunkMessage{
+		JobID: jobID, ChunkIndex: 0, TotalChunks: 1,
+		StorageURL: storageURL, TargetResolution: "480p",
+	})
+
+	assertNacked(t, js, "expected message to be nacked")
+
+	entry, err := jobMilestoneKV.Get(context.Background(), jobID)
+	require.NoError(t, err)
+
+	var status struct {
+		State string `json:"state"`
+	}
+	require.NoError(t, json.Unmarshal(entry.Value(), &status))
+	assert.Equal(t, "COMPLETE", status.State, "processing a chunk after job completion must not regress the milestone")
+}
+
 func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 	tests := []struct {
 		name           string
