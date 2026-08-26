@@ -35,14 +35,19 @@ async def process_msg(
             return
 
         await update_job_stage(
-            job_milestone_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
+            job_milestone_kv,
+            metadata.job_id,
+            settings.SERVICE_NAME,
+            settings.SERVICE_NAME,
         )
 
         async with keep_alive(msg, interval=shared_settings.ACK_WAIT_S / 3):
             chunk_messages = await process_job(metadata)
 
             for chunk_msg in chunk_messages:
-                await publisher(js, chunk_msg, settings.PUB_SUBJECT, settings.SERVICE_NAME)
+                await publisher(
+                    js, chunk_msg, settings.PUB_SUBJECT, settings.SERVICE_NAME
+                )
 
             await msg_processed_kv.put(metadata.job_id, b"done")
     except Exception as e:
