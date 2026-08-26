@@ -3,6 +3,7 @@ from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from shared_core.logging import get_logger
+from shared_core.settings import settings as shared_settings
 from shared_handler.nats import publisher, keep_alive
 from shared_handler.kv import (
     update_job_stage,
@@ -47,7 +48,7 @@ async def process_msg(
             job_stage_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
         )
 
-        async with keep_alive(msg, interval=settings.ACK_WAIT_S / 3):
+        async with keep_alive(msg, interval=shared_settings.ACK_WAIT_S / 3):
             local_video_path = await asyncio.to_thread(
                 fetch_video, metadata.storage_url, settings.SERVICE_NAME
             )
