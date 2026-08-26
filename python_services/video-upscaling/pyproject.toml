@@ -49,7 +49,7 @@ implicit-any = "error"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "../shared"]
 asyncio_mode = "auto"
 filterwarnings = [
     "ignore::DeprecationWarning:testcontainers",

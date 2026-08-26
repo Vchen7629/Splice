@@ -2,7 +2,6 @@ from typing import Any
 from unittest.mock import patch
 from unittest.mock import AsyncMock
 from nats.js import JetStreamContext
-from shared_storage import queries
 from src.service import start_service
 from src.core.settings import settings
 import json
@@ -56,10 +55,8 @@ async def test_full_job_publishes_upscale_complete_msg(
     uploaded_test_video: str,
     seaweedfs_url: str,
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Any,
 ) -> None:
     """Full flow: message published -> video fetched from SeaweedFS -> downscaled -> UpscaleCompleteMsg on downstream subject."""
-    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
     monkeypatch.setattr(
         "src.processing.nats_msg.settings.BASE_STORAGE_URL", seaweedfs_url
     )
@@ -98,10 +95,8 @@ async def test_full_job_uploads_output_to_storage(
     uploaded_test_video: str,
     seaweedfs_url: str,
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Any,
 ) -> None:
     """After processing, output video is PUT to SeaweedFS at the expected URL."""
-    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
     monkeypatch.setattr(
         "src.processing.nats_msg.settings.BASE_STORAGE_URL", seaweedfs_url
     )
