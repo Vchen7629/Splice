@@ -1,21 +1,11 @@
 from nats.aio.msg import Msg
 from nats.js.api import KeyValueConfig
 from typing import Any
-from typing import Generator
 from typing import AsyncGenerator
 from nats.js import JetStreamContext
-from testcontainers.nats import NatsContainer
 import json
-import pytest
 import pytest_asyncio
 import nats
-
-
-@pytest.fixture(scope="session")
-def nats_url() -> Generator[str, None]:
-    """Starts a nats container and returns url"""
-    with NatsContainer(jetstream=True) as container:
-        yield container.nats_uri()
 
 
 @pytest_asyncio.fixture

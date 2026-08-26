@@ -19,13 +19,14 @@ where = ["src"]
 include = ["shared_core*", "shared_handler*", "shared_storage*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 
 [tool.pyrefly]
 python-version = "3.13"
 untyped-def-behavior = "check-and-infer-return-any"
 search-path = [".", "../shared/src"]
 venv = ".venv"
+project-excludes = ["test_fixtures/service_nats.py"]
 
 [tool.pyrefly.errors]
 unannotated-parameter = "error"

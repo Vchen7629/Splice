@@ -1,19 +1,8 @@
 from typing import Any
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock
 from src.service import start_service
 import pytest
 import nats.js.errors as js_errors
-
-
-@pytest.fixture
-def service_patches(mock_nats: tuple[MagicMock, MagicMock]) -> Any:
-    mock_nc, mock_js = mock_nats
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.start_health_server"),
-        patch("src.service.nats_connect", return_value=(mock_nc, mock_js)),
-    ):
-        yield mock_nc, mock_js
 
 
 @pytest.mark.asyncio

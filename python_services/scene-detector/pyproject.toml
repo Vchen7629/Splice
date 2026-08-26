@@ -37,7 +37,7 @@ implicit-any = "error"
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
-pythonpath = ["."]
+pythonpath = [".", "../shared"]
 filterwarnings = [
     "ignore::DeprecationWarning:testcontainers",
 ]
