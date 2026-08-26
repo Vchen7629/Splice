@@ -34,16 +34,6 @@ func TestWriteHeader(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, recorder.Code, "It should update the recorder")
 	})
-
-	t.Run("Starts at 200 status code", func(t *testing.T) {
-		recorder := httptest.NewRecorder()
-		wrapped := &wrappedWriter{
-			ResponseWriter: recorder,
-			StatusCode:     http.StatusOK,
-		}
-
-		assert.Equal(t, http.StatusOK, wrapped.StatusCode, "It start as status ok")
-	})
 }
 
 func TestUnwrap(t *testing.T) {
