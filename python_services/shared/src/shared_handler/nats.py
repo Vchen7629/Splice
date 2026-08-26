@@ -1,5 +1,4 @@
-from typing import Awaitable
-from typing import Callable
+from typing import AsyncGenerator, Awaitable, Callable
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
@@ -11,6 +10,26 @@ from shared_core.logging import get_logger
 from shared_core.settings import settings
 from shared_handler.messages import UpscaleCompleteMsg
 from .messages import VideoChunkMessage
+import asyncio
+import contextlib
+
+
+@contextlib.asynccontextmanager
+async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[None, None]:
+    """Periodically calls msg.in_progress() to extend Jetstream ack
+    deadline while long-running work runs under 'msg'."""
+    async def _heartbeat():
+        while True:
+            await asyncio.sleep(interval)
+            await msg.in_progress()
+
+    task = asyncio.create_task(_heartbeat())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 async def consumer(
