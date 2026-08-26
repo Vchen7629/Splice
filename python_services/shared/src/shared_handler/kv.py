@@ -89,6 +89,7 @@ async def update_job_stage(
         await job_milestone_kv.put(job_id, status)
     except Exception as e:
         logger.error("failed to update job-milestones stage", job_id=job_id, err=str(e))
+        raise
 
 
 async def update_job_failed(
