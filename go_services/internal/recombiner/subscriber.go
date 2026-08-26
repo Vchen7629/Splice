@@ -77,7 +77,7 @@ func recombineChunks(
 	}
 	err = sJetstream.PutKeyKV(jobStatusKV, payload.JobID, processingMsg)
 	if err != nil {
-		logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
+		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 	}
 
 	ready, chunks, err := Add(msgRecievedKV, payload, logger)

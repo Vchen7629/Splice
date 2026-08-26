@@ -70,13 +70,13 @@ func main() {
 	}
 
 	msgRecievedKV := sJetstream.CreateKV("recombine-chunk-recieved", js, 0, logger) // no ttl for now
-	jobStatusKV := sJetstream.ConnectKV(js, "job-status", logger)
+	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
 	claimKV := sJetstream.CreateKV("recombine-chunk-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runCombiner(js, nc, msgRecievedKV, jobStatusKV, claimKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
+	err = runCombiner(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -89,7 +89,7 @@ type ncDrainer interface {
 func runCombiner(
 	js jetstream.JetStream,
 	nc ncDrainer,
-	msgRecievedKV, jobStatusKV, claimKV jetstream.KeyValue,
+	msgRecievedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	logger *slog.Logger,
 	baseStorageURL, httpPort string,
 	quit <-chan os.Signal,
@@ -98,7 +98,7 @@ func runCombiner(
 
 	server := shandler.StartHealthHttpServer(logger, httpPort)
 
-	consCtx, err := recombiner.RecombineVideo(js, msgRecievedKV, jobStatusKV, claimKV, chunkAckWait, logger, baseStorageURL)
+	consCtx, err := recombiner.RecombineVideo(js, msgRecievedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, baseStorageURL)
 	if err != nil {
 		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start subscriber/publisher: %w", err)

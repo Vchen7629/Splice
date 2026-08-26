@@ -82,12 +82,12 @@ func TestRunGateway_Lifecycle(t *testing.T) {
 		return true
 	}, 15*time.Second, 100*time.Millisecond, "runGateway server did not start")
 
-	t.Run("creates the job-status KV bucket", func(t *testing.T) {
+	t.Run("creates the job-milestones KV bucket", func(t *testing.T) {
 		// Every other service connects to this bucket and exits if it is absent,
 		// so the gateway creating it is load-bearing for the whole pipeline.
-		kv, err := js.KeyValue(context.Background(), "job-status")
+		kv, err := js.KeyValue(context.Background(), "job-milestones")
 		require.NoError(t, err)
-		assert.Equal(t, "job-status", kv.Bucket())
+		assert.Equal(t, "job-milestones", kv.Bucket())
 	})
 
 	t.Run("serves the status route", func(t *testing.T) {
