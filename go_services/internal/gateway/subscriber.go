@@ -80,7 +80,7 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, kv jetstream
 }
 
 // subs to jobs.complete (from video-recombiner service) via jetstream consumer and writes COMPLETE to KV
-func ListenJobComplete(js jetstream.JetStream, jobStatusKV jetstream.KeyValue, logger *slog.Logger) (jetstream.ConsumeContext, error) {
+func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue, logger *slog.Logger) (jetstream.ConsumeContext, error) {
 	ctx := context.Background()
 
 	streamName, err := js.StreamNameBySubject(ctx, "jobs.complete")
@@ -118,7 +118,7 @@ func ListenJobComplete(js jetstream.JetStream, jobStatusKV jetstream.KeyValue, l
 			return
 		}
 
-		_, err = jobStatusKV.Put(context.Background(), payload.JobID, status)
+		_, err = jobMilestoneKV.Put(context.Background(), payload.JobID, status)
 		if err != nil {
 			logger.Error("failed to write complete status to kv", "job_id", payload.JobID, "err", err)
 			sJetstream.NakWithErrHandling(logger, msg)

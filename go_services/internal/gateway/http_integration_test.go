@@ -301,7 +301,7 @@ type serverEnv struct {
 func setupServer(t *testing.T) *serverEnv {
 	t.Helper()
 	js, nc := stest.SetupNats(t)
-	kv := stest.SetupJobStatusKV(t, js)
+	kv := stest.SetupJobMilestoneKV(t, js)
 
 	httpPort := stest.FreePort(t)
 	url := "http://localhost:" + httpPort
@@ -324,7 +324,7 @@ func setupServer(t *testing.T) *serverEnv {
 // covers the full upload pipeline: multipart form → SeaweedFS → NATS → response.
 func TestUploadVideoFlow(t *testing.T) {
 	js, nc := stest.SetupNats(t)
-	kv := stest.SetupJobStatusKV(t, js)
+	kv := stest.SetupJobMilestoneKV(t, js)
 	h := newUploadHandler(js, kv, sharedFilerUrl)
 
 	t.Run("Rejects uploads exceeding MaxUploadBytes", func(t *testing.T) {
@@ -565,7 +565,7 @@ func TestUploadPipeline(t *testing.T) {
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&uploadResp))
 		require.NotEmpty(t, uploadResp.JobID)
 
-		kv := stest.SetupJobStatusKV(t, env.js)
+		kv := stest.SetupJobMilestoneKV(t, env.js)
 		entry, err := kv.Get(context.Background(), uploadResp.JobID)
 		require.NoError(t, err)
 		var status struct {
@@ -588,7 +588,7 @@ func TestUploadPipeline(t *testing.T) {
 	})
 
 	t.Run("multiple uploads each get their own PROCESSING entry in KV", func(t *testing.T) {
-		kv := stest.SetupJobStatusKV(t, env.js)
+		kv := stest.SetupJobMilestoneKV(t, env.js)
 		jobIDs := make([]string, 3)
 
 		for i := range jobIDs {

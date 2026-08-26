@@ -73,9 +73,9 @@ func TestConsumeVideoChunk(t *testing.T) {
 		js, _ := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
@@ -97,9 +97,9 @@ func TestConsumeVideoChunk(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -138,9 +138,9 @@ func TestConsumeVideoChunk(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -199,9 +199,9 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 
 			storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, tc.fileName, tc.videoContent(t))
 			claimKV := test.SetupKV(t, js, "chunk-claims")
-			jobStatusKV := test.SetupJobStatusKV(t, js)
+			jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+			_, err := ConsumeVideoChunk(tc.baseStorageURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 			require.NoError(t, err)
 
 			publishVideoChunk(t, js, VideoChunkMessage{
@@ -250,9 +250,9 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -274,9 +274,9 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -347,9 +347,9 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -378,9 +378,9 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		require.NoError(t, err)
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -408,9 +408,9 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		// Seed invalid video so transcoding fails.
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "bad.mp4", []byte("not a video"))
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
@@ -428,7 +428,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
 		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 		jobID := "job-redelivery-race"
 		t.Cleanup(func() {
@@ -471,9 +471,9 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		const ackWait = 2 * time.Second // short ackWait so test doesnt take forever
 
 		// Two workers sharing same durable consumer to simulate two scaled out transcoder instances
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, ackWait, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())
 		require.NoError(t, err)
-		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobStatusKV, claimKV, ackWait, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{

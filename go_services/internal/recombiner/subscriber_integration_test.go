@@ -38,7 +38,7 @@ func TestReturnCorrectConfig(t *testing.T) {
 	ctx := context.Background()
 	js, _ := test.SetupNats(t)
 	kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-	jobStatusKV := test.SetupJobStatusKV(t, js)
+	jobStatusKV := test.SetupJobMilestoneKV(t, js)
 	claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 	_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
@@ -66,7 +66,7 @@ func TestMessageHandlingI(t *testing.T) {
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
@@ -92,7 +92,7 @@ func TestMessageHandlingI(t *testing.T) {
 	t.Run("partial chunk does not publish downstream", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
@@ -134,7 +134,7 @@ func TestMessageHandlingI(t *testing.T) {
 		test.SeedProcessedVideo(t, sharedFilerURL, "job-combine", "chunk-0.mp4", videoData)
 		test.SeedProcessedVideo(t, sharedFilerURL, "job-combine", "chunk-1.mp4", videoData)
 
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
@@ -180,7 +180,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		_, err := kv.Put(context.Background(), fmt.Sprintf("%s.%d", jobID, 0), []byte("received"))
 		require.NoError(t, err)
 
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
@@ -215,7 +215,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 
 		jobID := "job-idempotency-write"
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
@@ -253,7 +253,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		// storage hiccup that later resolves).
 		test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-0.mp4", videoData)
 
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)

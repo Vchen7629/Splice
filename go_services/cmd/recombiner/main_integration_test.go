@@ -37,7 +37,7 @@ func TestRunCombinerI(t *testing.T) {
 	t.Run("quit signal exits cleanly", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 		quit := make(chan os.Signal, 1)
 		done := make(chan error, 1)
@@ -77,7 +77,7 @@ func TestRunCombinerI(t *testing.T) {
 
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-		jobStatusKV := test.SetupJobStatusKV(t, js)
+		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
 		jobID := "job-full-flow"
@@ -189,7 +189,7 @@ func TestMainI(t *testing.T) {
 		defer setupNC.Close()
 		setupJS, err := jetstream.New(setupNC)
 		require.NoError(t, err)
-		test.SetupJobStatusKV(t, setupJS)
+		test.SetupJobMilestoneKV(t, setupJS)
 
 		code := test.PatchExit(t, &osExit)
 		test.WriteEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=%s\nHTTP_PORT=0\n", sharedFilerURL, natsURL))

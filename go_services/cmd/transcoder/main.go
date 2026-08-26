@@ -72,12 +72,12 @@ func main() {
 
 	claimKV := sJetstream.CreateKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
 	processedKV := sJetstream.CreateKV("transcode-chunk-job-processed", js, 3*time.Hour, logger)
-	jobStatusKV := sJetstream.ConnectKV(js, "job-status", logger)
+	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobStatusKV, claimKV, js, nc, chunkAckWait, logger, quit)
+	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobMilestoneKV, claimKV, js, nc, chunkAckWait, logger, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
@@ -90,7 +90,7 @@ type ncDrainer interface {
 // run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
 func runProcessing(
 	baseStorageURL, httpPort string,
-	processedKV, jobStatusKV, claimKV jetstream.KeyValue,
+	processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	js jetstream.JetStream,
 	nc ncDrainer,
 	chunkAckWait time.Duration,
@@ -101,7 +101,7 @@ func runProcessing(
 
 	server := shandler.StartHealthHttpServer(logger, httpPort)
 
-	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobStatusKV, claimKV, chunkAckWait, logger)
+	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
 	if err != nil {
 		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start consumer: %w", err)

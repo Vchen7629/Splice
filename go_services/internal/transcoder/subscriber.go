@@ -22,7 +22,7 @@ var transcodeVideo = TranscodeVideo
 
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(
-	baseStorageURL string, js jetstream.JetStream, processedKV, jobStatusKV, claimKV jetstream.KeyValue,
+	baseStorageURL string, js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
 	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait)
@@ -49,7 +49,7 @@ func ConsumeVideoChunk(
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
-			return processChunk(js, processedKV, jobStatusKV, msg, baseStorageURL, payload, logger)
+			return processChunk(js, processedKV, jobMilestoneKV, msg, baseStorageURL, payload, logger)
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -74,16 +74,16 @@ func ConsumeVideoChunk(
 // -> acking and removing the temp files
 // returns a bool: false if any part fails and we want to stop or true if its done
 func processChunk(
-	js jetstream.JetStream, processedKV, jobStatusKV jetstream.KeyValue,
+	js jetstream.JetStream, processedKV, jobMilestoneKV jetstream.KeyValue,
 	msg jetstream.Msg, baseStorageURL string, payload VideoChunkMessage, logger *slog.Logger,
 ) bool {
 	processingMsg, err := handler.MarshalProcessingStatusMsg("transcoder")
 	if err != nil {
 		logger.Error("error marshalling status text", "err", err)
 	}
-	err = sJetstream.PutKeyKV(jobStatusKV, payload.JobID, processingMsg)
+	err = sJetstream.PutKeyKV(jobMilestoneKV, payload.JobID, processingMsg)
 	if err != nil {
-		logger.Error("failed to update job_status stage", "job_id", payload.JobID, "err", err)
+		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 	}
 
 	fileName := fmt.Sprintf("temp-unprocessed-%s", payload.JobID)

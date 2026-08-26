@@ -64,13 +64,13 @@ func runGateway(cfg *Config, logger *slog.Logger, quit <-chan os.Signal) error {
 		return fmt.Errorf("unable to connect to jetstream: %w", err)
 	}
 
-	jobStatusKV := sJetstream.CreateKV("job-status", js, 0, logger) // no ttl for now
+	jobMilestoneKV := sJetstream.CreateKV("job-milestones", js, 0, logger) // no ttl for now
 
-	advisorySub, err := gateway.ListenAdvisoriesFailure(nc, js, jobStatusKV, logger)
+	advisorySub, err := gateway.ListenAdvisoriesFailure(nc, js, jobMilestoneKV, logger)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to advisories: %w", err)
 	}
-	jobCompleteSub, err := gateway.ListenJobComplete(js, jobStatusKV, logger)
+	jobCompleteSub, err := gateway.ListenJobComplete(js, jobMilestoneKV, logger)
 	if err != nil {
 		// advisorySub is already live; drop it so a failed start leaves nothing behind.
 		unsubErr := advisorySub.Unsubscribe()
@@ -83,7 +83,7 @@ func runGateway(cfg *Config, logger *slog.Logger, quit <-chan os.Signal) error {
 	logger.Debug("starting service...")
 
 	server := gateway.StartHttpApi(
-		logger, nc, js, jobStatusKV, cfg.HTTPPort, cfg.StorageURL,
+		logger, nc, js, jobMilestoneKV, cfg.HTTPPort, cfg.StorageURL,
 		gateway.ServiceURLs{
 			SceneDetector:  cfg.SceneDetectorURL,
 			Transcoder:     cfg.TranscoderURL,
