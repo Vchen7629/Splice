@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Toaster } from 'sonner'
 import { useVideoQueueStore } from './state/videoQueue'
 import { useUploadQueue } from './hooks/useUploadQueue'
-import { useJobPolling } from './hooks/useJobPolling'
+import { useJobEvents } from './hooks/useJobEvents'
 import type { ProcessingType, UploadedFile } from './types/file'
 import { defaultResolution, getVideoResolution } from './utils/videoResolution'
 import { useTheme } from './hooks/useTheme'
@@ -24,7 +24,7 @@ function App() {
   const fileMap = useRef<Map<number, File>>(new Map())
   const { mode, toggleMode } = useTheme()
   const { isDragging, inputRef, browse, dropHandlers, handleInputChange } = useFileDrop(handleFiles)
-  useJobPolling()
+  useJobEvents()
 
   const queue = uploadedVideos[activeFeature]
   const output = processedVideos[activeFeature]
