@@ -29,6 +29,7 @@ async def test_calls_process_msg_for_published_message(
 
     task = asyncio.create_task(
         consumer(
+            nc,
             js,
             kv,
             job_status_kv,

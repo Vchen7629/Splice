@@ -38,7 +38,7 @@ async def test_processes_published_message(
     with patch(
         "src.processing.nats_msg.process_job", new_callable=AsyncMock, return_value=[]
     ) as mock_process:
-        await process_msg(js, kv, job_status_kv, msg)
+        await process_msg(nc, js, kv, job_status_kv, msg)
 
     mock_process.assert_called_once_with(
         ProcessJobMessage(
@@ -79,7 +79,7 @@ async def test_skips_redelivered_message_for_already_processed_job(
     with patch(
         "src.processing.nats_msg.process_job", new_callable=AsyncMock, return_value=[]
     ) as mock_process:
-        await process_msg(js, kv, job_status_kv, msg)
+        await process_msg(nc, js, kv, job_status_kv, msg)
 
     mock_process.assert_not_called()
     msg.ack.assert_called_once()

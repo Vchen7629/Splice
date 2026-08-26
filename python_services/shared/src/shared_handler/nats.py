@@ -1,5 +1,6 @@
 from typing import Awaitable
 from typing import Callable
+from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js.api import ConsumerConfig
@@ -13,13 +14,16 @@ from .messages import VideoChunkMessage
 
 
 async def consumer(
+    nc: NATSClient,
     js: JetStreamContext,
     msg_processed_kv: KeyValue,
-    job_status_kv: KeyValue,
+    job_milestone_kv: KeyValue,
     sub_subject: str,
     durable_name: str,
     queue_name: str,
-    process_msg: Callable[[JetStreamContext, KeyValue, KeyValue, Msg], Awaitable[None]],
+    process_msg: Callable[
+        [NATSClient, JetStreamContext, KeyValue, KeyValue, Msg], Awaitable[None]
+    ],
 ) -> None:
     """Nats jetstream consumer that subscribes to subject to process videos"""
     sub = await js.subscribe(
@@ -32,7 +36,7 @@ async def consumer(
     )
 
     async for msg in sub.messages:
-        await process_msg(js, msg_processed_kv, job_status_kv, msg)
+        await process_msg(nc, js, msg_processed_kv, job_milestone_kv, msg)
 
 
 async def publisher(

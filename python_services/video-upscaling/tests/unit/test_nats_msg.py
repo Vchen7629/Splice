@@ -1,13 +1,18 @@
 from typing import Any
 from pathlib import Path
-from unittest.mock import ANY
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from nats.aio.client import Client as NATSClient
+from nats.js.kv import KeyValue
+from nats.js.client import JetStreamContext
 from src.core.settings import settings
-from src.processing.nats_msg import process_msg
-from src.processing.nats_msg import _finalize_job
-from shared_handler.messages import ProcessJobMessage
-from shared_handler.messages import UpscaleCompleteMsg
+from src.processing.nats_msg import process_msg, _finalize_job, _make_progress_reporter
+from shared_handler.messages import ProcessJobMessage, UpscaleCompleteMsg
 import pytest
+
+
+MOCK_NC = AsyncMock(spec=NATSClient)
+MOCK_JS = AsyncMock(spec=JetStreamContext)
+MOCK_KV = AsyncMock(spec=KeyValue)
 
 
 def make_msg(
@@ -35,7 +40,7 @@ async def test_already_processed_acks_and_returns(
     nats_msg_patches["check"].return_value = True
     msg = make_msg()
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     msg.ack.assert_called_once()
     nats_msg_patches["upscale"].assert_not_called()
@@ -50,9 +55,9 @@ async def test_already_processed_skips_status_update(
     nats_msg_patches["check"].return_value = True
     msg = make_msg()
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
-    nats_msg_patches["update_status"].assert_not_called()
+    nats_msg_patches["update_stage"].assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -63,7 +68,7 @@ async def test_upscale_path_calls_video_upscale(
     nats_msg_patches["select"].return_value = (model_path, 2)
     msg = make_msg(source_resolution="480p", target_resolution="1080p")
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["upscale"].assert_called_once()
     nats_msg_patches["downscale"].assert_not_called()
@@ -76,7 +81,7 @@ async def test_downscale_path_calls_video_downscale(
     nats_msg_patches["select"].return_value = None
     msg = make_msg(source_resolution="1080p", target_resolution="480p")
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["downscale"].assert_called_once()
     nats_msg_patches["upscale"].assert_not_called()
@@ -89,7 +94,7 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
     nats_msg_patches["fetch"].return_value = "/tmp/video.mp4"
     msg = make_msg(job_id="abc", source_resolution="480p", target_resolution="1080p")
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["upscale"].assert_called_once_with(
         "abc",
@@ -106,7 +111,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
     nats_msg_patches["fetch"].return_value = "/tmp/video.mp4"
     msg = make_msg(job_id="abc", source_resolution="1080p", target_resolution="480p")
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["downscale"].assert_called_once_with(
         "/tmp/video.mp4",
@@ -122,7 +127,7 @@ async def test_invalid_json_acks_without_updating_kv(
     msg = AsyncMock()
     msg.data = b"not valid json"
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     msg.ack.assert_called_once()
     msg.nak.assert_not_called()
@@ -136,7 +141,7 @@ async def test_fetch_video_raises_updates_kv_and_acks(
     nats_msg_patches["fetch"].side_effect = RuntimeError("storage down")
     msg = make_msg()
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["update_failed"].assert_called_once_with(
         ANY, "job-123", "storage down", settings.SERVICE_NAME
@@ -153,7 +158,7 @@ async def test_video_upscale_raises_updates_kv_and_acks(
     nats_msg_patches["upscale"].side_effect = RuntimeError("gpu oom")
     msg = make_msg()
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["update_failed"].assert_called_once_with(
         ANY, "job-123", "gpu oom", settings.SERVICE_NAME
@@ -170,7 +175,7 @@ async def test_video_downscale_raises_updates_kv_and_acks(
     nats_msg_patches["downscale"].side_effect = RuntimeError("ffmpeg failed")
     msg = make_msg(source_resolution="1080p", target_resolution="480p")
 
-    await process_msg(AsyncMock(), AsyncMock(), AsyncMock(), msg)
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["update_failed"].assert_called_once_with(
         ANY, "job-123", "ffmpeg failed", settings.SERVICE_NAME
@@ -184,7 +189,7 @@ async def test_finalize_uploads_to_correct_storage_url(
     nats_msg_patches: dict[str, Any],
 ) -> None:
     await _finalize_job(
-        AsyncMock(), AsyncMock(), AsyncMock(), "job-abc", "/tmp/job-abc/output.mp4"
+        MOCK_JS, MOCK_KV, AsyncMock(), "job-abc", "/tmp/job-abc/output.mp4"
     )
 
     expected_url = f"{settings.BASE_STORAGE_URL}/job-abc/output.mp4/processed"
@@ -197,11 +202,10 @@ async def test_finalize_uploads_to_correct_storage_url(
 async def test_finalize_publishes_upscale_complete_msg(
     nats_msg_patches: dict[str, Any],
 ) -> None:
-    mock_js = AsyncMock()
-    await _finalize_job(mock_js, AsyncMock(), AsyncMock(), "job-abc", "/tmp/out.mp4")
+    await _finalize_job(MOCK_JS, MOCK_KV, AsyncMock(), "job-abc", "/tmp/out.mp4")
 
     nats_msg_patches["pub"].assert_called_once_with(
-        mock_js,
+        MOCK_JS,
         UpscaleCompleteMsg(job_id="job-abc"),
         settings.PUB_SUBJECT,
         settings.SERVICE_NAME,
@@ -213,7 +217,7 @@ async def test_finalize_marks_job_processed_in_kv(
     nats_msg_patches: dict[str, Any],
 ) -> None:
     mock_kv = AsyncMock()
-    await _finalize_job(AsyncMock(), mock_kv, AsyncMock(), "job-abc", "/tmp/out.mp4")
+    await _finalize_job(MOCK_JS, mock_kv, AsyncMock(), "job-abc", "/tmp/out.mp4")
 
     mock_kv.put.assert_called_once_with("job-abc", b"done")
 
@@ -221,7 +225,7 @@ async def test_finalize_marks_job_processed_in_kv(
 @pytest.mark.asyncio
 async def test_finalize_acks_message(nats_msg_patches: dict[str, Any]) -> None:
     msg = AsyncMock()
-    await _finalize_job(AsyncMock(), AsyncMock(), msg, "job-abc", "/tmp/out.mp4")
+    await _finalize_job(MOCK_JS, MOCK_KV, msg, "job-abc", "/tmp/out.mp4")
 
     msg.ack.assert_called_once()
 
@@ -229,8 +233,8 @@ async def test_finalize_acks_message(nats_msg_patches: dict[str, Any]) -> None:
 @pytest.mark.asyncio
 async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> None:
     await _finalize_job(
-        AsyncMock(),
-        AsyncMock(),
+        MOCK_JS,
+        MOCK_KV,
         AsyncMock(),
         "job-abc",
         "../temp_output/job-abc/video.mp4",
@@ -239,3 +243,49 @@ async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> N
     rmtree_calls = nats_msg_patches["rmtree"].call_args_list
     removed_paths = [str(c.args[0]) for c in rmtree_calls]
     assert any("job-abc" in p for p in removed_paths)
+
+
+def test_progress_reporter_publishes_first_reading() -> None:
+    import json
+
+    mock_nc = MagicMock(spec=NATSClient)
+
+    with patch(
+        "src.processing.nats_msg.asyncio.run_coroutine_threadsafe"
+    ) as mock_schedule:
+        reporter = _make_progress_reporter(mock_nc, "job-1", MagicMock())
+        reporter(10)
+
+    mock_nc.publish.assert_called_once()
+    subject, payload = mock_nc.publish.call_args.args
+    assert subject == "progress.job-1"
+    assert json.loads(payload) == {
+        "job_id": "job-1",
+        "stage": settings.SERVICE_NAME,
+        "progress": 10,
+    }
+    mock_schedule.assert_called_once()
+
+
+def test_progress_reporter_throttles_unchanged_percent() -> None:
+    """progress reporter shouldnt change if percent doesnt update"""
+    mock_nc = MagicMock(spec=NATSClient)
+
+    with patch("src.processing.nats_msg.asyncio.run_coroutine_threadsafe"):
+        reporter = _make_progress_reporter(mock_nc, "job-1", AsyncMock())
+        reporter(10)
+        reporter(10)  # 2nd unchanged call
+
+    assert mock_nc.publish.call_count == 1
+
+
+def test_progress_reporter_publishes_on_percent_change() -> None:
+    """progress reporter should publish if percent changes"""
+    mock_nc = MagicMock(spec=NATSClient)
+
+    with patch("src.processing.nats_msg.asyncio.run_coroutine_threadsafe"):
+        reporter = _make_progress_reporter(mock_nc, "job-1", AsyncMock())
+        reporter(10)
+        reporter(11)
+
+    assert mock_nc.publish.call_count == 2

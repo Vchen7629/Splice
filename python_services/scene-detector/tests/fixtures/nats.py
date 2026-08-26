@@ -35,7 +35,7 @@ async def js_context(
         name="videos",
         subjects=[settings.SUB_SUBJECT, settings.PUB_SUBJECT],
     )
-    await js.create_key_value(config=KeyValueConfig(bucket="job-status"))
+    await js.create_key_value(config=KeyValueConfig(bucket="job-milestones"))
     yield nc, js
     await nc.close()
 

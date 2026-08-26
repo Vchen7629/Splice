@@ -93,7 +93,7 @@ async def test_drain_called_even_if_consumer_raises(service_patches: Any) -> Non
             lambda js: setattr(  # pyrefly: ignore[implicit-any-lambda]
                 js, "key_value", AsyncMock(side_effect=js_errors.NotFoundError)
             ),
-            "job-status KV bucket not found",
+            "job-milestones KV bucket not found",
         ),
         (
             lambda js: setattr(  # pyrefly: ignore[implicit-any-lambda]

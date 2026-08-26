@@ -24,13 +24,14 @@ async def start_service() -> None:
         await check_js_stream_exists(js, settings.SUB_SUBJECT)
         await check_js_stream_exists(js, settings.PUB_SUBJECT)
 
-        job_status_kv = await connect_kv(js, "job-status")
+        job_milestone_kv = await connect_kv(js, "job-milestones")
         msg_processed_kv = await create_kv(js, "upscale-processed")
 
         await consumer(
+            nc,
             js,
             msg_processed_kv,
-            job_status_kv,
+            job_milestone_kv,
             settings.SUB_SUBJECT,
             settings.SUB_QUEUE_NAME,
             settings.SUB_QUEUE_NAME,
