@@ -1,5 +1,5 @@
 import { AxiosError } from "axios"
-import { GatewayApi } from "../lib/basePath"
+import { GatewayApi, GATEWAY_BASE_URL } from "../lib/basePath"
 
 export const VideoService = {
     // upload with XHR to show upload progress
@@ -11,7 +11,6 @@ export const VideoService = {
         onProgress: (pct: number) => void
     ): { promise: Promise<{ job_id: string }>; abort: () => void} => {
         let xhr: XMLHttpRequest
-        const BASE_URL = 'http://localhost:8080'
 
         const promise = new Promise<{ job_id: string }>((resolve, reject) => {
             xhr = new XMLHttpRequest()
@@ -36,7 +35,7 @@ export const VideoService = {
             xhr.addEventListener('error', () => reject(new Error('Network error during upload')))
             xhr.addEventListener('abort', () => reject(new DOMException('Upload cancelled', 'AbortError')))
 
-            xhr.open('POST', `${BASE_URL}/jobs/upload`)
+            xhr.open('POST', `${GATEWAY_BASE_URL}/jobs/upload`)
             xhr.send(formData)
         })
 
@@ -60,6 +59,9 @@ export const VideoService = {
             }
         }
     },
+
+    connectEvents: (jobId: string): EventSource => 
+        new EventSource(`${GATEWAY_BASE_URL}/jobs/${jobId}/events`),
 
     download: async(jobId: string, fileName: string) => {
         try {
