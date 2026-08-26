@@ -34,7 +34,7 @@ func publishVideoChunk(t *testing.T, js jetstream.JetStream, msg VideoChunkMessa
 	require.NoError(t, err)
 }
 
-// assertNacked polls until the named consumer has a pending ack, confirming the message was nacked.
+// assertNacked polls until the named consumer has redelivered the message, confirming it was nacked.
 func assertNacked(t *testing.T, js jetstream.JetStream, msg string) {
 	t.Helper()
 	ctx := context.Background()
@@ -51,7 +51,7 @@ func assertNacked(t *testing.T, js jetstream.JetStream, msg string) {
 		if err != nil {
 			return false
 		}
-		return info.NumAckPending > 0
+		return info.NumRedelivered > 0
 	}, 30*time.Second, 200*time.Millisecond, msg)
 }
 
@@ -178,7 +178,7 @@ func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testin
 		State string `json:"state"`
 	}{State: "COMPLETE"})
 	require.NoError(t, err)
-	_, err = jobMilestoneKV.Put(context.Background(), jobID, completeStatus)
+	completeRevision, err := jobMilestoneKV.Put(context.Background(), jobID, completeStatus)
 	require.NoError(t, err)
 
 	storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "not_a_video.mp4", []byte("this is not a video"))
@@ -201,6 +201,7 @@ func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testin
 	}
 	require.NoError(t, json.Unmarshal(entry.Value(), &status))
 	assert.Equal(t, "COMPLETE", status.State, "processing a chunk after job completion must not regress the milestone")
+	assert.Equal(t, completeRevision, entry.Revision(), "AdvanceMilestone must not write at all once the milestone is terminal")
 }
 
 func TestConsumeVideoChunkNaksOnError(t *testing.T) {

@@ -80,6 +80,8 @@ func processChunk(
 	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "transcoder"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
+		sJetstream.NakWithErrHandling(logger, msg)
+		return false
 	}
 
 	fileName := fmt.Sprintf("temp-unprocessed-%s", payload.JobID)
