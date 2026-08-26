@@ -129,6 +129,82 @@ func TestClaimChunk(t *testing.T) {
 	})
 }
 
+// For job milestone kv related tests
+
+func TestAdvanceMilestoneWritePolicy(t *testing.T) {
+	tests := []struct {
+		name      string
+		current   *test.MockKV
+		newStatus MilestoneStatus
+		wantWrite bool
+	}{
+		{
+			name:      "creates entry when job has no milestone yet",
+			current:   &test.MockKV{},
+			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			wantWrite: true,
+		},
+		{
+			name:      "advances when new stage is ahead of current",
+			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
+			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"},
+			wantWrite: true,
+		},
+		{
+			name:      "no-ops when new stage is behind current",
+			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
+			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			wantWrite: false,
+		},
+		{
+			name:      "no-ops on terminal COMPLETE",
+			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
+			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			wantWrite: false,
+		},
+		{
+			name:      "no-ops on terminal FAILED",
+			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
+			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			wantWrite: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := AdvanceMilestone(tc.current, "job-1", tc.newStatus)
+
+			require.NoError(t, err)
+			wrote := tc.current.CreateKey != "" || tc.current.UpdateKey != ""
+			assert.Equal(t, tc.wantWrite, wrote)
+		})
+	}
+}
+
+func TestAdvanceMilestoneErrors(t *testing.T) {
+	transcoderValue := []byte(`{"state":"PROCESSING","stage":"transcoder"}`)
+
+	tests := []struct {
+		name   string
+		mockKV *test.MockKV
+	}{
+		{"Get fails", &test.MockKV{GetErr: errors.New("kv unavailable")}},
+		{"Create fails", &test.MockKV{CreateErr: errors.New("create failed")}},
+		{"Update fails", &test.MockKV{GetFound: true, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newStatus := MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"}
+
+			err := AdvanceMilestone(tc.mockKV, "job-1", newStatus)
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "failed")
+		})
+	}
+}
+
 func TestReleaseChunkClaim(t *testing.T) {
 	t.Run("returns nil on success", func(t *testing.T) {
 		mockKV := &test.MockKV{}

@@ -17,7 +17,7 @@ const subSubject = "jobs.chunks.complete"
 
 // recombines video chunks back into one video
 func RecombineVideo(
-	js jetstream.JetStream, msgRecievedKV, jobStatusKV, claimKV jetstream.KeyValue,
+	js jetstream.JetStream, msgRecievedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
 	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "video-recombiner", ackWait)
@@ -44,7 +44,7 @@ func RecombineVideo(
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
-			return recombineChunks(js, jobStatusKV, msgRecievedKV, msg, payload, baseStorageURL, logger)
+			return recombineChunks(js, jobMilestoneKV, msgRecievedKV, msg, payload, baseStorageURL, logger)
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -68,14 +68,10 @@ func RecombineVideo(
 // -> publishing the job complete nats msg
 // returns a bool: false if any part fails and we want to stop or true if its done
 func recombineChunks(
-	js jetstream.JetStream, jobStatusKV, msgRecievedKV jetstream.KeyValue, msg jetstream.Msg,
+	js jetstream.JetStream, jobMilestoneKV, msgRecievedKV jetstream.KeyValue, msg jetstream.Msg,
 	payload handler.ChunkCompleteMessage, baseStorageURL string, logger *slog.Logger,
 ) bool {
-	processingMsg, err := handler.MarshalProcessingStatusMsg("video-recombiner")
-	if err != nil {
-		logger.Error("error marshalling status text", "err", err)
-	}
-	err = sJetstream.PutKeyKV(jobStatusKV, payload.JobID, processingMsg)
+	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 	}

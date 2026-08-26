@@ -77,11 +77,7 @@ func processChunk(
 	js jetstream.JetStream, processedKV, jobMilestoneKV jetstream.KeyValue,
 	msg jetstream.Msg, baseStorageURL string, payload VideoChunkMessage, logger *slog.Logger,
 ) bool {
-	processingMsg, err := handler.MarshalProcessingStatusMsg("transcoder")
-	if err != nil {
-		logger.Error("error marshalling status text", "err", err)
-	}
-	err = sJetstream.PutKeyKV(jobMilestoneKV, payload.JobID, processingMsg)
+	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "transcoder"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 	}
