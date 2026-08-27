@@ -67,6 +67,52 @@ async def check_already_processed(kv: KeyValue, job_id: str) -> bool:
         return False
 
 
+TERMINAL_MILESTONE_STATES = {"COMPLETE", "FAILED"}
+
+MILESTONE_STAGE_ORDER = {
+    "scene-detector": 0,
+    "video-upscaling": 0,
+    "video-recombiner": 1,
+}
+
+
+async def advance_milestone(
+    job_milestone_kv: KeyValue,
+    job_id: str,
+    payload: dict[str, str],
+) -> None:
+    """
+    Writes payload to the job-milestones KV bucket only if it isn't behind the
+    currently stored stage and the job isn't already in terminal state
+    """
+    new_state = payload.get("state", "")
+    new_stage = payload.get("stage", "")
+    new_ordinal = MILESTONE_STAGE_ORDER.get(new_stage, -1)
+    status = json.dumps(payload).encode()
+
+    while True:
+        entry = await job_milestone_kv.get(job_id)
+
+        current = json.loads(entry.value)
+        current_state = current.get("state", "")
+        current_stage = current.get("stage", "")
+        current_ordinal = MILESTONE_STAGE_ORDER.get(current_stage, -1)
+
+        if current_state in TERMINAL_MILESTONE_STATES:
+            return
+        if (
+            new_state not in TERMINAL_MILESTONE_STATES
+            and current_ordinal >= new_ordinal
+        ):
+            return
+
+        try:
+            await job_milestone_kv.update(job_id, status, last=entry.revision)
+        except js_errors.KeyWrongLastSequenceError:
+            continue  # revision changed concurrently; reread and compare again
+        return
+
+
 async def update_job_stage(
     job_milestone_kv: KeyValue,
     job_id: str,
@@ -85,8 +131,7 @@ async def update_job_stage(
 
     try:
         payload: dict[str, str | int] = {"state": "PROCESSING", "stage": stage}
-        status = json.dumps(payload).encode()
-        await job_milestone_kv.put(job_id, status)
+        await advance_milestone(job_milestone_kv, job_id, payload)
     except Exception as e:
         logger.error("failed to update job-milestones stage", job_id=job_id, err=str(e))
         raise
@@ -107,9 +152,8 @@ async def update_job_failed(
     logger = get_logger(service_name)
 
     payload = {"state": "FAILED", "error": error}
-    status = json.dumps(payload).encode()
     try:
-        await job_milestone_kv.put(job_id, status)
+        await advance_milestone(job_milestone_kv, job_id, payload)
     except Exception as e:
         logger.error(
             "failed to update job-milestones to failed", job_id=job_id, err=str(e)

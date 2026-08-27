@@ -25,6 +25,9 @@ async def test_processes_published_message(
     )
 
     job_id = str(uuid.uuid4())
+    await job_status_kv.put(
+        job_id, json.dumps({"state": "PROCESSING", "stage": "upload"}).encode()
+    )
     msg = AsyncMock()
     msg.data = json.dumps(
         {

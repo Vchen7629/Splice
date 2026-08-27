@@ -1,6 +1,7 @@
 from typing import Generator
 from unittest.mock import AsyncMock, MagicMock
 from testcontainers.nats import NatsContainer
+import json
 import pytest
 
 
@@ -21,3 +22,9 @@ def mock_nats() -> tuple[MagicMock, MagicMock]:
     mock_nc.is_closed = False
     mock_nc.drain = AsyncMock()
     return mock_nc, mock_js
+
+
+def milestone_entry(state: str, stage: str = "", revision: int = 1) -> MagicMock:
+    payload = {"state": state, "stage": stage} if stage else {"state": state}
+
+    return MagicMock(value=json.dumps(payload).encode(), revision=revision)
