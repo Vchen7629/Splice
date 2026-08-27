@@ -23,6 +23,7 @@ async def test_advance_milestone_does_not_regress_terminal_state(
     )
 
     entry = await kv.get(job_id)
+    assert entry.value is not None
     assert json.loads(entry.value)["state"] == "COMPLETE"
     assert entry.revision == seed_revision
 
@@ -46,6 +47,7 @@ async def test_advance_milestone_advances_forward_stage(
     )
 
     entry = await kv.get(job_id)
+    assert entry.value is not None
     payload = json.loads(entry.value)
     assert payload == {"state": "PROCESSING", "stage": "video-recombiner"}
     assert entry.revision != seed_revision
