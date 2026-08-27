@@ -7,7 +7,7 @@ from nats.errors import TimeoutError
 from nats.errors import NoServersError
 from nats.errors import AuthorizationError
 from nats.js.client import JetStreamContext
-from shared_handler.connection import nats_connect
+from shared_handler import nats_connect
 import pytest
 
 

@@ -4,13 +4,12 @@ from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from shared_core.logging import get_logger
 from shared_core.settings import settings as shared_settings
-from shared_handler.nats import publisher, keep_alive
-from shared_handler.kv import (
+from shared_handler import (
+    publisher,
+    keep_alive,
     update_job_stage,
     update_job_failed,
     check_already_processed,
-)
-from shared_handler.messages import (
     ProgressMessage,
     ProcessJobMessage,
     UpscaleCompleteMsg,

@@ -1,7 +1,6 @@
 from typing import Any
 from nats.js.client import JetStreamContext
-from shared_handler.messages import VideoChunkMessage
-from shared_handler.nats import publisher
+from shared_handler import VideoChunkMessage, publisher
 import asyncio
 import pytest
 

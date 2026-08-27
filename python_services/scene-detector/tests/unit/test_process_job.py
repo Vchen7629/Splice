@@ -1,5 +1,4 @@
-from shared_handler.messages import ProcessJobMessage
-from shared_handler.messages import VideoChunkMessage
+from shared_handler.messages import ProcessJobMessage, VideoChunkMessage
 from scenedetect import VideoOpenFailure
 from unittest.mock import patch
 from src.processing.job import process_job

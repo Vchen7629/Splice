@@ -2,7 +2,7 @@ from typing import Any
 from unittest.mock import patch
 from unittest.mock import AsyncMock
 from nats.js import JetStreamContext
-from shared_handler.messages import VideoChunkMessage
+from shared_handler import VideoChunkMessage
 from src.service import start_service
 from src.core.settings import settings
 import asyncio

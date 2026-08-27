@@ -1,8 +1,7 @@
 from shared_core.logging import get_logger
 from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
-from shared_handler.messages import VideoChunkMessage
-from shared_handler.messages import ProcessJobMessage
+from shared_handler.messages import VideoChunkMessage, ProcessJobMessage
 from ..core.settings import settings
 from .video import split_into_chunks
 from scenedetect import VideoOpenFailure

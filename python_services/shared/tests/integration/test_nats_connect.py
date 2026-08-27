@@ -1,7 +1,7 @@
 from typing import Any
 from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
-from shared_handler.connection import nats_connect
+from shared_handler import nats_connect
 import pytest
 
 
