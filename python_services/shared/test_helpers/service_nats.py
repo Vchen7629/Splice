@@ -5,6 +5,7 @@ from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 from src.core.settings import settings
+from test_helpers.nats import milestone_entry
 import nats  # type: ignore[import-untyped]
 import pytest
 import pytest_asyncio
@@ -40,11 +41,17 @@ async def patched_start_service(
     mock_kv.get = AsyncMock(side_effect=KeyNotFoundError())
     mock_kv.put = AsyncMock()
 
+    mock_job_milestone_kv = MagicMock(spec=KeyValue)
+    mock_job_milestone_kv.get = AsyncMock(
+        return_value=milestone_entry("PROCESSING", "upload")
+    )
+    mock_job_milestone_kv.update = AsyncMock()
+
     with (
         patch("src.service.check_storage_health"),
         patch("src.service.start_health_server"),
         patch("src.service.nats_connect", return_value=(nc, js)),
-        patch("src.service.connect_kv", new_callable=AsyncMock),
+        patch("src.service.connect_kv", return_value=mock_job_milestone_kv),
         patch("src.service.create_kv", return_value=mock_kv),
     ):
         yield nc, js

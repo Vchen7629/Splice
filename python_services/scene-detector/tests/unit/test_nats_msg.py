@@ -9,12 +9,14 @@ from nats.js.client import JetStreamContext
 from shared_handler.messages import VideoChunkMessage
 from src.processing.nats_msg import process_msg
 from src.core.settings import settings
+from test_helpers.nats import milestone_entry
 import json
 import pytest
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)
 MOCK_KV = AsyncMock(spec=KeyValue)
+MOCK_KV.get.return_value = milestone_entry("PROCESSING", "upload")
 
 
 def make_mock_msg(data: dict[str, Any]) -> AsyncMock:
@@ -78,6 +80,7 @@ async def test_updates_kv_and_acks_on_failure(
     publish_kwargs: dict[str, Any],
 ) -> None:
     job_status_kv = AsyncMock(spec=KeyValue)
+    job_status_kv.get.return_value = milestone_entry("PROCESSING", "upload")
 
     with (
         patch(
@@ -93,7 +96,7 @@ async def test_updates_kv_and_acks_on_failure(
     ):
         await process_msg(MOCK_NC, MOCK_JS, mock_kv, job_status_kv, msg)
 
-    job_id, payload = job_status_kv.put.call_args_list[-1][0]
+    job_id, payload = job_status_kv.update.call_args_list[-1][0]
     assert job_id == "1"
     assert json.loads(payload)["state"] == "FAILED"
     msg.ack.assert_called_once()
@@ -223,7 +226,8 @@ async def test_update_job_stage_error_records_failure_and_acks(
     """When job_milestone_kv.put fails for the stage write but succeeds for the
     failed-write fallback, the failure is durably recorded and the message is acked."""
     mock_job_milestone_kv = AsyncMock(spec=KeyValue)
-    mock_job_milestone_kv.put.side_effect = [Exception("kv write failed"), None]
+    mock_job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
+    mock_job_milestone_kv.update.side_effect = [Exception("kv write failed"), None]
 
     with (
         patch(
@@ -235,7 +239,7 @@ async def test_update_job_stage_error_records_failure_and_acks(
     ):
         await process_msg(MOCK_NC, MOCK_JS, mock_kv, mock_job_milestone_kv, msg)
 
-    assert mock_job_milestone_kv.put.call_count == 2
+    assert mock_job_milestone_kv.update.call_count == 2
     msg.ack.assert_called_once()
     msg.nak.assert_not_called()
 
@@ -267,7 +271,7 @@ async def test_update_job_stage_error_naks_when_failure_write_also_fails(
 async def test_stage_written_to_job_status_kv_before_processing(
     mock_kv: AsyncMock,
 ) -> None:
-    """job_status_kv.put is called with PROCESSING:scene-detector before process_job runs"""
+    """job_status_kv.update is called with PROCESSING:scene-detector before process_job runs"""
     msg = make_mock_msg(
         {
             "job_id": "abc-123",
@@ -277,16 +281,17 @@ async def test_stage_written_to_job_status_kv_before_processing(
         }
     )
     mock_job_status_kv = AsyncMock(spec=KeyValue)
+    mock_job_status_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     call_order: list[str] = []
 
     async def fake_process_job(_metadata: Any) -> list[Any]:
         call_order.append("process_job")
         return []
 
-    async def fake_job_status_put(key: str, value: bytes) -> None:
-        call_order.append("job_status_put")
+    async def fake_job_status_update(key: str, value: bytes, last: int) -> None:
+        call_order.append("job_status_update")
 
-    mock_job_status_kv.put.side_effect = fake_job_status_put
+    mock_job_status_kv.update.side_effect = fake_job_status_update
 
     with (
         patch("src.processing.nats_msg.process_job", side_effect=fake_process_job),
@@ -297,5 +302,7 @@ async def test_stage_written_to_job_status_kv_before_processing(
     expected_payload = json.dumps(
         {"state": "PROCESSING", "stage": "scene-detector"}
     ).encode()
-    mock_job_status_kv.put.assert_called_once_with("abc-123", expected_payload)
-    assert call_order == ["job_status_put", "process_job"]
+    mock_job_status_kv.update.assert_called_once_with(
+        "abc-123", expected_payload, last=1
+    )
+    assert call_order == ["job_status_update", "process_job"]
