@@ -93,7 +93,7 @@ async def advance_milestone(
     while True:
         entry = await job_milestone_kv.get(job_id)
 
-        current = json.loads(entry.value)
+        current = json.loads(entry.value) if entry.value is not None else {}
         current_state = current.get("state", "")
         current_stage = current.get("stage", "")
         current_ordinal = MILESTONE_STAGE_ORDER.get(current_stage, -1)
@@ -130,7 +130,7 @@ async def update_job_stage(
     logger = get_logger(service_name)
 
     try:
-        payload: dict[str, str | int] = {"state": "PROCESSING", "stage": stage}
+        payload: dict[str, str] = {"state": "PROCESSING", "stage": stage}
         await advance_milestone(job_milestone_kv, job_id, payload)
     except Exception as e:
         logger.error("failed to update job-milestones stage", job_id=job_id, err=str(e))
