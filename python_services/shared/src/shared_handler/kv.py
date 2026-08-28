@@ -2,8 +2,7 @@ from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
-from shared_core.logging import get_logger
-from shared_core.settings import settings
+from shared_core import get_logger, settings
 import json
 import nats.js.errors as js_errors
 

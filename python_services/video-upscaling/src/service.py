@@ -1,4 +1,4 @@
-from shared_core.logging import get_logger
+from shared_core import get_logger
 from shared_handler import (
     create_kv,
     connect_kv,

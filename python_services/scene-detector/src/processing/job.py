@@ -1,4 +1,4 @@
-from shared_core.logging import get_logger
+from shared_core import get_logger
 from shared_storage.queries import fetch_video
 from shared_storage.queries import upload_video
 from shared_handler.messages import VideoChunkMessage, ProcessJobMessage

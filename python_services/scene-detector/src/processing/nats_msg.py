@@ -1,8 +1,7 @@
 from nats.js.kv import KeyValue
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
-from shared_core.logging import get_logger
-from shared_core.settings import settings as shared_settings
+from shared_core import get_logger, settings as shared_settings
 from shared_handler import (
     ProcessJobMessage,
     update_job_stage,

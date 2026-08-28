@@ -6,8 +6,7 @@ from nats.js.api import ConsumerConfig
 from nats.errors import TimeoutError
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
-from shared_core.logging import get_logger
-from shared_core.settings import settings
+from shared_core import get_logger, settings
 from shared_handler import UpscaleCompleteMsg
 from .messages import VideoChunkMessage
 import asyncio

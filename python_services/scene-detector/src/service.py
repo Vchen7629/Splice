@@ -6,7 +6,7 @@ from shared_handler import (
     check_js_stream_exists,
     start_health_server,
 )
-from shared_core.logging import get_logger
+from shared_core import get_logger
 from shared_storage.check_health import check_storage_health
 from .core.settings import settings
 from .processing.nats_msg import process_msg
