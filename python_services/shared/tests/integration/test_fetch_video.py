@@ -1,5 +1,5 @@
 from typing import Tuple
-from shared_storage.queries import fetch_video
+from shared_storage import fetch_video
 import requests
 import pytest
 import os

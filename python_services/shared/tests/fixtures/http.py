@@ -1,5 +1,5 @@
 from typing import Any
-from shared_handler.http import start_health_server
+from shared_handler import start_health_server
 import pytest
 
 

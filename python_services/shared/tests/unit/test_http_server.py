@@ -1,8 +1,7 @@
 from typing import Any
 from http.server import ThreadingHTTPServer
 from unittest.mock import MagicMock, create_autospec, patch
-from shared_handler.http import start_health_server
-from shared_handler.http import HealthEnpointHandler
+from shared_handler import start_health_server, HealthEnpointHandler
 import json
 import pytest
 import threading

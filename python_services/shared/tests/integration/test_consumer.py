@@ -2,7 +2,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 from nats.js.api import KeyValueConfig
 from nats.js.client import JetStreamContext
-from shared_handler.nats import consumer
+from shared_handler import consumer
 import pytest
 import asyncio
 

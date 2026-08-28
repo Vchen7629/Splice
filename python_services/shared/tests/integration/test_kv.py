@@ -1,6 +1,6 @@
 from typing import Any
 from nats.js.client import JetStreamContext
-from shared_handler.kv import advance_milestone
+from shared_handler import advance_milestone
 import json
 import pytest
 

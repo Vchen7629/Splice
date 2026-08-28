@@ -1,6 +1,6 @@
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from shared_storage.queries import upload_video
+from shared_storage import upload_video
 import requests
 import pytest
 

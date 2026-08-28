@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError
 from nats.js.kv import KeyValue
-from shared_handler.kv import advance_milestone
+from shared_handler import advance_milestone
 from test_helpers.nats import milestone_entry
 import pytest
 

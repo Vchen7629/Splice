@@ -4,7 +4,7 @@ from nats.aio.client import Client as NATSClient
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
-from shared_handler.nats import consumer
+from shared_handler import consumer
 import pytest
 
 MOCK_NC = AsyncMock(spec=NATSClient)

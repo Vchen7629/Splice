@@ -6,7 +6,7 @@ from nats.aio.client import Client as NATSClient
 from nats.js.kv import KeyValue
 from nats.js.errors import KeyNotFoundError
 from nats.js.client import JetStreamContext
-from shared_handler.messages import VideoChunkMessage
+from shared_handler import VideoChunkMessage
 from src.processing.nats_msg import process_msg
 from src.core.settings import settings
 from test_helpers.nats import milestone_entry

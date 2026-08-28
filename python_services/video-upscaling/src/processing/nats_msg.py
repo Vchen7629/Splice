@@ -2,20 +2,18 @@ from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
-from shared_core.logging import get_logger
-from shared_core.settings import settings as shared_settings
-from shared_handler.nats import publisher, keep_alive
-from shared_handler.kv import (
+from shared_core import get_logger, settings as shared_settings
+from shared_handler import (
+    publisher,
+    keep_alive,
     update_job_stage,
     update_job_failed,
     check_already_processed,
-)
-from shared_handler.messages import (
     ProgressMessage,
     ProcessJobMessage,
     UpscaleCompleteMsg,
 )
-from shared_storage.queries import fetch_video, upload_video
+from shared_storage import fetch_video, upload_video
 from typing import Callable
 from ..core.settings import settings
 from .video import video_upscale, video_downscale, recombine_video_audio

@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-from shared_storage.check_health import check_storage_health
+from shared_storage import check_storage_health
 import requests
 import pytest
 

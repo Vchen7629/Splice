@@ -3,7 +3,7 @@ from unittest.mock import patch
 from unittest.mock import AsyncMock
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
-from shared_handler.messages import ProcessJobMessage
+from shared_handler import ProcessJobMessage
 from src.processing.nats_msg import process_msg
 import json
 import pytest
