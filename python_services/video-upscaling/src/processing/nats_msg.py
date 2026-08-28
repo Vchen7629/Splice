@@ -13,7 +13,7 @@ from shared_handler import (
     ProcessJobMessage,
     UpscaleCompleteMsg,
 )
-from shared_storage.queries import fetch_video, upload_video
+from shared_storage import fetch_video, upload_video
 from typing import Callable
 from ..core.settings import settings
 from .video import video_upscale, video_downscale, recombine_video_audio

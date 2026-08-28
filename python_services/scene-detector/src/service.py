@@ -7,7 +7,7 @@ from shared_handler import (
     start_health_server,
 )
 from shared_core import get_logger
-from shared_storage.check_health import check_storage_health
+from shared_storage import check_storage_health
 from .core.settings import settings
 from .processing.nats_msg import process_msg
 import asyncio
