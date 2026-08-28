@@ -1,5 +1,4 @@
-from src.utils.model_router import Resolution
-from src.utils.model_router import select_model
+from src.utils import Resolution, select_model
 import pytest
 
 

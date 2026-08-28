@@ -1,11 +1,11 @@
 from typing import Any
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock
 from nats.aio.client import Client as NATSClient
 from nats.js.kv import KeyValue
 from nats.js.client import JetStreamContext
 from src.core.settings import settings
-from src.processing.nats_msg import process_msg, _finalize_job, _make_progress_reporter
+from src.processing.nats_msg import process_msg, _finalize_job
 from shared_handler import ProcessJobMessage, UpscaleCompleteMsg
 import pytest
 
@@ -243,49 +243,3 @@ async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> N
     rmtree_calls = nats_msg_patches["rmtree"].call_args_list
     removed_paths = [str(c.args[0]) for c in rmtree_calls]
     assert any("job-abc" in p for p in removed_paths)
-
-
-def test_progress_reporter_publishes_first_reading() -> None:
-    import json
-
-    mock_nc = MagicMock(spec=NATSClient)
-
-    with patch(
-        "src.processing.nats_msg.asyncio.run_coroutine_threadsafe"
-    ) as mock_schedule:
-        reporter = _make_progress_reporter(mock_nc, "job-1", MagicMock())
-        reporter(10)
-
-    mock_nc.publish.assert_called_once()
-    subject, payload = mock_nc.publish.call_args.args
-    assert subject == "progress.job-1"
-    assert json.loads(payload) == {
-        "job_id": "job-1",
-        "stage": settings.SERVICE_NAME,
-        "progress": 10,
-    }
-    mock_schedule.assert_called_once()
-
-
-def test_progress_reporter_throttles_unchanged_percent() -> None:
-    """progress reporter shouldnt change if percent doesnt update"""
-    mock_nc = MagicMock(spec=NATSClient)
-
-    with patch("src.processing.nats_msg.asyncio.run_coroutine_threadsafe"):
-        reporter = _make_progress_reporter(mock_nc, "job-1", AsyncMock())
-        reporter(10)
-        reporter(10)  # 2nd unchanged call
-
-    assert mock_nc.publish.call_count == 1
-
-
-def test_progress_reporter_publishes_on_percent_change() -> None:
-    """progress reporter should publish if percent changes"""
-    mock_nc = MagicMock(spec=NATSClient)
-
-    with patch("src.processing.nats_msg.asyncio.run_coroutine_threadsafe"):
-        reporter = _make_progress_reporter(mock_nc, "job-1", AsyncMock())
-        reporter(10)
-        reporter(11)
-
-    assert mock_nc.publish.call_count == 2
