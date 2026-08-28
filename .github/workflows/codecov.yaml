@@ -1,0 +1,96 @@
+name: Run tests and upload coverage to Codecov
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.19"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install scene-detector project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/scene-detector
+
+      - name: Run scene-detector coverage
+        working-directory: ./python_services/scene-detector
+        run: make coverage
+
+      - name: Install video-upscaling project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/video-upscaling
+
+      - name: Run video-upscaling coverage
+        working-directory: ./python_services/video-upscaling
+        run: make coverage
+
+      - name: Install shared-python project
+        run: uv sync --locked --all-extras --dev
+        working-directory: ./python_services/shared
+
+      - name: Run shared-python coverage
+        working-directory: ./python_services/shared
+        run: make coverage
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
+
+      - name: Run gateway coverage
+        working-directory: ./go_services/cmd/gateway
+        run: make coverage
+
+      - name: Run transcoder coverage
+        working-directory: ./go_services/cmd/transcoder
+        run: make coverage
+
+      - name: Run recombiner coverage
+        working-directory: ./go_services/cmd/recombiner
+        run: make coverage
+
+      - name: Run shared-go coverage
+        working-directory: ./go_services/cmd/shared
+        run: make coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: |
+            ./go_services/cmd/gateway/coverage.out,
+            ./go_services/cmd/transcoder/coverage.out,
+            ./go_services/cmd/recombiner/coverage.out,
+            ./go_services/cmd/shared/coverage.out,
+            ./python_services/scene-detector/coverage.xml,
+            ./python_services/video-upscaling/coverage.xml,
+            ./python_services/shared/coverage.xml,
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
