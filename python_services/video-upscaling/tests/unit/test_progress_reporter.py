@@ -105,6 +105,25 @@ async def test_progress_reporter_flush_propagates_publish_failure() -> None:
 
 
 @pytest.mark.asyncio
+async def test_progress_reporter_flush_times_out_and_cancels_stuck_future() -> None:
+    """flush must not hang forever on a publish that never settles, and must cancel it when it times out"""
+    mock_nc = MagicMock(spec=NATSClient)
+    loop = asyncio.get_running_loop()
+    fut: concurrent.futures.Future = concurrent.futures.Future()  # never resolved
+
+    with patch(
+        "src.utils.progress_reporter.asyncio.run_coroutine_threadsafe", return_value=fut
+    ):
+        reporter = ProgressReporter(mock_nc, "job-1", loop)
+        reporter(10)
+
+    with pytest.raises(TimeoutError):
+        await reporter.flush(timeout=0.05)
+
+    assert fut.cancelled()
+
+
+@pytest.mark.asyncio
 async def test_progress_reporter_flush_does_not_reawait_already_flushed_futures() -> (
     None
 ):
