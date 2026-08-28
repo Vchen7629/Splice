@@ -2,9 +2,8 @@ from typing import Optional, Callable
 from pathlib import Path
 from queue import Queue
 from subprocess import Popen
-from ..utils.metrics import log_timing
-from ..utils.model_router import Resolution
-from ..core.settings import settings
+from utils import log_timing, Resolution
+from core.settings import settings
 from .batch import flush_batch
 from .worker import encode_worker
 from .load_model import load_model
