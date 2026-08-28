@@ -1,8 +1,7 @@
 from unittest.mock import patch
 from unittest.mock import MagicMock
 from pathlib import Path
-from shared_storage import fetch_video
-import shared_storage as queries
+from shared_storage import fetch_video, queries
 import requests
 import pytest
 
