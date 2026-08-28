@@ -19,6 +19,7 @@ class ProgressReporter:
         self._pending: list[Future[None]] = []
 
     def __call__(self, pct: int) -> None:
+        """"""
         if pct == self._last_progress:
             return
         self._last_progress = pct
@@ -37,9 +38,17 @@ class ProgressReporter:
         )
         self._pending.append(fut)
 
-    async def flush(self) -> None:
-        """Await every progress publish scheduled since the last flush"""
+    async def flush(self, timeout: float = settings.PROGRESS_FLUSH_TIMEOUT_S) -> None:
+        """Await every progress publish scheduled since the last flush
+        Bounded by timeout so stuck publish cant hang forever
+        """
         futs = self._pending
         self._pending = []
-        for fut in futs:
-            await asyncio.wrap_future(fut)
+        awaitables = [asyncio.wrap_future(fut) for fut in futs]
+        try:
+            await asyncio.wait_for(asyncio.gather(*awaitables), timeout=timeout)
+        except asyncio.TimeoutError:
+            for fut in futs:
+                if not fut.done():
+                    fut.cancel()
+            raise
