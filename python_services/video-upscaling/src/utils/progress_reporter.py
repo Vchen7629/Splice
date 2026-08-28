@@ -43,4 +43,3 @@ class ProgressReporter:
         self._pending = []
         for fut in futs:
             await asyncio.wrap_future(fut)
-    
