@@ -1,5 +1,11 @@
 import sys
+from pathlib import Path
 from types import ModuleType
+
+# for absolute imports
+_src_dir = str(Path(__file__).parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 # basicsr (a realesrgan dependency) unconditionally imports
 # torchvision.transforms.functional_tensor at package-import time for training-only

@@ -9,15 +9,13 @@ from shared_handler import (
     update_job_stage,
     update_job_failed,
     check_already_processed,
-    ProgressMessage,
     ProcessJobMessage,
     UpscaleCompleteMsg,
 )
 from shared_storage import fetch_video, upload_video
-from typing import Callable
 from ..core.settings import settings
 from .video import video_upscale, video_downscale, recombine_video_audio
-from ..utils.model_router import select_model
+from utils import select_model, ProgressReporter
 import os
 import shutil
 import asyncio
@@ -110,7 +108,7 @@ async def process_msg(
             os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
             loop = asyncio.get_event_loop()
-            on_progress = _make_progress_reporter(nc, metadata.job_id, loop)
+            reporter = ProgressReporter(nc, metadata.job_id, loop)
 
             await asyncio.to_thread(
                 video_upscale,
@@ -118,9 +116,10 @@ async def process_msg(
                 local_video_path,
                 model_path,
                 resolution_scale,
-                on_progress,
+                reporter,
             )
             logger.debug("upscaled video", job_id=metadata.job_id)
+            await reporter.flush()
 
             await update_job_stage(
                 job_stage_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
@@ -180,33 +179,3 @@ async def _finalize_job(
     shutil.rmtree(os.path.dirname(temp_file_loc))
     shutil.rmtree(f"../temp/{job_id}", ignore_errors=True)
     logger.debug("removed temp dirs", job_id=job_id)
-
-
-def _make_progress_reporter(
-    nc: NATSClient, job_id: str, loop: asyncio.AbstractEventLoop
-) -> Callable[[int], None]:
-    """Builds on_progress callback for video_upscale
-    Throttles by percent-delta and pubs the progress to Nats subject"""
-    last_progress = -1
-
-    def on_progress(pct: int) -> None:
-        nonlocal last_progress
-        if pct == last_progress:
-            return
-
-        last_progress = pct
-        asyncio.run_coroutine_threadsafe(
-            nc.publish(
-                f"progress.{job_id}",
-                ProgressMessage(
-                    job_id=job_id,
-                    stage=settings.SERVICE_NAME,
-                    progress=pct,
-                )
-                .model_dump_json()
-                .encode(),
-            ),
-            loop,
-        )
-
-    return on_progress
