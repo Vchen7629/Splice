@@ -16,9 +16,7 @@ interface Segment {
  */
 const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: string; label: string }[]> = {
     Upscale: [
-        { key: 'scene-detector',   label: 'Detect' },
         { key: 'video-upscaling',  label: 'Upscale' },
-        { key: 'video-recombiner', label: 'Recombine' },
     ],
     Transcode: [
         { key: 'scene-detector',   label: 'Detect' },
