@@ -30,6 +30,7 @@ python-version = "3.12"
 untyped-def-behavior = "check-and-infer-return-any"
 search-path = [".", "../shared/src"]
 python-interpreter-path = ".venv/bin/python3"
+project-excludes = ["**/tests/**"]
 
 [tool.uv.workspace]
 members = [
