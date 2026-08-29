@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"testing"
+	"time"
+
 	"splice.com/go_services/internal/recombiner"
 	shandler "splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/test"
-	"testing"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -36,12 +37,12 @@ func TestMain(m *testing.M) {
 // it should create consumer with correct config
 func TestReturnCorrectConfig(t *testing.T) {
 	ctx := context.Background()
-	js, _ := test.SetupNats(t)
+	js, nc := test.SetupNats(t)
 	kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 	jobStatusKV := test.SetupJobMilestoneKV(t, js)
 	claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-	_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
+	_, err := recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
 	require.NoError(t, err)
 
 	stream, err := js.Stream(ctx, "jobs")
@@ -69,7 +70,7 @@ func TestMessageHandlingI(t *testing.T) {
 		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
+		_, err := recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -95,7 +96,7 @@ func TestMessageHandlingI(t *testing.T) {
 		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
+		_, err := recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), t.TempDir())
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -137,7 +138,7 @@ func TestMessageHandlingI(t *testing.T) {
 		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
+		_, err = recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -169,6 +170,55 @@ func TestMessageHandlingI(t *testing.T) {
 	})
 }
 
+func TestRecombineVideoPublishesProgress(t *testing.T) {
+	jobID := "job-progress"
+	js, nc := test.SetupNats(t)
+	kv := test.SetupKV(t, js, "recombine-chunk-recieved")
+
+	videoFile := test.OpenTestVideo(t, "../shared/test/testvideo.mp4")
+	videoData, err := os.ReadFile(videoFile.Name())
+	require.NoError(t, err)
+
+	test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-0.mp4", videoData)
+	test.SeedProcessedVideo(t, sharedFilerURL, jobID, "chunk-1.mp4", videoData)
+
+	jobStatusKV := test.SetupJobMilestoneKV(t, js)
+	claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
+
+	_, err = recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
+	require.NoError(t, err)
+
+	reached100 := make(chan struct{}, 1)
+	sub, err := nc.Subscribe(fmt.Sprintf("progress.%s", jobID), func(msg *nats.Msg) {
+		var progress shandler.ProgressMessage
+		if json.Unmarshal(msg.Data, &progress) == nil && progress.Progress == 100 {
+			reached100 <- struct{}{}
+		}
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+	ctx := context.Background()
+	for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
+		storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerURL, jobID, fileName)
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
+			JobID:       jobID,
+			ChunkIndex:  i,
+			TotalChunks: 2,
+			StorageURL:  storageURL,
+		})
+		require.NoError(t, err)
+		_, err = js.Publish(ctx, "jobs.chunks.complete", payload)
+		require.NoError(t, err)
+	}
+
+	select {
+	case <-reached100:
+	case <-time.After(30 * time.Second):
+		t.Fatalf("progress.%s never reached 100", jobID)
+	}
+}
+
 func TestRecombineVideoIdempotency(t *testing.T) {
 	t.Run("already received chunk is acked and skipped", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
@@ -183,7 +233,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
+		_, err = recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		secondComplete := make(chan struct{}, 1)
@@ -211,14 +261,14 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 	})
 
 	t.Run("kv entry is written after chunk is acked", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
+		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 
 		jobID := "job-idempotency-write"
 		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err := recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
+		_, err := recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		// Partial chunk (TotalChunks:2) so combine never fires — KV write still happens after ack.
@@ -256,7 +306,7 @@ func TestRecombineVideoIdempotency(t *testing.T) {
 		jobStatusKV := test.SetupJobMilestoneKV(t, js)
 		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
 
-		_, err = recombiner.RecombineVideo(js, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
+		_, err = recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, ackWaitI, test.SilentLogger(), sharedFilerURL)
 		require.NoError(t, err)
 
 		completed := make(chan struct{}, 1)
