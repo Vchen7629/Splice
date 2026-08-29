@@ -11,11 +11,12 @@ from shared_handler import (
     check_already_processed,
     ProcessJobMessage,
     UpscaleCompleteMsg,
+    ProgressReporter,
 )
 from shared_storage import fetch_video, upload_video
 from ..core.settings import settings
 from .video import video_upscale, video_downscale, recombine_video_audio
-from utils import select_model, ProgressReporter
+from utils import select_model
 import os
 import shutil
 import asyncio
@@ -108,7 +109,9 @@ async def process_msg(
             os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
             loop = asyncio.get_event_loop()
-            reporter = ProgressReporter(nc, metadata.job_id, loop)
+            reporter = ProgressReporter(
+                nc, metadata.job_id, loop, settings.SERVICE_NAME
+            )
 
             await asyncio.to_thread(
                 video_upscale,

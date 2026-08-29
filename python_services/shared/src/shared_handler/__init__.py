@@ -15,6 +15,7 @@ from .messages import (
     ProgressMessage,
 )
 from .nats import keep_alive, consumer, publisher
+from .progress_reporter import ProgressReporter
 
 __all__ = [
     "check_js_stream_exists",
@@ -34,4 +35,5 @@ __all__ = [
     "keep_alive",
     "consumer",
     "publisher",
+    "ProgressReporter",
 ]
