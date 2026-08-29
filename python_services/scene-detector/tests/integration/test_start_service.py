@@ -40,7 +40,9 @@ async def test_full_flow_publishes_chunks_downstream(
         ),
     ]
 
-    async def fake_process_job(_metadata: Any) -> list[VideoChunkMessage]:
+    async def fake_process_job(
+        _metadata: Any, _on_progress: Any = None
+    ) -> list[VideoChunkMessage]:
         return fake_chunks
 
     with patch("src.processing.nats_msg.process_job", side_effect=fake_process_job):
@@ -155,7 +157,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
     processing_started = asyncio.Event()
 
-    async def slow_process_job(_metadata: Any) -> None:
+    async def slow_process_job(_metadata: Any, _on_progress: Any = None) -> None:
         processing_started.set()
         await asyncio.Event().wait()
 
