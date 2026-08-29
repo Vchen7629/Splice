@@ -1,6 +1,7 @@
 package transcoder
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,7 +23,8 @@ var transcodeVideo = TranscodeVideo
 
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(
-	baseStorageURL string, js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
+	baseStorageURL string, nc handler.Publisher,
+	js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
 	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait)
@@ -49,7 +51,7 @@ func ConsumeVideoChunk(
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
-			return processChunk(js, processedKV, jobMilestoneKV, msg, baseStorageURL, payload, logger)
+			return processChunk(baseStorageURL, nc, js, processedKV, jobMilestoneKV, msg, payload, logger)
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -74,8 +76,9 @@ func ConsumeVideoChunk(
 // -> acking and removing the temp files
 // returns a bool: false if any part fails and we want to stop or true if its done
 func processChunk(
-	js jetstream.JetStream, processedKV, jobMilestoneKV jetstream.KeyValue,
-	msg jetstream.Msg, baseStorageURL string, payload VideoChunkMessage, logger *slog.Logger,
+	baseStorageURL string, nc handler.Publisher,
+	js jetstream.JetStream, processedKV, jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg,
+	payload VideoChunkMessage, logger *slog.Logger,
 ) bool {
 	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "transcoder"})
 	if err != nil {
@@ -145,6 +148,13 @@ func processChunk(
 		logger.Error("failed to mark job chunk as processed", "err", err)
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
+	}
+
+	pct, err := jobProgressPct(context.Background(), processedKV, payload.JobID, payload.TotalChunks, logger)
+	if err != nil {
+		logger.Error("failed to compute job progress", "job_id", payload.JobID, "err", err)
+	} else {
+		handler.NewProgressReporter(nc, payload.JobID, "transcoder", logger)(pct)
 	}
 
 	err = msg.Ack()

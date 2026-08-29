@@ -102,7 +102,7 @@ func runProcessing(
 
 	server := shandler.StartHealthHttpServer(logger, httpPort)
 
-	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
+	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
 	if err != nil {
 		shandler.ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start consumer: %w", err)
