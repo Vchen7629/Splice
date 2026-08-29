@@ -85,6 +85,7 @@ func main() {
 
 type ncDrainer interface {
 	Drain() error
+	shandler.Publisher
 }
 
 // run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs

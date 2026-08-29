@@ -84,6 +84,7 @@ func main() {
 
 type ncDrainer interface {
 	Drain() error
+	shandler.Publisher
 }
 
 func runCombiner(
