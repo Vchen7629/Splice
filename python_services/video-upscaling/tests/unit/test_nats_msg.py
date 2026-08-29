@@ -100,6 +100,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
         "/tmp/video.mp4",
         "480p",
         "../temp_output/abc/video.mp4",
+        ANY,
     )
 
 

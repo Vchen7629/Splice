@@ -109,7 +109,8 @@ def recombine_video_audio(
 
 
 def _probe_duration_s(video_path: str) -> float:
-    """Use ffprobe to get a video's duration in seconds"""
+    """Use ffprobe to get a video's duration in seconds, falling back to frame-count/fps for 
+    containers (e.g. webm from MediaRecorder) that don't store a duration in their header"""
     probe = subprocess.run([
         "ffprobe", "-v", "error",
         "-show_entries", "format=duration",
@@ -117,7 +118,12 @@ def _probe_duration_s(video_path: str) -> float:
         video_path
     ], capture_output=True, text=True, check=True)
 
-    return float(probe.stdout.strip())
+    duration = probe.stdout.strip()
+    if duration != "N/A":
+        return float(duration)
+
+    _, _, fps, total_frames = extract_video_info(video_path)
+    return total_frames / fps
 
 
 def _parse_out_time_s(line: str) -> Optional[float]:
@@ -214,7 +220,9 @@ def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[by
         out_path
     ], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
-def video_downscale(video_path: str, target_res: str, output_path: str) -> None:
+def video_downscale(
+    video_path: str, target_res: str, output_path: str, on_progress: Callable[[int], None] | None = None
+) -> None:
     """
     Uses ffmpeg to downscale a video to a lower res. Used when the target resolution
     is the same as the source resolution or less than the source resolution
@@ -226,22 +234,41 @@ def video_downscale(video_path: str, target_res: str, output_path: str) -> None:
         video_path: path to where the video is fetched and downloaded to from seaweedfs storage
         target_res: the resolution to downscale to
         output_path: path to where the final downscaled video is saved to
+        on_progress: callback invoked with 0-99 as ffmpeg reports progress
     
     Raises:
         RuntimeError when calling the ffmpeg subprocess fails with an error
     """
     try:
         tgt_res = Resolution.from_string(target_res)
-        
-        subprocess.run([
+        cmd = [
             "ffmpeg",
             "-i", video_path,
             "-vf", f"scale=-2:{tgt_res}",
             "-c:a", "copy",
+            "-progress", "pipe:1",
+            "-nostats",
             output_path
-        ], check=True)
+        ]
+
+        duration_s = _probe_duration_s(video_path)
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+        )
+
+        for line in proc.stdout or []:
+            if not line.startswith("out_time=") or on_progress is None:
+                continue
+
+            out_time_s = _parse_out_time_s(line.strip())
+            if out_time_s is not None:
+                on_progress(min(99, int(out_time_s / duration_s * 100)))
+
+        if proc.wait() != 0:
+            raise subprocess.CalledProcessError(proc.returncode, cmd)
+
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg downscale failed: {e.stderr.decode()}") from e
+        raise RuntimeError(f"ffmpeg downscale failed: {e}") from e
 
 
 def video_upscale(
