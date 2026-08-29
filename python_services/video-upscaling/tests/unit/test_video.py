@@ -15,6 +15,14 @@ import subprocess
 import numpy as np
 
 
+def _fake_recombine_proc() -> MagicMock:
+    """A Popen stand-in with no progress lines and a clean exit"""
+    proc = MagicMock()
+    proc.stdout = iter([])
+    proc.wait.return_value = 0
+    return proc
+
+
 @pytest.mark.parametrize("bad_path", ["", None])
 def test_extract_video_info_raises_type_error_for_missing_path(
     bad_path: str | None,
@@ -114,29 +122,51 @@ def test_video_upscale_encoder_uses_job_scoped_temp_path(
 
 
 def test_recombine_video_audio_reads_job_scoped_temp_path() -> None:
-    with patch("src.processing.video.subprocess.run") as mock_run:
+    with (
+        patch("src.processing.video.subprocess.run") as mock_run,
+        patch(
+            "src.processing.video.subprocess.Popen",
+            side_effect=lambda *a, **kw: _fake_recombine_proc(),
+        ) as mock_popen,
+    ):
+        mock_run.return_value.stdout = "10.0"
+
         recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
-        input_a = mock_run.call_args[0][0][mock_run.call_args[0][0].index("-i") + 1]
+        input_a = mock_popen.call_args[0][0][mock_popen.call_args[0][0].index("-i") + 1]
 
         recombine_video_audio("job_id2", "/tmp/original.mp4", "/tmp/final.mp4")
-        input_b = mock_run.call_args[0][0][mock_run.call_args[0][0].index("-i") + 1]
+        input_b = mock_popen.call_args[0][0][mock_popen.call_args[0][0].index("-i") + 1]
 
     assert input_a == "/tmp/upscaled_noaudio-job_id1.mp4"
     assert input_b == "/tmp/upscaled_noaudio-job_id2.mp4"
 
 
-def test_recombine_video_audio_calls_subprocess_run() -> None:
-    with patch("src.processing.video.subprocess.run") as mock_run:
+def test_recombine_video_audio_calls_subprocess_popen() -> None:
+    with (
+        patch("src.processing.video.subprocess.run") as mock_run,
+        patch(
+            "src.processing.video.subprocess.Popen", return_value=_fake_recombine_proc()
+        ) as mock_popen,
+    ):
+        mock_run.return_value.stdout = "10.0"
+
         recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
 
-        mock_run.assert_called_once()
+        mock_popen.assert_called_once()
 
 
 def test_recombine_video_audio_passes_correct_paths() -> None:
-    with patch("src.processing.video.subprocess.run") as mock_run:
+    with (
+        patch("src.processing.video.subprocess.run") as mock_run,
+        patch(
+            "src.processing.video.subprocess.Popen", return_value=_fake_recombine_proc()
+        ) as mock_popen,
+    ):
+        mock_run.return_value.stdout = "10.0"
+
         recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
 
-        args = mock_run.call_args[0][0]
+        args = mock_popen.call_args[0][0]
         assert "/tmp/upscaled_noaudio-job_id1.mp4" in args
         assert "/tmp/original.mp4" in args
         assert "/tmp/final.mp4" in args

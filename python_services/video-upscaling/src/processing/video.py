@@ -57,8 +57,13 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
 
     return int(w), int(h), fps, int(nb_frames)
 
+
 def recombine_video_audio(
-    job_id: str, video_path: str, output_path: str, target_res: str | None = None
+    job_id: str,
+    video_path: str,
+    output_path: str,
+    target_res: str | None = None,
+    on_progress: Optional[Callable[[int], None]] = None,
 ) -> None:
     """
     Use ffmpeg to recombine the no audio upscaled video with the original audio
@@ -68,10 +73,12 @@ def recombine_video_audio(
         video_path: path to the original video with audio
         output_path: the path to save the combined video to
         target_res: if given scales the video to exact resolution
+        on_progress: callback invoked with 0-99 as ffmpeg reports progress
     """
+    noaudio_path = f"/tmp/upscaled_noaudio-{job_id}.mp4"
     cmd = [
         "ffmpeg", "-y",
-        "-i", f"/tmp/upscaled_noaudio-{job_id}.mp4",
+        "-i", noaudio_path,
         "-i", video_path,
         "-map", "0:v", "-map", "1:a?",
     ]
@@ -82,9 +89,45 @@ def recombine_video_audio(
     else:
         cmd += ["-c", "copy"]
 
-    cmd.append(output_path)
+    cmd += ["-progress", "pipe:1", "-nostats", output_path]
 
-    subprocess.run(cmd, check=True, stderr=subprocess.DEVNULL)
+    duration_s = _probe_duration_s(noaudio_path)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+    )
+
+    for line in proc.stdout or []:
+        if not line.startswith("out_time=") or on_progress is None:
+            continue
+
+        out_time_s = _parse_out_time_s(line.strip())
+        if out_time_s is not None:
+            on_progress(min(99, int(out_time_s / duration_s * 100)))
+
+    if proc.wait() != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+
+
+def _probe_duration_s(video_path: str) -> float:
+    """Use ffprobe to get a video's duration in seconds"""
+    probe = subprocess.run([
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "csv=p=0",
+        video_path
+    ], capture_output=True, text=True, check=True)
+
+    return float(probe.stdout.strip())
+
+
+def _parse_out_time_s(line: str) -> Optional[float]:
+    """Parse an `out_time=HH:MM:SS.ms` line from ffmpeg's -progress output into seconds"""
+    value = line.split("=", 1)[1]
+    if value == "N/A":
+        return None
+    h, m, s = value.split(":")
+    return int(h) * 3600 + int(m) * 60 + float(s)
+
 
 def video_decoder(video_path: str) -> Popen[bytes]:
     """

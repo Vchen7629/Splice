@@ -109,7 +109,7 @@ async def process_msg(
             os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
             loop = asyncio.get_event_loop()
-            reporter = ProgressReporter(
+            upscale_reporter = ProgressReporter(
                 nc, metadata.job_id, loop, settings.SERVICE_NAME
             )
 
@@ -119,13 +119,16 @@ async def process_msg(
                 local_video_path,
                 model_path,
                 resolution_scale,
-                reporter,
+                upscale_reporter,
             )
             logger.debug("upscaled video", job_id=metadata.job_id)
-            await reporter.flush()
+            await upscale_reporter.flush()
 
             await update_job_stage(
                 job_stage_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
+            )
+            recombine_reporter = ProgressReporter(
+                nc, metadata.job_id, loop, "video-recombiner"
             )
             await asyncio.to_thread(
                 recombine_video_audio,
@@ -133,8 +136,10 @@ async def process_msg(
                 local_video_path,
                 temp_file_loc,
                 metadata.target_resolution,
+                recombine_reporter,
             )
             logger.debug("recombined video with audio", job_id=metadata.job_id)
+            await recombine_reporter.flush()
 
             await _finalize_job(
                 js, msg_processed_kv, msg, metadata.job_id, temp_file_loc
