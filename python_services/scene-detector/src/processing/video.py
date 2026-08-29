@@ -2,7 +2,6 @@ from scenedetect import (
     open_video,
     SceneManager,
     AdaptiveDetector,
-    VideoOpenFailure,
     FrameTimecode,
 )
 from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS

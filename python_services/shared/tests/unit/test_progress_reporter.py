@@ -1,11 +1,8 @@
 from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
-from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from shared_handler import ProgressReporter
-from test_helpers.nats import make_msg
 
 import asyncio
 import concurrent.futures
