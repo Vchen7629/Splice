@@ -71,13 +71,6 @@ func recombineChunks(
 	js jetstream.JetStream, jobMilestoneKV, msgRecievedKV jetstream.KeyValue, msg jetstream.Msg,
 	payload handler.ChunkCompleteMessage, baseStorageURL string, logger *slog.Logger,
 ) bool {
-	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"})
-	if err != nil {
-		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false
-	}
-
 	ready, chunks, err := Add(msgRecievedKV, payload, logger)
 	if err != nil {
 		logger.Error("failed to record chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -96,6 +89,13 @@ func recombineChunks(
 
 		sJetstream.AckWithErrHandling(logger, msg)
 		return true
+	}
+
+	err = sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"})
+	if err != nil {
+		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
+		sJetstream.NakWithErrHandling(logger, msg)
+		return false
 	}
 
 	localChunks := make(map[int]string)
