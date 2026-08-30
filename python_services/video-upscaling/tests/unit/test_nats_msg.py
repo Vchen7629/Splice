@@ -248,8 +248,8 @@ async def test_recombiner_stage_transition_waits_for_progress_flush(
     nats_msg_patches["update_stage"].side_effect = fake_update_stage
     msg = make_msg()
 
-    # NOTE: since we moved it to shared here, we cant access process_msg from video-upscaling
     with patch("src.processing.nats_msg.ProgressReporter.flush", new=fake_flush):
         await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
-    assert call_order == ["flush", "update_stage:video-recombiner"]
+    nats_msg_patches["recombine"].assert_called_once()
+    assert call_order == ["flush", "update_stage:video-recombiner", "flush"]
