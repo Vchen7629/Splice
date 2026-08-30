@@ -11,10 +11,9 @@ from shared_handler import (
     check_already_processed,
     ProcessJobMessage,
     UpscaleCompleteMsg,
-    ProgressReporter,
 )
 from shared_storage import fetch_video, upload_video
-from shared_util import cleanup_temp_dir, cleanup_temp_file
+from shared_util import cleanup_temp_dir, cleanup_temp_file, ProgressReporter
 from ..core.settings import settings
 from .video import video_upscale, video_downscale, recombine_video_audio
 from utils import select_model

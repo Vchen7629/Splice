@@ -6,7 +6,8 @@ from nats.js.kv import KeyValue
 from nats.js.client import JetStreamContext
 from src.core.settings import settings
 from src.processing.nats_msg import process_msg, _finalize_job
-from shared_handler import UpscaleCompleteMsg, ProgressReporter
+from shared_handler import UpscaleCompleteMsg
+from shared_util import ProgressReporter
 from test_helpers.nats import make_msg
 import pytest
 
