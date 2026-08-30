@@ -19,7 +19,6 @@ func NewProgressReporter(pub Publisher, jobID, stage string, logger *slog.Logger
 		if pct == lastProgress {
 			return
 		}
-		lastProgress = pct
 
 		data, err := json.Marshal(ProgressMessage{
 			JobID:    jobID,
@@ -36,5 +35,6 @@ func NewProgressReporter(pub Publisher, jobID, stage string, logger *slog.Logger
 			logger.Error("failed to publish progress message", "job_id", jobID, "stage", stage, "err", err)
 			return
 		}
+		lastProgress = pct
 	}
 }
