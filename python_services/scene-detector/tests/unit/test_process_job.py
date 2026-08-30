@@ -1,7 +1,7 @@
 from shared_handler import ProcessJobMessage, VideoChunkMessage
 from scenedetect import VideoOpenFailure
 from unittest.mock import patch
-from src.processing.job import process_job
+from src.processing.job import process_job, logger
 import pytest
 
 METADATA = ProcessJobMessage(
@@ -41,7 +41,7 @@ async def test_uses_job_scoped_output_dir() -> None:
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=[]) as mock_split,
         patch("src.processing.job.upload_video", return_value=FAKE_STORAGE_URLS[0]),
-        patch("src.processing.job.shutil.rmtree"),
+        patch("src.processing.job.cleanup_temp_dir"),
     ):
         await process_job(METADATA)
 
@@ -62,7 +62,7 @@ async def test_returns_chunk_messages_on_success() -> None:
             "src.processing.job.upload_video",
             side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
         ),
-        patch("src.processing.job.shutil.rmtree"),
+        patch("src.processing.job.cleanup_temp_dir"),
     ):
         result = await process_job(METADATA)
 
@@ -89,8 +89,10 @@ async def test_cleans_up_temp_dir_after_upload() -> None:
             "src.processing.job.upload_video",
             side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
         ),
-        patch("src.processing.job.shutil.rmtree") as mock_rmtree,
+        patch("src.processing.job.cleanup_temp_dir") as mock_cleanup_temp_dir,
     ):
         await process_job(METADATA)
 
-    mock_rmtree.assert_called_once_with(f"../temp/{METADATA.job_id}")
+    mock_cleanup_temp_dir.assert_called_once_with(
+        f"../temp/{METADATA.job_id}", METADATA.job_id, logger
+    )

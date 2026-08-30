@@ -58,6 +58,20 @@ async def test_upscale_path_calls_video_upscale(
 
 
 @pytest.mark.asyncio
+async def test_upscale_removes_noaudio_temp_file(
+    nats_msg_patches: dict[str, Any],
+) -> None:
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+    msg = make_msg(job_id="abc", source_resolution="480p", target_resolution="1080p")
+
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
+        "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
+    )
+
+
+@pytest.mark.asyncio
 async def test_downscale_path_calls_video_downscale(
     nats_msg_patches: dict[str, Any],
 ) -> None:
@@ -224,8 +238,8 @@ async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> N
         "../temp_output/job-abc/video.mp4",
     )
 
-    rmtree_calls = nats_msg_patches["rmtree"].call_args_list
-    removed_paths = [str(c.args[0]) for c in rmtree_calls]
+    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
+    removed_paths = [str(c.args[0]) for c in cleanup_calls]
     assert any("job-abc" in p for p in removed_paths)
 
 
