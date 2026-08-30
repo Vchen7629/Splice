@@ -171,33 +171,36 @@ async def _upscale_job(
     loop = asyncio.get_event_loop()
     upscale_reporter = ProgressReporter(nc, job_id, loop, settings.SERVICE_NAME)
 
-    await asyncio.to_thread(
-        video_upscale,
-        job_id,
-        local_video_path,
-        model_path,
-        resolution_scale,
-        upscale_reporter,
-    )
-    logger.debug("upscaled video", job_id=job_id)
-    await upscale_reporter.flush()
+    try:
+        await asyncio.to_thread(
+            video_upscale,
+            job_id,
+            local_video_path,
+            model_path,
+            resolution_scale,
+            upscale_reporter,
+        )
+        logger.debug("upscaled video", job_id=job_id)
+        await upscale_reporter.flush()
 
-    await update_job_stage(
-        job_stage_kv, job_id, "video-recombiner", settings.SERVICE_NAME
-    )
-    recombine_reporter = ProgressReporter(nc, job_id, loop, "video-recombiner")
-    await asyncio.to_thread(
-        recombine_video_audio,
-        job_id,
-        local_video_path,
-        temp_file_loc,
-        metadata.target_resolution,
-        recombine_reporter,
-    )
-    logger.debug("recombined video with audio", job_id=job_id)
-    await recombine_reporter.flush()
+        await update_job_stage(
+            job_stage_kv, job_id, "video-recombiner", settings.SERVICE_NAME
+        )
+        recombine_reporter = ProgressReporter(nc, job_id, loop, "video-recombiner")
+        await asyncio.to_thread(
+            recombine_video_audio,
+            job_id,
+            local_video_path,
+            temp_file_loc,
+            metadata.target_resolution,
+            recombine_reporter,
+        )
+        logger.debug("recombined video with audio", job_id=job_id)
+        await recombine_reporter.flush()
 
-    await cleanup_temp_file(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
+    finally:
+        logger.debug("cleaning up no audio upscale mp4 file", job_id=job_id)
+        await cleanup_temp_file(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
 
     await _finalize_job(js, msg_processed_kv, msg, job_id, temp_file_loc)
 
