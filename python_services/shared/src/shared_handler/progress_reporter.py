@@ -49,10 +49,17 @@ class ProgressReporter:
         futs = self._pending
         self._pending = []
         awaitables = [asyncio.wrap_future(fut) for fut in futs]
+
         try:
-            await asyncio.wait_for(asyncio.gather(*awaitables), timeout=timeout_s)
+            results = await asyncio.wait_for(
+                asyncio.gather(*awaitables, return_exceptions=True), timeout=timeout_s
+            )
         except asyncio.TimeoutError:
             for fut in futs:
                 if not fut.done():
                     fut.cancel()
             raise
+
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
