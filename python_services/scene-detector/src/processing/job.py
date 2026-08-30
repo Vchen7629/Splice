@@ -1,13 +1,13 @@
 from shared_core import get_logger
 from shared_storage import fetch_video, upload_video
 from shared_handler import VideoChunkMessage, ProcessJobMessage
+from shared_util import cleanup_temp_dir
 from ..core.settings import settings
 from .video import split_into_chunks
 from scenedetect import VideoOpenFailure
 from typing import Callable, Optional
 import os
 import asyncio
-import shutil
 
 logger = get_logger(settings.SERVICE_NAME)
 
@@ -76,7 +76,7 @@ async def process_job(
             storage_urls.append(result)
 
     finally:
-        await _cleanup_temp_dir(temp_dir, metadata.job_id)
+        await cleanup_temp_dir(temp_dir, metadata.job_id, logger)
 
     return [
         VideoChunkMessage(
@@ -88,26 +88,3 @@ async def process_job(
         )
         for i, url in enumerate(storage_urls)
     ]
-
-
-async def _cleanup_temp_dir(
-    temp_dir: str, job_id: str, retries: int = 3, delay_seconds: float = 1.0
-) -> None:
-    """remove the job's temp dir, retrying a few times"""
-    for attempt in range(1, retries + 1):
-        try:
-            await asyncio.to_thread(lambda: shutil.rmtree(temp_dir))
-            return
-        except FileNotFoundError:
-            return
-        except OSError as e:
-            if attempt == retries:
-                logger.error(
-                    "failed to clean up temp dir after retries",
-                    temp_dir=temp_dir,
-                    job_id=job_id,
-                    attempts=attempt,
-                    err=str(e),
-                )
-                return
-            await asyncio.sleep(delay_seconds)

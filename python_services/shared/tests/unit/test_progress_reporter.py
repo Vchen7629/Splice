@@ -2,7 +2,7 @@ from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
 from unittest.mock import AsyncMock, MagicMock, patch
-from shared_handler import ProgressReporter
+from shared_util import ProgressReporter
 
 import asyncio
 import concurrent.futures
@@ -20,7 +20,7 @@ def test_progress_reporter_publishes_first_reading() -> None:
     mock_nc = MagicMock(spec=NATSClient)
 
     with patch(
-        "src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe"
+        "src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe"
     ) as mock_schedule:
         reporter = ProgressReporter(mock_nc, "job-1", MagicMock(), "video-upscaling")
         reporter(10)
@@ -40,7 +40,7 @@ def test_progress_reporter_throttles_unchanged_percent() -> None:
     """progress reporter shouldnt change if percent doesnt update"""
     mock_nc = MagicMock(spec=NATSClient)
 
-    with patch("src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe"):
+    with patch("src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe"):
         reporter = ProgressReporter(mock_nc, "job-1", AsyncMock(), "video-upscaling")
         reporter(10)
         reporter(10)  # 2nd unchanged call
@@ -52,7 +52,7 @@ def test_progress_reporter_publishes_on_percent_change() -> None:
     """progress reporter should publish if percent changes"""
     mock_nc = MagicMock(spec=NATSClient)
 
-    with patch("src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe"):
+    with patch("src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe"):
         reporter = ProgressReporter(mock_nc, "job-1", AsyncMock(), "video-upscaling")
         reporter(10)
         reporter(11)
@@ -69,7 +69,7 @@ async def test_progress_reporter_flush_awaits_all_pending_futures() -> None:
     scheduled = iter(futures)
 
     with patch(
-        "src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe",
+        "src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe",
         side_effect=lambda coro, loop: next(scheduled),
     ):
         reporter = ProgressReporter(mock_nc, "job-1", loop, "video-upscaling")
@@ -91,7 +91,7 @@ async def test_progress_reporter_flush_propagates_publish_failure() -> None:
     fut.set_exception(RuntimeError("nats down"))
 
     with patch(
-        "src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe",
+        "src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe",
         return_value=fut,
     ):
         reporter = ProgressReporter(mock_nc, "job-1", loop, "video-upscaling")
@@ -109,7 +109,7 @@ async def test_progress_reporter_flush_times_out_and_cancels_stuck_future() -> N
     fut: concurrent.futures.Future = concurrent.futures.Future()  # never resolved
 
     with patch(
-        "src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe",
+        "src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe",
         return_value=fut,
     ):
         reporter = ProgressReporter(mock_nc, "job-1", loop, "video-upscaling")
@@ -132,7 +132,7 @@ async def test_progress_reporter_flush_does_not_reawait_already_flushed_futures(
     fut.set_result(None)
 
     with patch(
-        "src.shared_handler.progress_reporter.asyncio.run_coroutine_threadsafe",
+        "src.shared_util.progress_reporter.asyncio.run_coroutine_threadsafe",
         return_value=fut,
     ):
         reporter = ProgressReporter(mock_nc, "job-1", loop, "video-upscaling")

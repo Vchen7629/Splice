@@ -6,7 +6,8 @@ from nats.js.kv import KeyValue
 from nats.js.client import JetStreamContext
 from src.core.settings import settings
 from src.processing.nats_msg import process_msg, _finalize_job
-from shared_handler import UpscaleCompleteMsg, ProgressReporter
+from shared_handler import UpscaleCompleteMsg
+from shared_util import ProgressReporter
 from test_helpers.nats import make_msg
 import pytest
 
@@ -55,6 +56,20 @@ async def test_upscale_path_calls_video_upscale(
 
     nats_msg_patches["upscale"].assert_called_once()
     nats_msg_patches["downscale"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_upscale_removes_noaudio_temp_file(
+    nats_msg_patches: dict[str, Any],
+) -> None:
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+    msg = make_msg(job_id="abc", source_resolution="480p", target_resolution="1080p")
+
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
+        "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
+    )
 
 
 @pytest.mark.asyncio
@@ -151,6 +166,54 @@ async def test_video_upscale_raises_updates_kv_and_acks(
     msg.nak.assert_not_called()
 
 
+FLUSH_FAILURE_SIDE_EFFECTS = {
+    "upscale_flush": [RuntimeError("boom"), None],
+    "recombine_flush": [None, RuntimeError("boom")],
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure_point",
+    [
+        "video_upscale",
+        "upscale_flush",
+        "update_job_stage",
+        "recombine_video_audio",
+        "recombine_flush",
+    ],
+)
+async def test_upscale_failure_still_cleans_up_noaudio_file(
+    failure_point: str, nats_msg_patches: dict[str, Any]
+) -> None:
+    """cleanup_temp_file must run no matter which step of the upscale/recombine
+    sequence fails, since a partial noaudio file may already be on disk"""
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+
+    if failure_point == "video_upscale":
+        nats_msg_patches["upscale"].side_effect = RuntimeError("boom")
+    elif failure_point == "update_job_stage":
+        nats_msg_patches["update_stage"].side_effect = [None, RuntimeError("boom")]
+    elif failure_point == "recombine_video_audio":
+        nats_msg_patches["recombine"].side_effect = RuntimeError("boom")
+
+    msg = make_msg(job_id="abc")
+
+    with patch(
+        "src.processing.nats_msg.ProgressReporter.flush",
+        new_callable=AsyncMock,
+        side_effect=FLUSH_FAILURE_SIDE_EFFECTS.get(failure_point, [None, None]),
+    ):
+        await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
+        "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
+    )
+    nats_msg_patches["update_failed"].assert_called_once()
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_video_downscale_raises_updates_kv_and_acks(
     nats_msg_patches: dict[str, Any],
@@ -224,8 +287,8 @@ async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> N
         "../temp_output/job-abc/video.mp4",
     )
 
-    rmtree_calls = nats_msg_patches["rmtree"].call_args_list
-    removed_paths = [str(c.args[0]) for c in rmtree_calls]
+    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
+    removed_paths = [str(c.args[0]) for c in cleanup_calls]
     assert any("job-abc" in p for p in removed_paths)
 
 

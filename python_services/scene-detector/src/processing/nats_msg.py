@@ -4,13 +4,13 @@ from nats.aio.msg import Msg
 from shared_core import get_logger, settings as shared_settings
 from shared_handler import (
     ProcessJobMessage,
-    ProgressReporter,
     update_job_stage,
     update_job_failed,
     check_already_processed,
     publisher,
     keep_alive,
 )
+from shared_util import ProgressReporter
 from ..core.settings import settings
 from ..processing.job import process_job
 from nats.js.client import JetStreamContext

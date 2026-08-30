@@ -11,15 +11,14 @@ from shared_handler import (
     check_already_processed,
     ProcessJobMessage,
     UpscaleCompleteMsg,
-    ProgressReporter,
 )
 from shared_storage import fetch_video, upload_video
+from shared_util import cleanup_temp_dir, cleanup_temp_file, ProgressReporter
 from ..core.settings import settings
 from .video import video_upscale, video_downscale, recombine_video_audio
 from utils import select_model
 from pathlib import Path
 import os
-import shutil
 import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
@@ -34,16 +33,18 @@ async def process_msg(
 ) -> None:
     """Processes a single video upscale nats message"""
     metadata: ProcessJobMessage | None = None
+
     try:
         metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
+        job_id = metadata.job_id
 
-        if await check_already_processed(msg_processed_kv, metadata.job_id):
-            logger.debug("job already processed, skipping", job_id=metadata.job_id)
+        if await check_already_processed(msg_processed_kv, job_id):
+            logger.debug("job already processed, skipping", job_id=job_id)
             await msg.ack()
             return
 
         await update_job_stage(
-            job_stage_kv, metadata.job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
+            job_stage_kv, job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
         )
 
         async with keep_alive(
@@ -53,12 +54,12 @@ async def process_msg(
                 fetch_video, metadata.storage_url, settings.SERVICE_NAME
             )
             filename = os.path.basename(local_video_path)
-            temp_file_loc = f"../temp_output/{metadata.job_id}/{filename}"
+            temp_file_loc = f"../temp_output/{job_id}/{filename}"
             os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
             logger.debug(
                 "fetched unprocessed video",
-                job_id=metadata.job_id,
+                job_id=job_id,
                 saved_to=local_video_path,
             )
 
@@ -89,6 +90,8 @@ async def process_msg(
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
         if metadata is not None:
+            job_id = metadata.job_id
+
             try:
                 await update_job_failed(
                     job_stage_kv, metadata.job_id, str(e), settings.SERVICE_NAME
@@ -97,9 +100,9 @@ async def process_msg(
                 await msg.nak()
                 return
             finally:
-                shutil.rmtree(f"../temp_output/{metadata.job_id}", ignore_errors=True)
-                shutil.rmtree(f"../temp/{metadata.job_id}", ignore_errors=True)
-                logger.debug("removed temp dirs", job_id=metadata.job_id)
+                await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
+                await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
+                logger.debug("removed temp dirs", job_id=job_id)
         await msg.ack()
 
 
@@ -124,8 +127,8 @@ async def _finalize_job(
     await msg_processed_kv.put(job_id, b"done")
     await msg.ack()
 
-    shutil.rmtree(os.path.dirname(temp_file_loc))
-    shutil.rmtree(f"../temp/{job_id}", ignore_errors=True)
+    await cleanup_temp_dir(os.path.dirname(temp_file_loc), job_id, logger)
+    await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
     logger.debug("removed temp dirs", job_id=job_id)
 
 
@@ -140,9 +143,11 @@ async def _upscale_job(
     res: tuple[Path, int],
 ) -> None:
     """upscale video path logic"""
+    job_id = metadata.job_id
+
     logger.debug(
         "upscaling video",
-        job_id=metadata.job_id,
+        job_id=job_id,
         source_res=metadata.source_resolution,
         target_res=metadata.target_resolution,
     )
@@ -160,41 +165,44 @@ async def _upscale_job(
     # reusing the source filename's extension (e.g. .webm) produces a
     # container/codec mismatch when recombine_video_audio muxes with -c copy
     stem = os.path.splitext(os.path.basename(local_video_path))[0]
-    temp_file_loc = f"../temp_output/{metadata.job_id}/{stem}.mp4"
+    temp_file_loc = f"../temp_output/{job_id}/{stem}.mp4"
     os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
     loop = asyncio.get_event_loop()
-    upscale_reporter = ProgressReporter(
-        nc, metadata.job_id, loop, settings.SERVICE_NAME
-    )
+    upscale_reporter = ProgressReporter(nc, job_id, loop, settings.SERVICE_NAME)
 
-    await asyncio.to_thread(
-        video_upscale,
-        metadata.job_id,
-        local_video_path,
-        model_path,
-        resolution_scale,
-        upscale_reporter,
-    )
-    logger.debug("upscaled video", job_id=metadata.job_id)
-    await upscale_reporter.flush()
+    try:
+        await asyncio.to_thread(
+            video_upscale,
+            job_id,
+            local_video_path,
+            model_path,
+            resolution_scale,
+            upscale_reporter,
+        )
+        logger.debug("upscaled video", job_id=job_id)
+        await upscale_reporter.flush()
 
-    await update_job_stage(
-        job_stage_kv, metadata.job_id, "video-recombiner", settings.SERVICE_NAME
-    )
-    recombine_reporter = ProgressReporter(nc, metadata.job_id, loop, "video-recombiner")
-    await asyncio.to_thread(
-        recombine_video_audio,
-        metadata.job_id,
-        local_video_path,
-        temp_file_loc,
-        metadata.target_resolution,
-        recombine_reporter,
-    )
-    logger.debug("recombined video with audio", job_id=metadata.job_id)
-    await recombine_reporter.flush()
+        await update_job_stage(
+            job_stage_kv, job_id, "video-recombiner", settings.SERVICE_NAME
+        )
+        recombine_reporter = ProgressReporter(nc, job_id, loop, "video-recombiner")
+        await asyncio.to_thread(
+            recombine_video_audio,
+            job_id,
+            local_video_path,
+            temp_file_loc,
+            metadata.target_resolution,
+            recombine_reporter,
+        )
+        logger.debug("recombined video with audio", job_id=job_id)
+        await recombine_reporter.flush()
 
-    await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
+    finally:
+        logger.debug("cleaning up no audio upscale mp4 file", job_id=job_id)
+        await cleanup_temp_file(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
+
+    await _finalize_job(js, msg_processed_kv, msg, job_id, temp_file_loc)
 
 
 async def _downscale_job(
