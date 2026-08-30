@@ -66,7 +66,7 @@ func TestReturnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := recombiner.RecombineVideo(tc.js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+			_, err := recombiner.RecombineVideo(tc.js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
@@ -80,7 +80,7 @@ func TestMessageHandling(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := recombiner.RecombineVideo(js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		consCtx, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -103,13 +103,48 @@ func TestMessageHandling(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{}
 
-		consCtx, err := recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		consCtx, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
 		assert.Equal(t, "job-1.0", kv.PutKey)
+	})
+
+	t.Run("non-triggering chunk does not advance job milestone", func(t *testing.T) {
+		// since transcode workers are horizontally scaled/multiple workers processing multiple chunks concurrently
+		// chunk-complete msgs arrive while most chunks are still encoding, milestone must only advance once
+		// combining actually begines not on every chunk recieved
+		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		jobMilestoneKV := &test.MockKV{}
+
+		_, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+
+		require.NoError(t, err)
+		assert.Empty(t, jobMilestoneKV.CreateKey, "milestone should not be written until triggering chunk arrives")
+	})
+
+	t.Run("triggering chunk advances the job milestone", func(t *testing.T) {
+		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
+			JobID:       "job-1",
+			ChunkIndex:  0,
+			TotalChunks: 1,
+			StorageURL:  "http://storage/chunk-0.mp4",
+		})
+		require.NoError(t, err)
+
+		msg := &test.MockMsg{Payload: payload}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		jobMilestoneKV := &test.MockKV{}
+
+		_, err = recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+
+		require.NoError(t, err)
+		assert.Equal(t, "job-1", jobMilestoneKV.CreateKey)
 	})
 }
 
@@ -120,7 +155,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetFound: true}
 
-		_, err := recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
 
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
@@ -133,7 +168,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetFound: true}
 
-		_, err := recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
 
 		require.NoError(t, err)
 		assert.Empty(t, kv.PutKey)
@@ -145,7 +180,7 @@ func TestIdempotency(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := recombiner.RecombineVideo(js, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
 
 		require.NoError(t, err)
 		assert.False(t, msg.AckCalled)

@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     PUB_SUBJECT: str = "jobs.complete"
     MAX_DELIVER_ATTEMPTS: int = 3
     ACK_WAIT_S: int = 30
-    PROGRESS_FLUSH_TIMEOUT_S: int = 10
 
     BASE_STORAGE_URL: str = "http://localhost:8888"
 

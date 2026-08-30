@@ -199,11 +199,22 @@ func (m *MockConsumeCtx) Stop() { m.Stopped = true }
 
 // MockDrainer stubs the ncDrainer interface used in runProcessing/runCombiner.
 type MockDrainer struct {
-	DrainCalled bool
-	DrainErr    error
+	DrainCalled   bool
+	DrainErr      error
+	PublishCalled bool
+	PublishErr    error
+	PublishSubj   string
+	PublishData   []byte
 }
 
 func (m *MockDrainer) Drain() error {
 	m.DrainCalled = true
 	return m.DrainErr
+}
+
+func (m *MockDrainer) Publish(subj string, data []byte) error {
+	m.PublishCalled = true
+	m.PublishSubj = subj
+	m.PublishData = data
+	return m.PublishErr
 }

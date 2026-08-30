@@ -26,7 +26,7 @@ python-version = "3.13"
 untyped-def-behavior = "check-and-infer-return-any"
 search-path = [".", "../shared/src"]
 venv = ".venv"
-project-excludes = ["test_helpers/service_nats.py"]
+project-excludes = ["**/test_helpers/**", "**/tests/**"]
 
 [tool.pyrefly.errors]
 unannotated-parameter = "error"

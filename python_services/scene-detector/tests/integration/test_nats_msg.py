@@ -1,6 +1,6 @@
 from typing import Any
 from unittest.mock import patch
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, ANY
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from shared_handler import ProcessJobMessage
@@ -49,7 +49,8 @@ async def test_processes_published_message(
             storage_url="/fake/video.mp4",
             source_resolution="280p",
             target_resolution="480p",
-        )
+        ),
+        ANY,  # ProgressReporter instance built inside process_msg
     )
     msg.ack.assert_called_once()
 

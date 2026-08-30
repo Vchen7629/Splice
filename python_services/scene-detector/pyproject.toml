@@ -27,6 +27,7 @@ extraPaths = [".", "../shared"]
 python-version = "3.13"
 untyped-def-behavior = "check-and-infer-return-any"
 search-path = [".", "../shared", "../shared/src"]
+project-excludes = ["**/tests/**"]
 
 [tool.pyrefly.errors]
 unannotated-parameter = "error"

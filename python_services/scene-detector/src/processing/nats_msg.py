@@ -4,6 +4,7 @@ from nats.aio.msg import Msg
 from shared_core import get_logger, settings as shared_settings
 from shared_handler import (
     ProcessJobMessage,
+    ProgressReporter,
     update_job_stage,
     update_job_failed,
     check_already_processed,
@@ -13,12 +14,13 @@ from shared_handler import (
 from ..core.settings import settings
 from ..processing.job import process_job
 from nats.js.client import JetStreamContext
+import asyncio
 
 logger = get_logger("scene-detector")
 
 
 async def process_msg(
-    _nc: NATSClient,
+    nc: NATSClient,
     js: JetStreamContext,
     msg_processed_kv: KeyValue,
     job_milestone_kv: KeyValue,
@@ -41,10 +43,14 @@ async def process_msg(
             settings.SERVICE_NAME,
         )
 
+        loop = asyncio.get_event_loop()
+        reporter = ProgressReporter(nc, metadata.job_id, loop, settings.SERVICE_NAME)
+
         async with keep_alive(
             settings.SERVICE_NAME, msg, interval=shared_settings.ACK_WAIT_S / 3
         ):
-            chunk_messages = await process_job(metadata)
+            chunk_messages = await process_job(metadata, reporter)
+            await reporter.flush()
 
             for chunk_msg in chunk_messages:
                 await publisher(

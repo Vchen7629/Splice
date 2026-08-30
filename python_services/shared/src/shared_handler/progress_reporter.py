@@ -1,7 +1,6 @@
 from concurrent.futures import Future
 from nats.aio.client import Client as NATSClient
 from shared_handler import ProgressMessage
-from core.settings import settings
 import asyncio
 
 
@@ -10,11 +9,16 @@ class ProgressReporter:
     and lets the caller wait for all publishes to land before advancing stages."""
 
     def __init__(
-        self, nc: NATSClient, job_id: str, loop: asyncio.AbstractEventLoop
+        self,
+        nc: NATSClient,
+        job_id: str,
+        loop: asyncio.AbstractEventLoop,
+        service_name: str,
     ) -> None:
         self._nc = nc
         self._job_id = job_id
         self._loop = loop
+        self._service_name = service_name
         self._last_progress = -1
         self._pending: list[Future[None]] = []
 
@@ -28,7 +32,7 @@ class ProgressReporter:
                 f"progress.{self._job_id}",
                 ProgressMessage(
                     job_id=self._job_id,
-                    stage=settings.SERVICE_NAME,
+                    stage=self._service_name,
                     progress=pct,
                 )
                 .model_dump_json()
@@ -38,17 +42,24 @@ class ProgressReporter:
         )
         self._pending.append(fut)
 
-    async def flush(self, timeout: float = settings.PROGRESS_FLUSH_TIMEOUT_S) -> None:
+    async def flush(self, timeout_s: float = 10.0) -> None:
         """Await every progress publish scheduled since the last flush
         Bounded by timeout so stuck publish cant hang forever
         """
         futs = self._pending
         self._pending = []
         awaitables = [asyncio.wrap_future(fut) for fut in futs]
+
         try:
-            await asyncio.wait_for(asyncio.gather(*awaitables), timeout=timeout)
+            results = await asyncio.wait_for(
+                asyncio.gather(*awaitables, return_exceptions=True), timeout=timeout_s
+            )
         except asyncio.TimeoutError:
             for fut in futs:
                 if not fut.done():
                     fut.cancel()
             raise
+
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result

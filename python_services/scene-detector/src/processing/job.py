@@ -4,6 +4,7 @@ from shared_handler import VideoChunkMessage, ProcessJobMessage
 from ..core.settings import settings
 from .video import split_into_chunks
 from scenedetect import VideoOpenFailure
+from typing import Callable, Optional
 import os
 import asyncio
 import shutil
@@ -11,7 +12,9 @@ import shutil
 logger = get_logger(settings.SERVICE_NAME)
 
 
-async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
+async def process_job(
+    metadata: ProcessJobMessage, on_progress: Optional[Callable[[int], None]] = None
+) -> list[VideoChunkMessage]:
     """
     takes in the msg from NATS subcriber, fetches the video from SeaweedFS, splits
     the video into chunks, uploads the chunks back to seaweedfs, and returns
@@ -19,6 +22,7 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
 
     Args:
         metadata: the nats message containing the job_id, storage_url, and target_resolution
+        on_progress: optional callback invoked with 0-100 as split_into_chunks proceeds
 
     Raises:
         requests.ConnectionError: if seaweedfs is unreachable during fetch or upload
@@ -38,9 +42,18 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
             fetch_video, metadata.storage_url, settings.SERVICE_NAME
         )
 
-        chunk_paths = await _split_into_chunks(
-            local_video_path, chunks_dir, metadata.job_id
-        )
+        try:
+            chunk_paths = await asyncio.to_thread(
+                split_into_chunks, local_video_path, chunks_dir, on_progress
+            )
+        except VideoOpenFailure as e:
+            logger.error("could not open video", job_id=metadata.job_id, err=str(e))
+            raise
+        except OSError as e:
+            logger.error(
+                "ffmpeg error while splitting video", job_id=metadata.job_id, err=str(e)
+            )
+            raise
 
         results = await asyncio.gather(
             *[
@@ -75,24 +88,6 @@ async def process_job(metadata: ProcessJobMessage) -> list[VideoChunkMessage]:
         )
         for i, url in enumerate(storage_urls)
     ]
-
-
-async def _split_into_chunks(
-    local_video_path: str, chunks_dir: str, job_id: str
-) -> list[str]:
-    """split the video into chunks in a thread and raise on errors"""
-    try:
-        chunk_paths = await asyncio.to_thread(
-            split_into_chunks, local_video_path, chunks_dir
-        )
-    except VideoOpenFailure as e:
-        logger.error("could not open video", job_id=job_id, err=str(e))
-        raise
-    except OSError as e:
-        logger.error("ffmpeg error while splitting video", job_id=job_id, err=str(e))
-        raise
-
-    return chunk_paths
 
 
 async def _cleanup_temp_dir(

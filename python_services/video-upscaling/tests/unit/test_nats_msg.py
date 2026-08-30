@@ -1,36 +1,19 @@
 from typing import Any
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock
+from unittest.mock import ANY, AsyncMock, patch
 from nats.aio.client import Client as NATSClient
 from nats.js.kv import KeyValue
 from nats.js.client import JetStreamContext
 from src.core.settings import settings
 from src.processing.nats_msg import process_msg, _finalize_job
-from shared_handler import ProcessJobMessage, UpscaleCompleteMsg
+from shared_handler import UpscaleCompleteMsg, ProgressReporter
+from test_helpers.nats import make_msg
 import pytest
 
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)
 MOCK_KV = AsyncMock(spec=KeyValue)
-
-
-def make_msg(
-    job_id: str = "job-123",
-    storage_url: str = "http://storage/video.mp4",
-    source_resolution: str = "480p",
-    target_resolution: str = "1080p",
-) -> AsyncMock:
-    """Build a mock NATS Msg with a valid ProcessJobMessage payload."""
-    payload = ProcessJobMessage(
-        job_id=job_id,
-        storage_url=storage_url,
-        source_resolution=source_resolution,
-        target_resolution=target_resolution,
-    )
-    msg = AsyncMock()
-    msg.data = payload.model_dump_json().encode()
-    return msg
 
 
 @pytest.mark.asyncio
@@ -117,6 +100,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
         "/tmp/video.mp4",
         "480p",
         "../temp_output/abc/video.mp4",
+        ANY,
     )
 
 
@@ -243,3 +227,29 @@ async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> N
     rmtree_calls = nats_msg_patches["rmtree"].call_args_list
     removed_paths = [str(c.args[0]) for c in rmtree_calls]
     assert any("job-abc" in p for p in removed_paths)
+
+
+@pytest.mark.asyncio
+async def test_recombiner_stage_transition_waits_for_progress_flush(
+    nats_msg_patches: dict[str, Any],
+) -> None:
+    """process_msg must not advance to the video-recombiner stage until all
+    queued progress updates from video_upscale have been flushed"""
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+    call_order: list[str] = []
+
+    async def fake_flush(self: ProgressReporter) -> None:
+        call_order.append("flush")
+
+    async def fake_update_stage(kv: Any, job_id: str, stage: str, service: str) -> None:
+        if stage == "video-recombiner":
+            call_order.append("update_stage:video-recombiner")
+
+    nats_msg_patches["update_stage"].side_effect = fake_update_stage
+    msg = make_msg()
+
+    with patch("src.processing.nats_msg.ProgressReporter.flush", new=fake_flush):
+        await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    nats_msg_patches["recombine"].assert_called_once()
+    assert call_order == ["flush", "update_stage:video-recombiner", "flush"]

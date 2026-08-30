@@ -284,7 +284,7 @@ async def test_stage_written_to_job_status_kv_before_processing(
     mock_job_status_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     call_order: list[str] = []
 
-    async def fake_process_job(_metadata: Any) -> list[Any]:
+    async def fake_process_job(_metadata: Any, _on_progress: Any = None) -> list[Any]:
         call_order.append("process_job")
         return []
 
