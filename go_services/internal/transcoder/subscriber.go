@@ -88,6 +88,16 @@ func processChunk(
 	}
 
 	fileName := fmt.Sprintf("temp-unprocessed-%s", payload.JobID)
+	defer func() {
+		err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+		}
+		err = removeAll("/tmp/temp-processed-" + payload.JobID)
+		if err != nil {
+			logger.Warn("error removing the temp unprocessed folder", "err", err)
+		}
+	}()
 
 	filePath, err := storage.GetVideoChunk(payload.StorageURL, fileName)
 	if err != nil {
@@ -131,17 +141,6 @@ func processChunk(
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
-
-	defer func() {
-		err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
-		if err != nil {
-			logger.Warn("error removing the temp unprocessed folder", "err", err)
-		}
-		err = removeAll("/tmp/temp-processed-" + payload.JobID)
-		if err != nil {
-			logger.Warn("error removing the temp unprocessed folder", "err", err)
-		}
-	}()
 
 	err = sJetstream.PutKeyKV(processedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
