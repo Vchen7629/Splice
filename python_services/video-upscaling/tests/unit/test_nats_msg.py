@@ -278,13 +278,36 @@ async def test_finalize_acks_message(nats_msg_patches: dict[str, Any]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_finalize_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> None:
-    await _finalize_job(
-        MOCK_JS,
-        MOCK_KV,
-        AsyncMock(),
-        "job-abc",
+async def test_process_msg_removes_temp_dirs_on_success(
+    nats_msg_patches: dict[str, Any],
+) -> None:
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+    msg = make_msg(job_id="job-abc")
+
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
+    removed_paths = [str(c.args[0]) for c in cleanup_calls]
+    assert any("job-abc" in p for p in removed_paths)
+
+
+@pytest.mark.asyncio
+async def test_downscale_path_removes_temp_dirs_on_success(
+    nats_msg_patches: dict[str, Any],
+) -> None:
+    nats_msg_patches["select"].return_value = None
+    nats_msg_patches["fetch"].return_value = "/tmp/video.mp4"
+    msg = make_msg(
+        job_id="job-abc", source_resolution="1080p", target_resolution="480p"
+    )
+
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    nats_msg_patches["downscale"].assert_called_once_with(
+        "/tmp/video.mp4",
+        "480p",
         "../temp_output/job-abc/video.mp4",
+        ANY,
     )
 
     cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list

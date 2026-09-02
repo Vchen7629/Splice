@@ -33,6 +33,7 @@ async def process_msg(
 ) -> None:
     """Processes a single video upscale nats message"""
     metadata: ProcessJobMessage | None = None
+    needs_nak = False
 
     try:
         metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
@@ -53,9 +54,6 @@ async def process_msg(
             local_video_path = await asyncio.to_thread(
                 fetch_video, metadata.storage_url, settings.SERVICE_NAME
             )
-            filename = os.path.basename(local_video_path)
-            temp_file_loc = f"../temp_output/{job_id}/{filename}"
-            os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
             logger.debug(
                 "fetched unprocessed video",
@@ -65,6 +63,10 @@ async def process_msg(
 
             res = select_model(metadata.source_resolution, metadata.target_resolution)
             if res is None:
+                filename = os.path.basename(local_video_path)
+                temp_file_loc = f"../temp_output/{job_id}/{filename}"
+                os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
+
                 await _downscale_job(
                     nc,
                     js,
@@ -96,14 +98,20 @@ async def process_msg(
                 await update_job_failed(
                     job_stage_kv, metadata.job_id, str(e), settings.SERVICE_NAME
                 )
-            except Exception:
-                await msg.nak()
+            except Exception as e:
+                needs_nak = True
                 return
-            finally:
-                await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
-                await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
-                logger.debug("removed temp dirs", job_id=job_id)
         await msg.ack()
+    finally:
+        if metadata is not None:
+            job_id = metadata.job_id
+
+            await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
+            await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
+            logger.debug("removed temp dirs", job_id=job_id)
+
+        if needs_nak:
+            await msg.nak()
 
 
 async def _finalize_job(
@@ -127,9 +135,7 @@ async def _finalize_job(
     await msg_processed_kv.put(job_id, b"done")
     await msg.ack()
 
-    await cleanup_temp_dir(os.path.dirname(temp_file_loc), job_id, logger)
-    await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
-    logger.debug("removed temp dirs", job_id=job_id)
+    logger.debug("job finallized", job_id=job_id)
 
 
 async def _upscale_job(
