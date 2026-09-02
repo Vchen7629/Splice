@@ -33,6 +33,7 @@ async def process_msg(
 ) -> None:
     """Processes a single video upscale nats message"""
     metadata: ProcessJobMessage | None = None
+    needs_nak = False
 
     try:
         metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
@@ -97,8 +98,8 @@ async def process_msg(
                 await update_job_failed(
                     job_stage_kv, metadata.job_id, str(e), settings.SERVICE_NAME
                 )
-            except Exception:
-                await msg.nak()
+            except Exception as e:
+                needs_nak = True
                 return
         await msg.ack()
     finally:
@@ -108,6 +109,9 @@ async def process_msg(
             await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
             await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
             logger.debug("removed temp dirs", job_id=job_id)
+
+        if needs_nak:
+            await msg.nak()
 
 
 async def _finalize_job(
