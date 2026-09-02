@@ -91,11 +91,11 @@ func processChunk(
 	defer func() {
 		err = removeAll("/tmp/temp-unprocessed-" + chunkName)
 		if err != nil {
-			logger.Warn("error removing the temp unprocessed folder", "err", err)
+			logger.Warn("error removing the temp unprocessed folder", "chunk_name", chunkName, "err", err)
 		}
 		err = removeAll("/tmp/temp-processed-" + chunkName)
 		if err != nil {
-			logger.Warn("error removing the temp unprocessed folder", "err", err)
+			logger.Warn("error removing the temp processed folder", "chunk_name", chunkName, "err", err)
 		}
 	}()
 
