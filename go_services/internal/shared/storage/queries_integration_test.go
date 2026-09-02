@@ -30,7 +30,7 @@ func TestGetVideoChunkIntegration(t *testing.T) {
 		filePath, err := storage.GetVideoChunk(storageURL, jobID)
 
 		require.NoError(t, err)
-		assert.Equal(t, "/tmp/"+jobID+"/"+filename, filePath)
+		assert.Equal(t, "/tmp/temp-unprocessed-"+jobID+"/"+filename, filePath)
 		assert.FileExists(t, filePath)
 
 		got, err := os.ReadFile(filePath)

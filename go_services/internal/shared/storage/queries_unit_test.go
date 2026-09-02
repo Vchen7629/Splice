@@ -165,7 +165,7 @@ func TestGetVideoChunkWritesFile(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(filePath, filename), "filePath %q should end with %q", filePath, filename)
-	assert.DirExists(t, "/tmp/"+jobID)
+	assert.DirExists(t, "/tmp/temp-unprocessed-"+jobID)
 	assert.FileExists(t, filePath)
 
 	got, err := os.ReadFile(filePath)

@@ -87,34 +87,34 @@ func processChunk(
 		return false
 	}
 
-	fileName := fmt.Sprintf("temp-unprocessed-%s", payload.JobID)
+	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 	defer func() {
-		err = removeAll("/tmp/temp-unprocessed-" + payload.JobID)
+		err = removeAll("/tmp/temp-unprocessed-" + chunkName)
 		if err != nil {
 			logger.Warn("error removing the temp unprocessed folder", "err", err)
 		}
-		err = removeAll("/tmp/temp-processed-" + payload.JobID)
+		err = removeAll("/tmp/temp-processed-" + chunkName)
 		if err != nil {
 			logger.Warn("error removing the temp unprocessed folder", "err", err)
 		}
 	}()
 
-	filePath, err := storage.GetVideoChunk(payload.StorageURL, fileName)
+	filePath, err := storage.GetVideoChunk(payload.StorageURL, chunkName)
 	if err != nil {
 		logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
-	outputPath, err := transcodeVideo(filePath, payload.TargetResolution, payload.JobID, logger)
+	outputPath, err := transcodeVideo(filePath, payload.TargetResolution, chunkName, logger)
 	if err != nil {
 		logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
-	fileName = filepath.Base(outputPath)
-	url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, fileName)
+	outFileName := filepath.Base(outputPath)
+	url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, outFileName)
 
 	storageUrl, err := storage.UploadVideoChunk(url, outputPath)
 	if err != nil {
