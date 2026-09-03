@@ -17,12 +17,14 @@ mock_kv = AsyncMock(spec=KeyValue)
         (milestone_entry("PROCESSING", "video-recombiner"), "video-upscaling", False),
         (milestone_entry("COMPLETE"), "video-upscaling", False),
         (milestone_entry("FAILED"), "video-upscaling", False),
+        (milestone_entry("CANCELLED"), "video-upscaling", False),
     ],
     ids=[
         "advances-forward-stage",
         "no-op-behind-stage",
         "no-op-terminal-complete",
         "no-op-terminal-failed",
+        "no-op-terminal-cancelled",
     ],
 )
 async def test_advance_milestone_write_policy(

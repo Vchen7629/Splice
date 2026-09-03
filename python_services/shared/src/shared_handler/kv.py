@@ -66,7 +66,7 @@ async def check_already_processed(kv: KeyValue, job_id: str) -> bool:
         return False
 
 
-TERMINAL_MILESTONE_STATES = {"COMPLETE", "FAILED"}
+TERMINAL_MILESTONE_STATES = {"COMPLETE", "FAILED", "CANCELLED"}
 
 MILESTONE_STAGE_ORDER = {
     "scene-detector": 0,
