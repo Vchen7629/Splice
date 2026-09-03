@@ -246,7 +246,7 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if current.State == StateComplete || current.State == StateFailed {
+			if current.State == StateComplete || current.State == StateFailed || current.State == StateCancelled {
 				return
 			}
 			launchHealthProbe(current.Stage)
