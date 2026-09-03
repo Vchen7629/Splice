@@ -157,7 +157,7 @@ func TestGetVideoChunkWritesFile(t *testing.T) {
 		w.Write(videoContent)
 	}))
 	t.Cleanup(srv.Close)
-	t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed" + jobID) })
+	t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
 	storageURL := srv.URL + "/" + jobID + "/processed/" + filename
 
