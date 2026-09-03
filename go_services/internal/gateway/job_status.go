@@ -56,6 +56,7 @@ type JobState string
 const (
 	StateProcessing JobState = "PROCESSING"
 	StateComplete   JobState = "COMPLETE"
+	StateCancelled  JobState = "CANCELLED"
 	StateFailed     JobState = "FAILED"
 	StateDegraded   JobState = "DEGRADED"
 )
@@ -124,8 +125,8 @@ type healthProbeResult struct {
 	errMsg string
 }
 
-// streams a job's status over Server-Sent Events. KV.Watch delivers the current snapshot on connect 
-// (for resuming/reload), then each milestone (new processign stage). Ephemeral progress ticks arrive 
+// streams a job's status over Server-Sent Events. KV.Watch delivers the current snapshot on connect
+// (for resuming/reload), then each milestone (new processign stage). Ephemeral progress ticks arrive
 // via pub/sub and a health probe scoped to the connection's current stage. Closes on terminal state
 // (COMPLETE/FAILED) or client disconnect
 func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
