@@ -25,12 +25,12 @@ func TestGetVideoChunkIntegration(t *testing.T) {
 
 		test.SeedProcessedVideo(t, sharedFilerUrl, jobID, filename, videoContent)
 		storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerUrl, jobID, filename)
-		t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
+		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
 		filePath, err := storage.GetVideoChunk(storageURL, jobID)
 
 		require.NoError(t, err)
-		assert.Equal(t, "/tmp/"+jobID+"/"+filename, filePath)
+		assert.Equal(t, "/tmp/temp-unprocessed-"+jobID+"/"+filename, filePath)
 		assert.FileExists(t, filePath)
 
 		got, err := os.ReadFile(filePath)
@@ -41,7 +41,7 @@ func TestGetVideoChunkIntegration(t *testing.T) {
 	t.Run("nonexistent file returns error", func(t *testing.T) {
 		jobID := "job-missing"
 		storageURL := fmt.Sprintf("%s/%s/processed/nonexistent.mp4", sharedFilerUrl, jobID)
-		t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
+		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
 		filePath, err := storage.GetVideoChunk(storageURL, jobID)
 

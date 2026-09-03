@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -437,6 +438,9 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 
 			calls := 0
 			removeAll = func(path string) error {
+				if !strings.Contains(path, tc.jobID) {
+					return os.RemoveAll(path)
+				}
 				calls++
 				if calls == tc.failOnCall {
 					return errors.New("remove failed")

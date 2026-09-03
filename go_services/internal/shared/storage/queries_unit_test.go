@@ -157,7 +157,7 @@ func TestGetVideoChunkWritesFile(t *testing.T) {
 		w.Write(videoContent)
 	}))
 	t.Cleanup(srv.Close)
-	t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
+	t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
 	storageURL := srv.URL + "/" + jobID + "/processed/" + filename
 
@@ -165,7 +165,7 @@ func TestGetVideoChunkWritesFile(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(filePath, filename), "filePath %q should end with %q", filePath, filename)
-	assert.DirExists(t, "/tmp/"+jobID)
+	assert.DirExists(t, "/tmp/temp-unprocessed-"+jobID)
 	assert.FileExists(t, filePath)
 
 	got, err := os.ReadFile(filePath)

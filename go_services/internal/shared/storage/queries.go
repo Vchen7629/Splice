@@ -66,8 +66,8 @@ func validatePathSegment(name string) error {
 var removeAll = os.RemoveAll
 
 // fetch the video chunk seaweedfs storage
-func GetVideoChunk(storageURL, fileName string) (string, error) {
-	err := validatePathSegment(fileName)
+func GetVideoChunk(storageURL, chunkName string) (string, error) {
+	err := validatePathSegment(chunkName)
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +101,7 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jobDir := filepath.Join("/tmp/" + fileName)
+	jobDir := filepath.Join("/tmp/temp-unprocessed-" + chunkName)
 
 	err = os.MkdirAll(jobDir, 0755)
 	if err != nil {
@@ -116,7 +116,7 @@ func GetVideoChunk(storageURL, fileName string) (string, error) {
 	defer func() {
 		err := outFile.Close()
 		if err != nil {
-			log.Printf("error closing the file, %v", err)
+			log.Printf("error closing the file 2, %v", err)
 		}
 	}()
 
