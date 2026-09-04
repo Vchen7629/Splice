@@ -2,15 +2,18 @@ from typing import Any
 from unittest.mock import AsyncMock
 from nats.js.api import KeyValueConfig
 from nats.js.client import JetStreamContext
-from shared_handler import consumer
+from shared_core import get_logger
+from shared_handler import consumer, keep_alive
 import pytest
 import asyncio
 
 
 @pytest.mark.asyncio
-async def test_calls_process_msg_for_published_message(
+async def test_consumer_calls_process_msg_for_published_message(
     js_context: tuple[Any, JetStreamContext],
 ) -> None:
+    import json
+
     """Verifies consumer receives a message and calls process_msg"""
     nc, js = js_context
 
@@ -40,7 +43,9 @@ async def test_calls_process_msg_for_published_message(
         )
     )
     try:
-        await nc.publish("jobs.video.scene-split", b"test-payload")
+        await nc.publish(
+            "jobs.video.scene-split", json.dumps({"job_id": "job-1"}).encode()
+        )
         await asyncio.wait_for(processed.wait(), timeout=5)
     finally:
         task.cancel()
@@ -50,3 +55,20 @@ async def test_calls_process_msg_for_published_message(
             pass
 
     assert process_msg.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_keep_alive_sets_cancel_event_when_nats_msg_pubbed(
+    js_context: tuple[Any, JetStreamContext],
+) -> None:
+    from nats.aio.msg import Msg
+
+    nc, _ = js_context
+    msg = AsyncMock(spec=Msg)
+    logger = get_logger("test")
+
+    async with keep_alive(nc, msg, "job-1", interval=10, logger=logger) as cancel_event:
+        await nc.publish("cancel.job-1", b"")
+        await asyncio.wait_for(asyncio.to_thread(cancel_event.wait), timeout=5)
+
+    assert cancel_event.is_set()

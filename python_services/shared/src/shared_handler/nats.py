@@ -6,34 +6,43 @@ from nats.js.api import ConsumerConfig
 from nats.errors import TimeoutError
 from nats.js.errors import APIError
 from nats.js.client import JetStreamContext
+from structlog.stdlib import BoundLogger
+from threading import Event
 from shared_core import get_logger, settings
-from shared_handler import UpscaleCompleteMsg
+from shared_handler import UpscaleCompleteMsg, is_job_cancelled
 from .messages import VideoChunkMessage
 import asyncio
 import contextlib
+import json
 
 
 @contextlib.asynccontextmanager
 async def keep_alive(
-    service_name: str, msg: Msg, interval: float
-) -> AsyncGenerator[None, None]:
-    """Periodically calls msg.in_progress() to extend Jetstream ack
-    deadline while long-running work runs under 'msg'."""
-    logger = get_logger(service_name)
+    nc: NATSClient, msg: Msg, job_id: str, interval: float, logger: BoundLogger
+) -> AsyncGenerator[Event, None]:
+    """Periodically calls msg.in_progress() to extend the Jetstream ack deadline,
+    and subscribes to cancel.{job_id} for the duration of the work, setting
+    cancel_event when a cancel broadcast arrives so long-running loops can check it."""
+    cancel_event = Event()
+
+    async def _on_cancel(_: Msg) -> None:
+        cancel_event.set()
 
     async def _heartbeat() -> None:
         while True:
             await asyncio.sleep(interval)
             await msg.in_progress()
 
+    cancel_sub = await nc.subscribe(f"cancel.{job_id}", cb=_on_cancel)
     task = asyncio.create_task(_heartbeat())
     try:
-        yield
+        yield cancel_event
     finally:
         try:
+            await cancel_sub.unsubscribe()
             task.cancel()
         except Exception as e:  # keep-alive is best-effort
-            logger.warning("failed to extend ack deadline", err=str(e))
+            logger.warning("failed to unsubscribe from cancel subject", err=str(e))
         with contextlib.suppress(asyncio.CancelledError):
             await task
 
@@ -61,6 +70,11 @@ async def consumer(
     )
 
     async for msg in sub.messages:
+        job_id = json.loads(msg.data)["job_id"]
+        if job_id and await is_job_cancelled(job_milestone_kv, job_id):
+            await msg.term()
+            continue
+
         await process_msg(nc, js, msg_processed_kv, job_milestone_kv, msg)
 
 
