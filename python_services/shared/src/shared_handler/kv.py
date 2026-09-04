@@ -66,6 +66,18 @@ async def check_already_processed(kv: KeyValue, job_id: str) -> bool:
         return False
 
 
+async def is_job_cancelled(job_milestone_kv: KeyValue, job_id: str) -> bool:
+    """Check the job_milestone_kv for the state of the job_id
+    and returns true if the value state is CANCELLED, false otherwise"""
+    try:
+        entry = await job_milestone_kv.get(job_id)
+    except KeyNotFoundError:
+        return False
+    current = json.loads(entry.value) if entry.value is not None else {}
+
+    return current.get("state") == "CANCELLED"
+
+
 TERMINAL_MILESTONE_STATES = {"COMPLETE", "FAILED", "CANCELLED"}
 
 MILESTONE_STAGE_ORDER = {
