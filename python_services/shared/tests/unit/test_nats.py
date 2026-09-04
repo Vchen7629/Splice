@@ -6,7 +6,7 @@ from nats.js.errors import APIError, KeyNotFoundError
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
 from shared_core import get_logger
-from shared_handler import consumer, keep_alive
+from shared_handler import consumer, check_cancel_event
 import pytest
 
 MOCK_NC = AsyncMock(spec=NATSClient)
@@ -36,14 +36,13 @@ def make_mock_msg(job_id: str = "job-1") -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_keep_alive_unsubscribes_on_exit() -> None:
+async def test_check_cancel_event_unsubscribes_on_exit() -> None:
     nc = AsyncMock(spec=NATSClient)
     sub = AsyncMock()
     nc.subscribe.return_value = sub
-    msg = AsyncMock(spec=Msg)
     logger = get_logger("test")
 
-    async with keep_alive(nc, msg, "job-2", interval=10, logger=logger):
+    async with check_cancel_event(nc, "job-2", logger):
         pass
 
     sub.unsubscribe.assert_awaited_once()
