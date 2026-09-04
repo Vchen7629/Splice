@@ -204,6 +204,11 @@ func TestPollJobStatus_States(t *testing.T) {
 			wantState: StateComplete,
 		},
 		{
+			name:      "CANCELLED state",
+			status:    JobStatus{State: StateCancelled, Stage: "scene-detector"},
+			wantState: StateCancelled,
+		},
+		{
 			name:       "FAILED state includes error message",
 			status:     JobStatus{State: StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: transcoder-worker"},
 			wantState:  StateFailed,

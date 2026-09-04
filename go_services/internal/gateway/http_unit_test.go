@@ -4,6 +4,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +45,14 @@ func newVideoHandler(storageURL string, js *MockJS) *videoHandler {
 		kv:             &MockKV{},
 		storageURL:     storageURL,
 		maxUploadBytes: 0,
+	}
+}
+
+func newCancelHandler(kv jetstream.KeyValue, nc *nats.Conn) *cancelHandler {
+	return &cancelHandler{
+		logger: stest.SilentLogger(),
+		kv:     kv,
+		nc:     nc,
 	}
 }
 
@@ -112,7 +122,7 @@ func TestStartHttpApiRouting(t *testing.T) {
 			{"DELETE on status route returns 405", http.MethodDelete, "/jobs/abc/status", http.StatusMethodNotAllowed},
 			{"GET on upload route returns 405", http.MethodGet, "/jobs/upload", http.StatusMethodNotAllowed},
 			{"GET on download route returns 405", http.MethodGet, "/jobs/download", http.StatusMethodNotAllowed},
-			{"path missing status segment returns 404", http.MethodGet, "/jobs/abc", http.StatusNotFound},
+			{"GET on cancel route returns 405", http.MethodGet, "/jobs/abc", http.StatusMethodNotAllowed},
 			{"completely unknown path returns 404", http.MethodGet, "/healthz", http.StatusNotFound},
 		}
 
@@ -293,5 +303,105 @@ func TestDownloadVideo(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 		assert.Contains(t, rec.Body.String(), "failed to fetch video")
+	})
+}
+
+func TestCancelProcessing(t *testing.T) {
+	t.Run("Returns 400 when job_id path param is missing", func(t *testing.T) {
+		c := newCancelHandler(&MockKV{}, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/", nil)
+		req.SetPathValue("id", "")
+		rec := httptest.NewRecorder()
+
+		c.cancelProcessingRoute(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "missing job_id")
+	})
+
+	// get already returns the errKeyNotFound so no need to mock error
+	t.Run("Returns 404 when KV Get returns ErrKeyNotFound", func(t *testing.T) {
+		c := newCancelHandler(&MockKV{}, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/id-2", nil)
+		req.SetPathValue("id", "id-2")
+		rec := httptest.NewRecorder()
+
+		c.cancelProcessingRoute(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Contains(t, rec.Body.String(), "job not found")
+	})
+
+	t.Run("Returns 500 when KV Get returns generic error", func(t *testing.T) {
+		c := newCancelHandler(&MockKV{GetErr: errors.New("kv unavailable")}, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/id-2", nil)
+		req.SetPathValue("id", "id-2")
+		rec := httptest.NewRecorder()
+
+		c.cancelProcessingRoute(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "failed to get job status")
+	})
+
+	t.Run("Returns 500 when malformed JSON in stored entry", func(t *testing.T) {
+		kv := NewMockKV()
+		kv.Seed("job-1", []byte("Not valid json{{"))
+		c := newCancelHandler(kv, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-1", nil)
+		req.SetPathValue("id", "job-1")
+		rec := httptest.NewRecorder()
+
+		c.cancelProcessingRoute(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "failed to unmarshall kv value into JobStatus")
+	})
+
+	tests := []struct {
+		name  string
+		state JobState
+	}{
+		{"COMPLETE", StateComplete},
+		{"FAILED", StateFailed},
+		{"CANCELLED", StateCancelled},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("terminal state %s returns 200 and update never called", tc.name), func(t *testing.T) {
+			kv := NewMockKV()
+			status, err := json.Marshal(JobStatus{State: tc.state, Stage: "scene-detector"})
+			require.NoError(t, err)
+			kv.Seed("job-2", status)
+
+			c := newCancelHandler(kv, nil)
+			req := httptest.NewRequest(http.MethodDelete, "/jobs/job-2", nil)
+			req.SetPathValue("id", "job-2")
+			rec := httptest.NewRecorder()
+
+			c.cancelProcessingRoute(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Contains(t, rec.Body.String(), string(tc.state))
+			assert.False(t, kv.UpdateCalled.Load())
+		})
+	}
+
+	t.Run("Returns 500 when KV update returns non ErrKeyExists error", func(t *testing.T) {
+		kv := NewMockKV()
+		status, err := json.Marshal(JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		require.NoError(t, err)
+		kv.Seed("job-3", status)
+		kv.UpdateErr = errors.New("update failed")
+
+		c := newCancelHandler(kv, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-3", nil)
+		req.SetPathValue("id", "job-3")
+		rec := httptest.NewRecorder()
+
+		c.cancelProcessingRoute(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "failed to update current stage for jobID as CANCELLED")
 	})
 }

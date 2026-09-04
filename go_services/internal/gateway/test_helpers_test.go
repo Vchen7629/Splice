@@ -87,14 +87,15 @@ func NewDownloadRequest(t *testing.T, target, jobID, fileName string) *http.Requ
 
 // MockKV stubs jetstream.KeyValue.
 // Seed pre-populates entries; GetErr forces an error on every Get; PutErr forces an error on every Put.
-// Used by http_unit_test.go, job_status_kv_unit_test.go, subscriber_unit_test.go and upload_unit_test.go.
 type MockKV struct {
 	jetstream.KeyValue
-	GetErr    error
-	PutErr    error
-	WatchErr  error
-	PutCalled atomic.Bool
-	entries   map[string][]byte
+	GetErr       error
+	PutErr       error
+	WatchErr     error
+	UpdateErr    error
+	PutCalled    atomic.Bool
+	UpdateCalled atomic.Bool
+	entries      map[string][]byte
 }
 
 func NewMockKV() *MockKV {
@@ -117,7 +118,7 @@ func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, er
 	if !ok {
 		return nil, jetstream.ErrKeyNotFound
 	}
-	return &MockKVEntry{value: v}, nil
+	return &MockKVEntry{value: v, revision: 0}, nil
 }
 
 func (m *MockKV) Put(_ context.Context, _ string, _ []byte) (uint64, error) {
@@ -133,6 +134,11 @@ func (m *MockKV) Watch(_ context.Context, _ string, _ ...jetstream.WatchOpt) (je
 	return &MockKeyWatcher{updates: make(chan jetstream.KeyValueEntry)}, nil
 }
 
+func (m *MockKV) Update(_ context.Context, _ string, _ []byte, _ uint64) (uint64, error) {
+	m.UpdateCalled.Store(true)
+	return 0, m.UpdateErr
+}
+
 // stubs jetstream.KeyWatcher. Only used to satisfy MockKV.Watch's success return type
 type MockKeyWatcher struct {
 	updates chan jetstream.KeyValueEntry
@@ -144,10 +150,12 @@ func (w *MockKeyWatcher) Stop() error                             { return nil }
 // MockKVEntry stubs jetstream.KeyValueEntry.
 type MockKVEntry struct {
 	jetstream.KeyValueEntry
-	value []byte
+	value    []byte
+	revision uint64
 }
 
-func (e *MockKVEntry) Value() []byte { return e.value }
+func (e *MockKVEntry) Value() []byte    { return e.value }
+func (e *MockKVEntry) Revision() uint64 { return e.revision }
 
 // MockJS stubs jetstream.JetStream.
 // Used by subscriber_unit_test.go, upload_unit_test.go and upload_integration_test.go.
