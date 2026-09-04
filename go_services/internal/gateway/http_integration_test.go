@@ -38,9 +38,11 @@ func newTestServer(t *testing.T, urls ...ServiceURLs) *httptest.Server {
 		u = urls[0]
 	}
 	mux := http.NewServeMux()
-	h := &JobStatusHandler{Logger: stest.SilentLogger(), NC: sharedNC, KV: sharedKV, URLs: u}
-	mux.HandleFunc("GET /jobs/{id}/status", h.PollJobStatus)
-	mux.HandleFunc("GET /jobs/{id}/events", h.JobEvents)
+	jh := &JobStatusHandler{Logger: stest.SilentLogger(), NC: sharedNC, KV: sharedKV, URLs: u}
+	ch := &cancelHandler{logger: stest.SilentLogger(), kv: sharedKV, nc: sharedNC}
+	mux.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
+	mux.HandleFunc("GET /jobs/{id}/events", jh.JobEvents)
+	mux.HandleFunc("DELETE /jobs/{id}", ch.cancelProcessingRoute)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts
@@ -650,5 +652,88 @@ func TestGracefulShutdown(t *testing.T) {
 		_, nc := stest.SetupNats(t)
 
 		assert.NoError(t, nc.Drain())
+	})
+}
+
+func TestCancelRouteI(t *testing.T) {
+	t.Run("happy path for processing", func(t *testing.T) {
+		jobID := "cancel-happy-path"
+		seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		ts := newTestServer(t)
+
+		sub, err := sharedNC.SubscribeSync("cancel." + jobID)
+		require.NoError(t, err)
+		defer sub.Unsubscribe()
+
+		req, err := http.NewRequest(http.MethodDelete, ts.URL+"/jobs/"+jobID, nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var got jobStatusResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+		assert.Equal(t, jobID, got.JobID)
+		assert.Equal(t, "CANCELLED", string(got.State))
+
+		entry, err := sharedKV.Get(context.Background(), jobID)
+		require.NoError(t, err)
+		var stored JobStatus
+		require.NoError(t, json.Unmarshal(entry.Value(), &stored))
+		assert.Equal(t, StateCancelled, stored.State)
+
+		_, err = sub.NextMsg(5 * time.Second)
+		assert.NoError(t, err, "expected cancel broadcast on cancel.%s", jobID)
+	})
+
+	t.Run("repeated cancels (3 sequential delete) all return 200 CANCELLED and only one KV revision bump", func(t *testing.T) {
+		jobID := "cancel-repeated"
+		seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		ts := newTestServer(t)
+
+		before, err := sharedKV.Get(context.Background(), jobID)
+		require.NoError(t, err)
+
+		for i := 0; i < 3; i++ {
+			req, err := http.NewRequest(http.MethodDelete, ts.URL+"/jobs/"+jobID, nil)
+			require.NoError(t, err)
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+
+			var got jobStatusResponse
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+			resp.Body.Close()
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, "CANCELLED", string(got.State))
+		}
+
+		entry, err := sharedKV.Get(context.Background(), jobID)
+		require.NoError(t, err)
+		assert.Equal(t, before.Revision()+1, entry.Revision(), "only the first cancel should CAS-write; the two repeats must no-op")
+	})
+
+	t.Run("cancel on COMPLETED job is no-op", func(t *testing.T) {
+		jobID := "cancel-terminal"
+		seedStatus(t, jobID, JobStatus{State: StateComplete, Stage: "scene-detector"})
+		ts := newTestServer(t)
+
+		before, err := sharedKV.Get(context.Background(), jobID)
+		require.NoError(t, err)
+
+		req, err := http.NewRequest(http.MethodDelete, ts.URL+"/jobs/"+jobID, nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var got jobStatusResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+		assert.Equal(t, "COMPLETE", string(got.State))
+
+		after, err := sharedKV.Get(context.Background(), jobID)
+		require.NoError(t, err)
+		assert.Equal(t, before.Revision(), after.Revision())
 	})
 }
