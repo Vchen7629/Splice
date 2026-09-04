@@ -1,8 +1,16 @@
+from structlog.stdlib import BoundLogger
+from threading import Event
 from unittest.mock import patch, MagicMock
 from types import SimpleNamespace
 from src.processing.video import split_into_chunks
+from shared_handler.exceptions import JobCancelledError
 import os
 import tempfile
+import pytest
+
+MOCK_CANCEL_EVENT = MagicMock(spec=Event)
+MOCK_CANCEL_EVENT.is_set.return_value = False
+MOCK_LOGGER = MagicMock(spec=BoundLogger)
 
 
 class FakeTimecode:
@@ -41,7 +49,9 @@ def test_returns_correct_chunk_paths() -> None:
             patch("src.processing.video.SceneManager", return_value=manager),
             patch("src.processing.video.subprocess.run"),
         ):
-            result = split_into_chunks("/videos/myvideo.mp4", output_dir)
+            result = split_into_chunks(
+                MOCK_LOGGER, MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir
+            )
 
     assert result == [
         os.path.join(output_dir, "myvideo-Scene-001.mp4"),
@@ -72,7 +82,13 @@ def test_no_scene_boundaries_copies_original_as_single_chunk() -> None:
             ),
             patch("src.processing.video.SceneManager", return_value=manager),
         ):
-            result = split_into_chunks(src, output_dir, on_progress=percents.append)
+            result = split_into_chunks(
+                MOCK_LOGGER,
+                MOCK_CANCEL_EVENT,
+                src,
+                output_dir,
+                on_progress=percents.append,
+            )
 
         expected_output = os.path.join(output_dir, "myvideo.mp4")
         assert result == [expected_output]
@@ -101,7 +117,7 @@ def test_on_progress_defaults_to_none_safely() -> None:
             ),
             patch("src.processing.video.SceneManager", return_value=manager),
         ):
-            result = split_into_chunks(src, output_dir)
+            result = split_into_chunks(MOCK_LOGGER, MOCK_CANCEL_EVENT, src, output_dir)
 
     assert result == [os.path.join(output_dir, "myvideo.mp4")]
 
@@ -132,10 +148,67 @@ def test_progress_capped_at_90_during_detection_then_reaches_100_after_split() -
     ):
         with tempfile.TemporaryDirectory() as output_dir:
             split_into_chunks(
-                "/videos/myvideo.mp4", output_dir, on_progress=percents.append
+                MOCK_LOGGER,
+                MOCK_CANCEL_EVENT,
+                "/videos/myvideo.mp4",
+                output_dir,
+                on_progress=percents.append,
             )
 
     detect_phase, split_phase = percents[:2], percents[2:]
     assert all(p <= 90 for p in detect_phase)
     assert percents == sorted(percents)
     assert split_phase[-1] == 100
+
+
+def test_raises_job_cancelled_when_cancel_event_is_set_during_detect_scan() -> None:
+    manager = SimpleNamespace(
+        add_detector=MagicMock(),
+        detect_scenes=MagicMock(return_value=150),
+        get_scene_list=MagicMock(),
+    )
+    cancel_event = MagicMock(spec=Event)
+    cancel_event.is_set.return_value = True
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with (
+            patch(
+                "src.processing.video.open_video",
+                return_value=MagicMock(frame_rate=30, duration=None),
+            ),
+            patch("src.processing.video.SceneManager", return_value=manager),
+            patch("src.processing.video.subprocess.run"),
+        ):
+            with pytest.raises(
+                JobCancelledError, match="cancelled during detect scan for job"
+            ):
+                split_into_chunks(
+                    MOCK_LOGGER, cancel_event, "/videos/myvideo.mp4", output_dir
+                )
+
+
+def test_raises_job_cancelled_when_cancel_event_is_set_before_scene_split() -> None:
+    scenes = [(FakeTimecode(0), FakeTimecode(1))] * 3
+    manager = SimpleNamespace(
+        add_detector=MagicMock(),
+        detect_scenes=MagicMock(return_value=0),
+        get_scene_list=MagicMock(return_value=scenes),
+    )
+    cancel_event = MagicMock(spec=Event)
+    cancel_event.is_set.side_effect = [False, True]
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with (
+            patch(
+                "src.processing.video.open_video",
+                return_value=MagicMock(frame_rate=30, duration=None),
+            ),
+            patch("src.processing.video.SceneManager", return_value=manager),
+            patch("src.processing.video.subprocess.run"),
+        ):
+            with pytest.raises(
+                JobCancelledError, match="cancelled before scene 1 for job"
+            ):
+                split_into_chunks(
+                    MOCK_LOGGER, cancel_event, "/videos/myvideo.mp4", output_dir
+                )
