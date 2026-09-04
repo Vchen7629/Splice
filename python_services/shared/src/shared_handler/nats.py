@@ -18,33 +18,47 @@ import json
 
 @contextlib.asynccontextmanager
 async def keep_alive(
-    nc: NATSClient, msg: Msg, job_id: str, interval: float, logger: BoundLogger
-) -> AsyncGenerator[Event, None]:
+    msg: Msg, interval: float, logger: BoundLogger
+) -> AsyncGenerator[None, None]:
     """Periodically calls msg.in_progress() to extend the Jetstream ack deadline,
     and subscribes to cancel.{job_id} for the duration of the work, setting
     cancel_event when a cancel broadcast arrives so long-running loops can check it."""
-    cancel_event = Event()
-
-    async def _on_cancel(_: Msg) -> None:
-        cancel_event.set()
 
     async def _heartbeat() -> None:
         while True:
             await asyncio.sleep(interval)
             await msg.in_progress()
 
-    cancel_sub = await nc.subscribe(f"cancel.{job_id}", cb=_on_cancel)
     task = asyncio.create_task(_heartbeat())
+    try:
+        yield task
+    finally:
+        try:
+            task.cancel()
+        except Exception as e:  # keep-alive is best-effort
+            logger.warning("failed to extend ack deadline", err=str(e))
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+@contextlib.asynccontextmanager
+async def check_cancel_event(
+    nc: NATSClient, job_id: str, logger: BoundLogger
+) -> AsyncGenerator[None, None]:
+    """"""
+    cancel_event = Event()
+
+    async def _on_cancel(_: Msg) -> None:
+        cancel_event.set()
+
+    cancel_sub = await nc.subscribe(f"cancel.{job_id}", cb=_on_cancel)
     try:
         yield cancel_event
     finally:
         try:
             await cancel_sub.unsubscribe()
-            task.cancel()
         except Exception as e:  # keep-alive is best-effort
             logger.warning("failed to unsubscribe from cancel subject", err=str(e))
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
 
 
 async def consumer(

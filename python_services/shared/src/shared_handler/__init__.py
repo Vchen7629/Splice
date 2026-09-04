@@ -16,7 +16,7 @@ from .messages import (
     UpscaleCompleteMsg,
     ProgressMessage,
 )
-from .nats import keep_alive, consumer, publisher
+from .nats import keep_alive, check_cancel_event, consumer, publisher
 
 __all__ = [
     "check_js_stream_exists",
@@ -36,6 +36,7 @@ __all__ = [
     "UpscaleCompleteMsg",
     "ProgressMessage",
     "keep_alive",
+    "check_cancel_event",
     "consumer",
     "publisher",
 ]
