@@ -1,7 +1,9 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -30,11 +32,15 @@ func StartHttpApi(
 
 	vh := &videoHandler{logger: logger, js: js, kv: kv, storageURL: storageURL}
 	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: urls}
+	ch := &cancelHandler{logger: logger, kv: kv, nc: nc}
 
 	router.HandleFunc("POST /jobs/upload", vh.uploadVideoRoute)
 	router.HandleFunc("POST /jobs/download", vh.downloadVideoRoute)
+
 	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 	router.HandleFunc("GET /jobs/{id}/events", jh.JobEvents)
+
+	router.HandleFunc("DELETE /jobs/{id}", ch.cancelProcessingRoute)
 
 	server := &http.Server{
 		Addr:              ":" + httpPort,
@@ -238,4 +244,80 @@ func writeSSEEvent(w io.Writer, event string, payload any) error {
 
 	_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
 	return err
+}
+
+type cancelHandler struct {
+	logger *slog.Logger
+	kv     jetstream.KeyValue
+	nc     *nats.Conn
+}
+
+func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		c.logger.Error("missing job_id param")
+		http.Error(w, "missing job_id", http.StatusBadRequest)
+		return
+	}
+
+	kh := KVHandler{logger: c.logger, kv: c.kv}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	w.Header().Set("Content-Type", "application/json")
+	var current JobStatus
+
+	for {
+		entry, httpStatusCode, err := kh.getJobStatusKV(ctx, jobID)
+		if err != nil {
+			http.Error(w, err.Error(), httpStatusCode)
+			return
+		}
+
+		err = json.Unmarshal(entry.Value(), &current)
+		if err != nil {
+			http.Error(w, "failed to unmarshall kv value into JobStatus", http.StatusInternalServerError)
+			return
+		}
+
+		// terminal job status, we just return 200 and don't update anything
+		// since cancelling it in this state makes no sense
+		if current.State == StateComplete || current.State == StateFailed || current.State == StateCancelled {
+			break
+		}
+
+		newValue, err := json.Marshal(JobStatus{State: StateCancelled, Stage: current.Stage})
+		if err != nil {
+			errMsg := "error marshalling status"
+			http.Error(w, errMsg, http.StatusInternalServerError)
+			c.logger.Error(errMsg, "err", err)
+			return
+		}
+
+		_, err = c.kv.Update(ctx, jobID, newValue, entry.Revision())
+		if errors.Is(err, jetstream.ErrKeyExists) {
+			continue // revision change concurrently, reread and compare again
+		}
+		if err != nil {
+			errMsg := "failed to update current stage for jobID as CANCELLED"
+			http.Error(w, errMsg, http.StatusInternalServerError)
+			c.logger.Error(errMsg, "job_id", jobID, "stage", current.Stage, "err", err)
+			return
+		}
+
+		err = c.nc.Publish("cancel."+jobID, nil)
+		if err != nil {
+			c.logger.Error("failed to publish cancel broadcast", "job_id", jobID, "err", err)
+			// we dont fail here since KV write already succeeded so durable gate is worst case
+		}
+
+		current.State = StateCancelled
+		break
+	}
+
+	err := json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: current.State, Stage: current.Stage})
+	if err != nil {
+		c.logger.Error("error encoding success http response", "err", err)
+		return
+	}
 }
