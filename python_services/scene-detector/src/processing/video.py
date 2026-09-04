@@ -5,7 +5,10 @@ from scenedetect import (
     FrameTimecode,
 )
 from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
+from structlog.stdlib import BoundLogger
+from threading import Event
 from typing import Callable, Optional
+from shared_handler.exceptions import JobCancelledError
 import os
 import shutil
 import subprocess
@@ -14,6 +17,8 @@ DETECT_SLICE_FRAMES = 150  # frames processed per detect_scenes() call
 
 
 def split_into_chunks(
+    logger: BoundLogger,
+    cancel_event: Event,
     video_path: str,
     output_dir: str,
     on_progress: Optional[Callable[[int], None]] = None,
@@ -23,6 +28,7 @@ def split_into_chunks(
     change.
 
     Args:
+        cancel_event: this is set when cancel.{job_id} nats msg is published to signal to stop processing
         video_path: the location the video we are trying to split is
         output_dir: the location the split video is saved to
         on_progress: optional callback invoked with 0-100 as work proceeds — 0-90 during
@@ -31,6 +37,7 @@ def split_into_chunks(
     Returns:
         a list of output video dir strings
     """
+
     video = open_video(video_path)
     scene_manager = SceneManager()
     scene_manager.add_detector(AdaptiveDetector())
@@ -42,6 +49,10 @@ def split_into_chunks(
         )
         > 0
     ):
+        if cancel_event.is_set():
+            logger.debug("split_into_chunks cancelled during detect scan")
+            raise JobCancelledError("cancelled during detect scan for job")
+
         if on_progress and total_frames:
             on_progress(min(90, int(video.frame_number / total_frames * 90)))
 
@@ -60,6 +71,10 @@ def split_into_chunks(
     output_paths = []
 
     for i, (start, end) in enumerate(scene_list):
+        if cancel_event.is_set():
+            logger.debug("split_into_chunks cancelled before splitting scenes")
+            raise JobCancelledError(f"cancelled before scene {i} for job")
+
         output_path = os.path.join(output_dir, f"{video_stem}-Scene-{i + 1:03d}.mp4")
         subprocess.run(
             [
