@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError
 from nats.js.kv import KeyValue
-from shared_handler import advance_milestone
+from shared_handler import advance_milestone, is_job_cancelled
 from test_helpers.nats import milestone_entry
 import pytest
 
@@ -71,3 +71,43 @@ async def test_advance_milestone_propagates_get_failure() -> None:
         await advance_milestone(
             mock_kv, "job-1", {"state": "PROCESSING", "stage": "video-upscaling"}
         )
+
+
+@pytest.mark.asyncio
+async def test_is_job_cancelled_returns_true_on_cancelled() -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    mock_kv.get.return_value = milestone_entry("CANCELLED")
+
+    result = await is_job_cancelled(mock_kv, "job-1")
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_is_job_cancelled_returns_false_when_key_not_found() -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    mock_kv.get.side_effect = KeyNotFoundError()
+
+    result = await is_job_cancelled(mock_kv, "job-1")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_is_job_cancelled_returns_false_when_entry_value_is_none() -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    mock_kv.get.return_value = MagicMock(value=None)
+
+    result = await is_job_cancelled(mock_kv, "job-1")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_is_job_cancelled_returns_false_on_processing() -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    mock_kv.get.return_value = milestone_entry("PROCESSING")
+
+    result = await is_job_cancelled(mock_kv, "job-1")
+
+    assert result is False
