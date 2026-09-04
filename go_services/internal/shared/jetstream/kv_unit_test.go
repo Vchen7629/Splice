@@ -168,6 +168,12 @@ func TestAdvanceMilestoneWritePolicy(t *testing.T) {
 			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantWrite: false,
 		},
+		{
+			name:      "no-ops on terminal CANCELLED",
+			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
+			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			wantWrite: false,
+		},
 	}
 
 	for _, tc := range tests {

@@ -127,7 +127,7 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneSt
 			return fmt.Errorf("failed: %w", err)
 		}
 
-		if current.State == "COMPLETE" || current.State == "FAILED" || milestoneStageOrder[current.Stage] >= milestoneStageOrder[newStatus.Stage] {
+		if current.State == "COMPLETE" || current.State == "FAILED" || current.State == "CANCELLED" || milestoneStageOrder[current.Stage] >= milestoneStageOrder[newStatus.Stage] {
 			return nil
 		}
 
