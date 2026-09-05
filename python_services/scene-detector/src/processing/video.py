@@ -36,6 +36,9 @@ def split_into_chunks(
 
     Returns:
         a list of output video dir strings
+
+    Raises:
+        JobCancelledError: when the cancel event is set and stops processing
     """
 
     video = open_video(video_path)
