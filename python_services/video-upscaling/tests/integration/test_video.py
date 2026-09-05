@@ -1,15 +1,21 @@
 from pathlib import Path
-from src.processing.video import video_decoder
-from src.processing.video import video_upscale
-from src.processing.video import video_downscale
-from src.processing.video import extract_video_info
-from src.processing.video import recombine_video_audio
+from threading import Event
+from unittest.mock import MagicMock
+from src.processing.video import (
+    video_decoder,
+    video_upscale,
+    video_downscale,
+    extract_video_info,
+    recombine_video_audio,
+)
 from tests.fixtures.processing_helpers import TEST_VIDEO
 import torch
 import pytest
 import subprocess
 
 
+MOCK_CANCEL_EVENT = MagicMock(spec=Event)
+MOCK_CANCEL_EVENT.is_set.return_value = False
 WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
 
 requires_cuda = pytest.mark.skipif(
@@ -144,7 +150,9 @@ def test_video_upscale_produces_output_file(
 ) -> None:
     output = Path("/tmp/upscaled_noaudio-jobid1.mp4")
     output.unlink(missing_ok=True)
-    video_upscale("jobid1", str(one_frame_video), WEIGHTS_DIR / filename, scale)
+    video_upscale(
+        MOCK_CANCEL_EVENT, "jobid1", str(one_frame_video), WEIGHTS_DIR / filename, scale
+    )
 
     assert output.exists()
     assert output.stat().st_size > 0
@@ -165,7 +173,13 @@ def test_video_upscale_output_has_correct_resolution(
     output = "/tmp/upscaled_noaudio-job_id1.mp4"
     Path(output).unlink(missing_ok=True)
 
-    video_upscale("job_id1", str(one_frame_video), WEIGHTS_DIR / filename, scale)
+    video_upscale(
+        MOCK_CANCEL_EVENT,
+        "job_id1",
+        str(one_frame_video),
+        WEIGHTS_DIR / filename,
+        scale,
+    )
 
     out_w, out_h, _, _ = extract_video_info(output)
     assert out_w == src_w * scale
