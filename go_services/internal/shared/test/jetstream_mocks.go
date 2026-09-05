@@ -145,13 +145,16 @@ type MockMsg struct {
 	Payload   []byte
 	NakCalled bool
 	AckCalled bool
+	TermCalled bool
 	NakErr    error
 	AckErr    error
+	TermErr   error
 }
 
 func (m *MockMsg) Data() []byte { return m.Payload }
 func (m *MockMsg) Nak() error   { m.NakCalled = true; return m.NakErr }
 func (m *MockMsg) Ack() error   { m.AckCalled = true; return m.AckErr }
+func (m *MockMsg) Term() error  { m.TermCalled = true; return m.TermErr }
 
 // MockConsumer stubs jetstream.Consumer. After Consume is called, Ctx holds the
 // returned ConsumeContext so tests can inspect it.

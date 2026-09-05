@@ -194,3 +194,42 @@ func TestIdempotency(t *testing.T) {
 		assert.Equal(t, "abc-123.3", expected)
 	})
 }
+
+func TestCancelledCases(t *testing.T) {
+	t.Run("cancelled job terminates message and does no other work", func(t *testing.T) {
+		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		processedKV := &test.MockKV{}
+		jobMilestoneKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"recombiner"}`),
+		}
+		claimKV := &test.MockKV{}
+
+		_, err := recombiner.RecombineVideo(js, nil, processedKV, jobMilestoneKV, claimKV, 15*time.Second, test.SilentLogger(), "http://storage")
+
+		require.NoError(t, err)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.AckCalled)
+		assert.False(t, msg.NakCalled)
+		assert.Empty(t, processedKV.PutKey, "cancelled gate should bail before dedupe/combine work")
+		assert.Empty(t, claimKV.CreateKey, "cancelled gate should never claim the chunk")
+	})
+
+	t.Run("failing to terminate a msg on cancelled job is logged not naked", func(t *testing.T) {
+		msg := &test.MockMsg{Payload: validPayload(t, "job-1"), TermErr: errors.New("term failed")}
+		consumer := &test.MockConsumerWithMsg{Msg: msg}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
+		jobMilestoneKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"recombiner"}`),
+		}
+
+		_, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, 15*time.Second, test.SilentLogger(), "http://storage")
+
+		require.NoError(t, err)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.NakCalled)
+	})
+}
