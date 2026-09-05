@@ -44,6 +44,7 @@ async def test_processes_published_message(
         await process_msg(nc, js, kv, job_status_kv, msg)
 
     mock_process.assert_called_once_with(
+        ANY,
         ProcessJobMessage(
             job_id=job_id,
             storage_url="/fake/video.mp4",
