@@ -4,8 +4,9 @@ package jetstream
 
 import (
 	"errors"
-	"splice.com/go_services/internal/shared/test"
 	"testing"
+
+	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -86,6 +87,65 @@ func TestPutKeyKV(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "failed")
+	})
+}
+
+func TestIsJobCancelled(t *testing.T) {
+
+	t.Run("key that doesnt exist just returns false", func(t *testing.T) {
+		mockKV := &test.MockKV{}
+
+		isCancelled, err := IsJobCancelled(mockKV, "some-jobID")
+
+		require.NoError(t, err)
+		assert.False(t, isCancelled)
+	})
+
+	t.Run("error fetching from keyValue returns false and error", func(t *testing.T) {
+		mockKV := &test.MockKV{GetErr: errors.New("Some error")}
+
+		isCancelled, err := IsJobCancelled(mockKV, "some-jobID")
+
+		require.Error(t, err)
+		assert.Equal(t, err.Error(), "failed to fetch from kv: Some error")
+		assert.False(t, isCancelled)
+	})
+
+	t.Run("returns false if the its invalid json", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{[`),
+		}
+
+		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+
+		require.Error(t, err)
+		assert.Equal(t, err.Error(), "failed to unmarshal json: invalid character '[' looking for beginning of object key string")
+		assert.False(t, isCancelled)
+	})
+
+	t.Run("returns true if the KV state is CANCELLED", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+		}
+
+		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+
+		require.NoError(t, err)
+		assert.True(t, isCancelled)
+	})
+
+	t.Run("returns false if the KV state is non CANCELLED (PROCESSING)", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`),
+		}
+
+		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+
+		require.NoError(t, err)
+		assert.False(t, isCancelled)
 	})
 }
 

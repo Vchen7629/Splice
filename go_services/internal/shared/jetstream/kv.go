@@ -77,6 +77,29 @@ func PutKeyKV(kv jetstream.KeyValue, key string, value []byte) error {
 	return nil
 }
 
+// checks whether a job's milestone entry is CANCELLED. A missing entry means its not cancelled yet
+// since it hasnt been written to the kv yet
+func IsJobCancelled(kv jetstream.KeyValue, jobID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	entry, err := kv.Get(ctx, jobID)
+	if errors.Is(err, jetstream.ErrKeyNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch from kv: %w", err)
+	}
+
+	var current MilestoneStatus
+	err = json.Unmarshal(entry.Value(), &current)
+	if err != nil {
+		return false, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+
+	return current.State == "CANCELLED", nil
+}
+
 // For job mileston kv
 
 // ranks pipeline stages so AdvanceMilestone can differentiate forward write from stale one
