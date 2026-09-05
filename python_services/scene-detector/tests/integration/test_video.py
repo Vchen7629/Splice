@@ -1,14 +1,22 @@
 from src.processing.video import split_into_chunks
+from structlog.stdlib import BoundLogger
+from threading import Event
+from unittest.mock import MagicMock
 import os
 import subprocess
 import tempfile
 
 VIDEO_PATH = os.path.join(os.path.dirname(__file__), "../videos/ForBiggerBlazes.mp4")
+MOCK_LOGGER = MagicMock(spec=BoundLogger)
+MOCK_CANCEL_EVENT = MagicMock(spec=Event)
+MOCK_CANCEL_EVENT.is_set.return_value = False
 
 
 def test_splits_video_and_returns_existing_paths() -> None:
     with tempfile.TemporaryDirectory() as output_dir:
-        chunk_paths = split_into_chunks(VIDEO_PATH, output_dir)
+        chunk_paths = split_into_chunks(
+            MOCK_LOGGER, MOCK_CANCEL_EVENT, VIDEO_PATH, output_dir
+        )
 
         assert len(chunk_paths) > 0
         for path in chunk_paths:
@@ -41,7 +49,9 @@ def test_single_scene_video_output_dir_differs_from_source_dir() -> None:
             capture_output=True,
         )
 
-        chunk_paths = split_into_chunks(video_path, out_dir)
+        chunk_paths = split_into_chunks(
+            MOCK_LOGGER, MOCK_CANCEL_EVENT, video_path, out_dir
+        )
 
         assert len(chunk_paths) == 1
         assert os.path.exists(chunk_paths[0]), "output chunk not found"

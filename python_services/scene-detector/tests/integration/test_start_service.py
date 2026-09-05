@@ -1,3 +1,4 @@
+from threading import Event
 from typing import Any
 from unittest.mock import patch
 from unittest.mock import AsyncMock
@@ -41,7 +42,7 @@ async def test_full_flow_publishes_chunks_downstream(
     ]
 
     async def fake_process_job(
-        _metadata: Any, _on_progress: Any = None
+        _event: Event, _metadata: Any, _on_progress: Any = None
     ) -> list[VideoChunkMessage]:
         return fake_chunks
 
@@ -157,7 +158,9 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
     processing_started = asyncio.Event()
 
-    async def slow_process_job(_metadata: Any, _on_progress: Any = None) -> None:
+    async def slow_process_job(
+        _event: Event, _metadata: Any, _on_progress: Any = None
+    ) -> None:
         processing_started.set()
         await asyncio.Event().wait()
 
