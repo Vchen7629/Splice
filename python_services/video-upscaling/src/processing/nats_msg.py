@@ -2,15 +2,18 @@ from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
-from shared_core import get_logger, settings as shared_settings
+from threading import Event
+from shared_core import get_logger
 from shared_handler import (
     publisher,
     keep_alive,
+    check_cancel_event,
     update_job_stage,
     update_job_failed,
     check_already_processed,
     ProcessJobMessage,
     UpscaleCompleteMsg,
+    JobCancelledError,
 )
 from shared_storage import fetch_video, upload_video
 from shared_util import cleanup_temp_dir, cleanup_temp_file, ProgressReporter
@@ -22,6 +25,7 @@ import os
 import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
+SERVICE_NAME = settings.SERVICE_NAME
 
 
 async def process_msg(
@@ -44,15 +48,15 @@ async def process_msg(
             await msg.ack()
             return
 
-        await update_job_stage(
-            job_stage_kv, job_id, settings.SERVICE_NAME, settings.SERVICE_NAME
-        )
+        await update_job_stage(job_stage_kv, job_id, SERVICE_NAME, SERVICE_NAME)
 
-        async with keep_alive(
-            settings.SERVICE_NAME, msg, interval=shared_settings.ACK_WAIT_S / 3
+        interval = settings.ACK_WAIT_S / 3
+        async with (
+            keep_alive(msg, interval, logger),
+            check_cancel_event(nc, job_id, logger) as cancel_event,
         ):
             local_video_path = await asyncio.to_thread(
-                fetch_video, metadata.storage_url, settings.SERVICE_NAME
+                fetch_video, metadata.storage_url, SERVICE_NAME
             )
 
             logger.debug(
@@ -79,6 +83,7 @@ async def process_msg(
                 return
 
             await _upscale_job(
+                cancel_event,
                 nc,
                 js,
                 msg_processed_kv,
@@ -89,15 +94,20 @@ async def process_msg(
                 res,
             )
             return
+    except JobCancelledError:
+        logger.debug(
+            "job cancelled during processing",
+            job_id=metadata.job_id if metadata else None,
+        )
+        await msg.ack()
+        return
     except Exception as e:
         logger.error("unexpected error processing job", err=str(e))
         if metadata is not None:
             job_id = metadata.job_id
 
             try:
-                await update_job_failed(
-                    job_stage_kv, metadata.job_id, str(e), settings.SERVICE_NAME
-                )
+                await update_job_failed(job_stage_kv, job_id, str(e), SERVICE_NAME)
             except Exception as e:
                 needs_nak = True
                 return
@@ -123,13 +133,13 @@ async def _finalize_job(
 ) -> None:
     """shared logic for uploading video file to storage, publish complete msg, updating KV and acking msg"""
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
-    upload_video(storage_url, job_id, temp_file_loc, settings.SERVICE_NAME)
+    upload_video(storage_url, job_id, temp_file_loc, SERVICE_NAME)
 
     await publisher(
         js,
         UpscaleCompleteMsg(job_id=job_id),
         settings.PUB_SUBJECT,
-        settings.SERVICE_NAME,
+        SERVICE_NAME,
     )
 
     await msg_processed_kv.put(job_id, b"done")
@@ -139,6 +149,7 @@ async def _finalize_job(
 
 
 async def _upscale_job(
+    cancel_event: Event,
     nc: NATSClient,
     js: JetStreamContext,
     msg_processed_kv: KeyValue,
@@ -175,11 +186,12 @@ async def _upscale_job(
     os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
     loop = asyncio.get_event_loop()
-    upscale_reporter = ProgressReporter(nc, job_id, loop, settings.SERVICE_NAME)
+    upscale_reporter = ProgressReporter(nc, job_id, loop, SERVICE_NAME)
 
     try:
         await asyncio.to_thread(
             video_upscale,
+            cancel_event,
             job_id,
             local_video_path,
             model_path,
@@ -189,9 +201,7 @@ async def _upscale_job(
         logger.debug("upscaled video", job_id=job_id)
         await upscale_reporter.flush()
 
-        await update_job_stage(
-            job_stage_kv, job_id, "video-recombiner", settings.SERVICE_NAME
-        )
+        await update_job_stage(job_stage_kv, job_id, "video-recombiner", SERVICE_NAME)
         recombine_reporter = ProgressReporter(nc, job_id, loop, "video-recombiner")
         await asyncio.to_thread(
             recombine_video_audio,
@@ -229,9 +239,7 @@ async def _downscale_job(
     )
 
     loop = asyncio.get_event_loop()
-    downscale_reporter = ProgressReporter(
-        nc, metadata.job_id, loop, settings.SERVICE_NAME
-    )
+    downscale_reporter = ProgressReporter(nc, metadata.job_id, loop, SERVICE_NAME)
 
     await asyncio.to_thread(
         video_downscale,

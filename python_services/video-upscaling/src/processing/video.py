@@ -1,8 +1,10 @@
+from threading import Event
 from typing import Optional, Callable
 from pathlib import Path
 from queue import Queue
 from subprocess import Popen
 from utils import log_timing, Resolution
+from shared_handler import JobCancelledError
 from core.settings import settings
 from .batch import flush_batch
 from .worker import encode_worker
@@ -270,8 +272,8 @@ def video_downscale(
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"ffmpeg downscale failed: {e}") from e
 
-
 def video_upscale(
+    cancel_event: Event,
     job_id: str,
     video_path: str, 
     model_path: Path, 
@@ -302,6 +304,16 @@ def video_upscale(
     pending: list[np.ndarray] = []
 
     while True:
+        # check for cancel and stop and cleanup before running any processing
+        if cancel_event.is_set():
+            if decoder.stdout:
+                decoder.stdout.close()
+            decoder.kill()
+            encoder.kill()
+            encode_queue.put(None)
+            encode_thread.join()
+            raise JobCancelledError(f"video_upscale cancelled for job {job_id}")
+
         t0 = time.perf_counter()
         if not decoder.stdout:
             break
