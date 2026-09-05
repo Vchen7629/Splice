@@ -39,6 +39,13 @@ func StartHttpApi(
 
 	router.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 	router.HandleFunc("GET /jobs/{id}/events", jh.JobEvents)
+	router.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{"status": "ok"}`))
+		if err != nil {
+			logger.Error("failed to write the http response json", "err", err)
+		}
+	})
 
 	router.HandleFunc("DELETE /jobs/{id}", ch.cancelProcessingRoute)
 

@@ -122,6 +122,7 @@ func TestStartHttpApiRouting(t *testing.T) {
 			{"DELETE on status route returns 405", http.MethodDelete, "/jobs/abc/status", http.StatusMethodNotAllowed},
 			{"GET on upload route returns 405", http.MethodGet, "/jobs/upload", http.StatusMethodNotAllowed},
 			{"GET on download route returns 405", http.MethodGet, "/jobs/download", http.StatusMethodNotAllowed},
+			{"GET on health route returns 200", http.MethodGet, "/health", http.StatusOK},
 			{"GET on cancel route returns 405", http.MethodGet, "/jobs/abc", http.StatusMethodNotAllowed},
 			{"completely unknown path returns 404", http.MethodGet, "/healthz", http.StatusNotFound},
 		}
