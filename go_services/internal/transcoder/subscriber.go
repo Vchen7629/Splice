@@ -43,10 +43,22 @@ func ConsumeVideoChunk(
 			logger.Error("failed to check chunk processed", "err", err)
 			return
 		}
-
 		if processed {
 			logger.Debug("message already processed, skipping")
 			sJetstream.AckWithErrHandling(logger, msg)
+			return
+		}
+
+		isCancelled, err := sJetstream.IsJobCancelled(jobMilestoneKV, payload.JobID)
+		if err != nil {
+			logger.Error("failed to check if job is cancelled", "job_id", payload.JobID, "err", err)
+			return
+		}
+		if isCancelled {
+			err := msg.Term()
+			if err != nil {
+				logger.Error("failed to terminate the cancelled jetstream msg", "job_id", payload.JobID, "err", err)
+			}
 			return
 		}
 
