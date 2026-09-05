@@ -7,7 +7,7 @@ from nats.js.kv import KeyValue
 from nats.js.errors import KeyNotFoundError
 from nats.js.client import JetStreamContext
 from shared_handler import VideoChunkMessage
-from src.processing.nats_msg import process_msg
+from src.processing.nats_msg import process_msg, JobCancelledError
 from src.core.settings import settings
 from test_helpers.nats import milestone_entry
 import json
@@ -185,6 +185,30 @@ async def test_writes_to_kv_on_success() -> None:
         await process_msg(MOCK_NC, MOCK_JS, mock_kv, MOCK_KV, msg)
 
     mock_kv.put.assert_called_once_with("abc-123", b"done")
+
+
+@pytest.mark.asyncio
+async def test_acks_and_does_not_record_failure_when_job_cancelled(
+    mock_kv: AsyncMock, msg: AsyncMock
+) -> None:
+    """When process_job raises JobCancelledError, the msg should be acked and
+    not recorded as failure in job_milestone_kv"""
+    mock_job_milestone_kv = AsyncMock(spec=KeyValue)
+    mock_job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
+
+    with (
+        patch(
+            "src.processing.nats_msg.process_job",
+            new_callable=AsyncMock,
+            side_effect=JobCancelledError("cancelled during detect scan for job"),
+        ),
+        patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
+    ):
+        await process_msg(MOCK_NC, MOCK_JS, mock_kv, mock_job_milestone_kv, msg)
+
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
+    mock_job_milestone_kv.update.assert_called_once()
 
 
 @pytest.mark.asyncio
