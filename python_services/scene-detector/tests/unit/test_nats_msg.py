@@ -9,7 +9,7 @@ from nats.js.client import JetStreamContext
 from shared_handler import VideoChunkMessage
 from src.processing.nats_msg import process_msg, JobCancelledError
 from src.core.settings import settings
-from test_helpers.nats import milestone_entry
+from test_helpers.nats import milestone_entry, make_msg
 import json
 import pytest
 
@@ -19,26 +19,10 @@ MOCK_KV = AsyncMock(spec=KeyValue)
 MOCK_KV.get.return_value = milestone_entry("PROCESSING", "upload")
 
 
-def make_mock_msg(data: dict[str, Any]) -> AsyncMock:
-    msg = AsyncMock()
-    msg.data = json.dumps(data).encode()
-    return msg
-
-
-@pytest.fixture
-def msg() -> AsyncMock:
-    return make_mock_msg(
-        {
-            "job_id": "1",
-            "storage_url": "/fake/idk.mp4",
-            "source_resolution": "1080p",
-            "target_resolution": "480p",
-        }
-    )
-
-
 @pytest.mark.asyncio
-async def test_acks_on_success(mock_kv: AsyncMock, msg: AsyncMock) -> None:
+async def test_acks_on_success(mock_kv: AsyncMock) -> None:
+    msg = make_msg()
+
     with (
         patch(
             "src.processing.nats_msg.process_job",
@@ -75,12 +59,12 @@ _one_chunk = [
 )
 async def test_updates_kv_and_acks_on_failure(
     mock_kv: AsyncMock,
-    msg: AsyncMock,
     process_job_kwargs: dict[str, Any],
     publish_kwargs: dict[str, Any],
 ) -> None:
     job_status_kv = AsyncMock(spec=KeyValue)
     job_status_kv.get.return_value = milestone_entry("PROCESSING", "upload")
+    msg = make_msg(job_id="1")
 
     with (
         patch(
@@ -104,9 +88,10 @@ async def test_updates_kv_and_acks_on_failure(
 
 
 @pytest.mark.asyncio
-async def test_acks_and_skips_when_job_already_processed(msg: AsyncMock) -> None:
+async def test_acks_and_skips_when_job_already_processed() -> None:
     already_processed_kv = AsyncMock(spec=KeyValue)
     already_processed_kv.get.return_value = MagicMock()
+    msg = make_msg()
 
     with (
         patch(
@@ -134,13 +119,11 @@ async def test_passes_chunk_messages_to_publisher(mock_kv: AsyncMock) -> None:
             target_resolution="480p",
         )
     ]
-    msg = make_mock_msg(
-        {
-            "job_id": "1",
-            "storage_url": "/fake/idk.mp4",
-            "source_resolution": "1080p",
-            "target_resolution": "480p",
-        }
+    msg = make_msg(
+        job_id="1",
+        storage_url="/fake/idk.mp4",
+        source_resolution="1080p",
+        target_resolution="480p",
     )
     mock_js = AsyncMock(spec=JetStreamContext)
 
@@ -163,13 +146,11 @@ async def test_passes_chunk_messages_to_publisher(mock_kv: AsyncMock) -> None:
 
 @pytest.mark.asyncio
 async def test_writes_to_kv_on_success() -> None:
-    msg = make_mock_msg(
-        {
-            "job_id": "abc-123",
-            "storage_url": "/fake/idk.mp4",
-            "source_resolution": "1080p",
-            "target_resolution": "480p",
-        }
+    msg = make_msg(
+        job_id="abc-123",
+        storage_url="/fake/idk.mp4",
+        source_resolution="1080p",
+        target_resolution="480p",
     )
     mock_kv = AsyncMock(spec=KeyValue)
     mock_kv.get.side_effect = KeyNotFoundError()
@@ -189,12 +170,13 @@ async def test_writes_to_kv_on_success() -> None:
 
 @pytest.mark.asyncio
 async def test_acks_and_does_not_record_failure_when_job_cancelled(
-    mock_kv: AsyncMock, msg: AsyncMock
+    mock_kv: AsyncMock,
 ) -> None:
     """When process_job raises JobCancelledError, the msg should be acked and
     not recorded as failure in job_milestone_kv"""
     mock_job_milestone_kv = AsyncMock(spec=KeyValue)
     mock_job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
+    msg = make_msg()
 
     with (
         patch(
@@ -222,10 +204,11 @@ async def test_acks_and_does_not_record_failure_when_job_cancelled(
 )
 async def test_does_not_write_to_kv_on_failure(
     mock_kv: AsyncMock,
-    msg: AsyncMock,
     process_job_kwargs: dict[str, Any],
     publish_kwargs: dict[str, Any],
 ) -> None:
+    msg = make_msg()
+
     with (
         patch(
             "src.processing.nats_msg.process_job",
@@ -245,13 +228,14 @@ async def test_does_not_write_to_kv_on_failure(
 
 @pytest.mark.asyncio
 async def test_update_job_stage_error_records_failure_and_acks(
-    mock_kv: AsyncMock, msg: AsyncMock
+    mock_kv: AsyncMock,
 ) -> None:
     """When job_milestone_kv.put fails for the stage write but succeeds for the
     failed-write fallback, the failure is durably recorded and the message is acked."""
     mock_job_milestone_kv = AsyncMock(spec=KeyValue)
     mock_job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     mock_job_milestone_kv.update.side_effect = [Exception("kv write failed"), None]
+    msg = make_msg()
 
     with (
         patch(
@@ -270,12 +254,13 @@ async def test_update_job_stage_error_records_failure_and_acks(
 
 @pytest.mark.asyncio
 async def test_update_job_stage_error_naks_when_failure_write_also_fails(
-    mock_kv: AsyncMock, msg: AsyncMock
+    mock_kv: AsyncMock,
 ) -> None:
     """When job_milestone_kv.put fails for both the stage write and the failed-write
     fallback, nothing was durably recorded, so the message is nak'd for redelivery."""
     mock_job_milestone_kv = AsyncMock(spec=KeyValue)
     mock_job_milestone_kv.put.side_effect = Exception("kv write failed")
+    msg = make_msg()
 
     with (
         patch(
@@ -296,13 +281,11 @@ async def test_stage_written_to_job_status_kv_before_processing(
     mock_kv: AsyncMock,
 ) -> None:
     """job_status_kv.update is called with PROCESSING:scene-detector before process_job runs"""
-    msg = make_mock_msg(
-        {
-            "job_id": "abc-123",
-            "storage_url": "/fake/idk.mp4",
-            "source_resolution": "1080p",
-            "target_resolution": "480p",
-        }
+    msg = make_msg(
+        job_id="abc-123",
+        storage_url="/fake/idk.mp4",
+        source_resolution="1080p",
+        target_resolution="480p",
     )
     mock_job_status_kv = AsyncMock(spec=KeyValue)
     mock_job_status_kv.get.return_value = milestone_entry("PROCESSING", "upload")
