@@ -340,3 +340,24 @@ async def test_recombiner_stage_transition_waits_for_progress_flush(
 
     nats_msg_patches["recombine"].assert_called_once()
     assert call_order == ["flush", "update_stage:video-recombiner", "flush"]
+
+
+@pytest.mark.asyncio
+async def test_ack_and_does_not_record_failure_when_job_cancelled(
+    nats_msg_patches: dict[str, Any],
+) -> None:
+    """When video_upscale raises JobCancelledError, the msg should be acked and
+    not recorded as failure in job_milestone_kv"""
+    from shared_handler.exceptions import JobCancelledError
+
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+    nats_msg_patches["upscale"].side_effect = JobCancelledError(
+        "video_upscale cancelled for job job-1"
+    )
+    msg = make_msg()
+
+    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
+    nats_msg_patches["update_failed"].assert_not_called()
