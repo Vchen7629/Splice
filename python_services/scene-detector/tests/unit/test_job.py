@@ -1,6 +1,7 @@
 from shared_handler import ProcessJobMessage, VideoChunkMessage
 from scenedetect import VideoOpenFailure
-from unittest.mock import patch
+from threading import Event
+from unittest.mock import patch, MagicMock
 from src.processing.job import process_job, logger
 import pytest
 
@@ -20,22 +21,26 @@ FAKE_STORAGE_URLS = [
     "http://fake:8888/test-123/video-Scene-001.mp4",
     "http://fake:8888/test-123/video-Scene-002.mp4",
 ]
+MOCK_CANCEL_EVENT = MagicMock(spec=Event)
+MOCK_CANCEL_EVENT.is_set.return_value = False
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("exc", [VideoOpenFailure, OSError])
-async def test_split_exceptions_propagate(exc: type[Exception]) -> None:
+async def test_process_job_split_into_chunks_exceptions_propagate(
+    exc: type[Exception],
+) -> None:
     """VideoOpenFailure and OSError from split_into_chunks propagate out of process_job"""
     with (
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", side_effect=exc),
         pytest.raises(exc),
     ):
-        await process_job(METADATA)
+        await process_job(MOCK_CANCEL_EVENT, METADATA)
 
 
 @pytest.mark.asyncio
-async def test_uses_job_scoped_output_dir() -> None:
+async def test_process_job_uses_job_scoped_output_dir() -> None:
     """split_into_chunks is called with a job-scoped temp dir to prevent collisions"""
     with (
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
@@ -43,15 +48,19 @@ async def test_uses_job_scoped_output_dir() -> None:
         patch("src.processing.job.upload_video", return_value=FAKE_STORAGE_URLS[0]),
         patch("src.processing.job.cleanup_temp_dir"),
     ):
-        await process_job(METADATA)
+        await process_job(MOCK_CANCEL_EVENT, METADATA)
 
     mock_split.assert_called_once_with(
-        FAKE_LOCAL_PATH, f"../temp/{METADATA.job_id}/chunks", None
+        logger,
+        MOCK_CANCEL_EVENT,
+        FAKE_LOCAL_PATH,
+        f"../temp/{METADATA.job_id}/chunks",
+        None,
     )
 
 
 @pytest.mark.asyncio
-async def test_returns_chunk_messages_on_success() -> None:
+async def test_process_job_returns_chunk_messages_on_success() -> None:
     """Returns correct VideoChunkMessage list with SeaweedFS URLs"""
     url_map = dict(zip(FAKE_CHUNK_PATHS, FAKE_STORAGE_URLS))
 
@@ -64,7 +73,7 @@ async def test_returns_chunk_messages_on_success() -> None:
         ),
         patch("src.processing.job.cleanup_temp_dir"),
     ):
-        result = await process_job(METADATA)
+        result = await process_job(MOCK_CANCEL_EVENT, METADATA)
 
     assert len(result) == 2
     assert all(isinstance(m, VideoChunkMessage) for m in result)
@@ -78,7 +87,7 @@ async def test_returns_chunk_messages_on_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cleans_up_temp_dir_after_upload() -> None:
+async def test_process_job_cleans_up_temp_dir_after_upload() -> None:
     """Temp directory is removed after chunks are uploaded"""
     url_map = dict(zip(FAKE_CHUNK_PATHS, FAKE_STORAGE_URLS))
 
@@ -91,7 +100,7 @@ async def test_cleans_up_temp_dir_after_upload() -> None:
         ),
         patch("src.processing.job.cleanup_temp_dir") as mock_cleanup_temp_dir,
     ):
-        await process_job(METADATA)
+        await process_job(MOCK_CANCEL_EVENT, METADATA)
 
     mock_cleanup_temp_dir.assert_called_once_with(
         f"../temp/{METADATA.job_id}", METADATA.job_id, logger
