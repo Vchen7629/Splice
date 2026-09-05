@@ -6,7 +6,7 @@ dev:
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-gateway.pid; cd go_services/cmd/gateway && exec go run .' > /tmp/splice-gateway.log 2>&1 &
 	gateway_ready=0; \
 	for i in $$(seq 1 60); do \
-		if curl -sf -o /dev/null http://localhost:8080/; then gateway_ready=1; break; fi; \
+		if curl -sf -o /dev/null http://localhost:8080/health; then gateway_ready=1; break; fi; \
 		if ! kill -0 "$$(cat /tmp/splice-gateway.pid 2>/dev/null)" 2>/dev/null; then break; fi; \
 		echo "waiting for gateway..."; sleep 1; \
 	done; \
