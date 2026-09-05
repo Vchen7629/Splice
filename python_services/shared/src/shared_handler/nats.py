@@ -44,7 +44,7 @@ async def keep_alive(
 @contextlib.asynccontextmanager
 async def check_cancel_event(
     nc: NATSClient, job_id: str, logger: BoundLogger
-) -> AsyncGenerator[None, None]:
+) -> AsyncGenerator[Event, None]:
     """"""
     cancel_event = Event()
 
