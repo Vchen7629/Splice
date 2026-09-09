@@ -61,7 +61,7 @@ def test_video_downscale_raises_runtime_error_when_ffmpeg_fails() -> None:
         side_effect=CalledProcessError(1, "ffmpeg", stderr=b"error"),
     ):
         with pytest.raises(RuntimeError, match="ffmpeg downscale failed"):
-            video_downscale("/tmp/input.mp4", "480p", "/tmp/out.mp4")
+            video_downscale(MOCK_CANCEL_EVENT, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
 
 
 def test_video_decoder_calls_popen_with_video_path() -> None:

@@ -113,6 +113,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
     await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["downscale"].assert_called_once_with(
+        ANY,
         "/tmp/video.mp4",
         "480p",
         "../temp_output/abc/video.mp4",
@@ -305,6 +306,7 @@ async def test_downscale_path_removes_temp_dirs_on_success(
     await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
 
     nats_msg_patches["downscale"].assert_called_once_with(
+        ANY,
         "/tmp/video.mp4",
         "480p",
         "../temp_output/job-abc/video.mp4",
