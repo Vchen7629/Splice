@@ -182,7 +182,9 @@ async def test_acks_and_does_not_record_failure_when_job_cancelled(
         patch(
             "src.processing.nats_msg.process_job",
             new_callable=AsyncMock,
-            side_effect=JobCancelledError("cancelled during detect scan for job"),
+            side_effect=JobCancelledError(
+                "split_into_chunks cancelled during detect scan"
+            ),
         ),
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock),
     ):

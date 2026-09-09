@@ -1,8 +1,9 @@
-from shared_handler import ProcessJobMessage, VideoChunkMessage
+from shared_handler import ProcessJobMessage, VideoChunkMessage, JobCancelledError
 from scenedetect import VideoOpenFailure
 from threading import Event
 from unittest.mock import patch, MagicMock
 from src.processing.job import process_job, logger
+import asyncio
 import pytest
 
 METADATA = ProcessJobMessage(
@@ -51,7 +52,6 @@ async def test_process_job_uses_job_scoped_output_dir() -> None:
         await process_job(MOCK_CANCEL_EVENT, METADATA)
 
     mock_split.assert_called_once_with(
-        logger,
         MOCK_CANCEL_EVENT,
         FAKE_LOCAL_PATH,
         f"../temp/{METADATA.job_id}/chunks",
@@ -105,3 +105,50 @@ async def test_process_job_cleans_up_temp_dir_after_upload() -> None:
     mock_cleanup_temp_dir.assert_called_once_with(
         f"../temp/{METADATA.job_id}", METADATA.job_id, logger
     )
+
+
+@pytest.mark.asyncio
+async def test_process_job_raises_when_cancelled_before_upload_starts() -> None:
+    """cancel_event set after scene-split but before any upload begins skips
+    uploading entirely and never returns chunk messages"""
+    cancel_event = MagicMock(spec=Event)
+    cancel_event.is_set.return_value = True
+
+    with (
+        patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
+        patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
+        patch("src.processing.job.upload_video") as mock_upload,
+        patch("src.processing.job.cleanup_temp_dir"),
+    ):
+        with pytest.raises(JobCancelledError):
+            await process_job(cancel_event, METADATA)
+
+    mock_upload.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_job_raises_when_cancelled_during_upload() -> None:
+    """cancel_event set while upload_video is blocked still stops process_job from
+    returning chunk messages, even though the in-flight upload finishes normally"""
+    cancel_event = Event()
+    upload_started = Event()
+
+    def blocking_upload(
+        storage_url: str, job_id: str, path: str, service_name: str
+    ) -> str:
+        upload_started.set()
+        cancel_event.wait(timeout=2)
+        return f"http://fake:8888/{job_id}/{path}"
+
+    with (
+        patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
+        patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
+        patch("src.processing.job.upload_video", side_effect=blocking_upload),
+        patch("src.processing.job.cleanup_temp_dir"),
+    ):
+        task = asyncio.create_task(process_job(cancel_event, METADATA))
+        await asyncio.to_thread(upload_started.wait, 2)
+        cancel_event.set()
+
+        with pytest.raises(JobCancelledError):
+            await task
