@@ -79,5 +79,23 @@ export const VideoService = {
                 throw error;
             }
         }
+    },
+
+    cancel: async(jobId: string) => {
+        try {
+            const response = await GatewayApi.delete(`/jobs/${jobId}`)
+            return response.data
+        } catch (error) {
+            if (error instanceof AxiosError) {
+                console.error(error.response?.data || error.message);
+                throw error;
+            } else if (error instanceof Error) {
+                console.error(error.message);
+                throw error;
+            } else {
+                console.error(error);
+                throw error;
+            }
+        }
     }
 }

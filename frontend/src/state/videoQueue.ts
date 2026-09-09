@@ -4,12 +4,16 @@ import type { ProcessingType, UploadedFile } from "../types/file"
 interface VideoQueueStore {
     uploadedVideos: Record<ProcessingType, UploadedFile[]>
     processedVideos: Record<ProcessingType, UploadedFile[]>
+    cancelledVideos: Record<ProcessingType, UploadedFile[]>
     addVideos: (processingType: ProcessingType, videos: UploadedFile[]) => void
     updateVideoStatus: (processingType: ProcessingType, id: number, patch: Partial<UploadedFile>) => void
     setResolution: (processingType: ProcessingType, id: number, resolution: string) => void
     removeUploadedVideo: (processingType: ProcessingType, id: number) => void
     removeProcessedVideo: (processingType: ProcessingType, id: number) => void
+    removeCancelledVideo: (processingType: ProcessingType, id: number) => void
     markComplete: (processingType: ProcessingType, video: UploadedFile) => void
+    markCancelling: (processingType: ProcessingType, id: number) => void
+    markCancelled: (processingType: ProcessingType, video: UploadedFile) => void
     resetVideo: (processingType: ProcessingType, id: number) => void
 }
 
@@ -30,6 +34,12 @@ export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
         "Convert": []
     },
     processedVideos: {
+        "Transcode": [],
+        "Upscale": [],
+        "Denoise": [],
+        "Convert": []
+    },
+    cancelledVideos: {
         "Transcode": [],
         "Upscale": [],
         "Denoise": [],
@@ -69,6 +79,14 @@ export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
             )
         })),
 
+    removeCancelledVideo(processingType, id) {
+        set(state => ({
+            cancelledVideos: withUpdatedQueue(state.cancelledVideos, processingType, list => 
+                list.filter(v => v.id !== id)
+            )
+        }))
+    },
+
     resetVideo: (processingType, id) =>
         set(state => ({
             uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
@@ -88,6 +106,29 @@ export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
                 ),
                 processedVideos: withUpdatedQueue(state.processedVideos, processingType, list =>
                     [...list, { ...current, status: 'complete' }]
+                ),
+            }
+        }),
+
+    markCancelling: (processingType, id) => 
+        set(state => ({
+            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
+                list.map(v => v.id === id ? { ...v, status: 'cancelling' } : v)
+            )
+        })),
+
+    markCancelled: (processingType, video) =>
+        set(state => {
+            const current = state.uploadedVideos[processingType]
+                .find(v => v.id === video.id)
+            if (!current) return {}
+
+            return {
+                uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
+                    list.filter(v => v.id !== video.id)
+                ),
+                cancelledVideos: withUpdatedQueue(state.cancelledVideos, processingType, list =>
+                    [...list, { ...current, status: 'cancelled' }]
                 ),
             }
         }),

@@ -1,7 +1,7 @@
 import type { ProcessingType, UploadedFile } from '../../types/file'
 import { STATUS_BG } from './StatusStyles'
 
-type SegmentState = 'done' | 'active' | 'pending'
+type SegmentState = 'done' | 'active' | 'pending' | 'cancelling'
 
 interface Segment {
     key: string
@@ -36,25 +36,12 @@ const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: str
 
 const UPLOAD_STEP = { key: 'upload', label: 'Upload'}
 
-/** Maps a file's status/stage to each pipeline segment's visual state and fill %. */
-function pipelineSegments(file: UploadedFile, processingType: ProcessingType): Segment[] {
-    const steps = [UPLOAD_STEP, ...STAGES[processingType]]
-
-    if (file.status === 'complete') {
-        return steps.map(s => ({ ...s, state: 'done' as const, fill: 100 }))
-    }
-
-    if (file.status === 'pending') {
-        return steps.map(s => ({ ...s, state: 'pending' as const, fill: 0 }))
-    }
-
-    if (file.status === 'uploading') {
-        return steps.map((s, i) => i === 0 
-            ? { ...s, state: 'active' as const, fill: file.uploadProgress }
-            : { ...s, state: 'pending' as const, fill: 0})
-    }
-
-    // Processing: upload is done, find the active backend stage among the rest.
+/**Segments derived from real backend stage/progress */
+function stageSegments(
+    file: UploadedFile,
+    steps: { key: string; label: string}[],
+    activeState: 'active' | 'cancelling',
+): Segment[] {
     const activeIdx = 1 + steps.slice(1).findIndex(s => s.key === file.stage)
 
     return steps.map((step, i) => {
@@ -68,8 +55,34 @@ function pipelineSegments(file: UploadedFile, processingType: ProcessingType): S
         ])
         const fill = PROGRESS_REPORTING_STAGES.has(step.key) ? file.jobProgress ?? 0 : 50
 
-        return { ...step, state: 'active' as const, fill }
+        return { ...step, state: activeState, fill }
     })
+}
+
+/** Maps a file's status/stage to each pipeline segment's visual state and fill %. */
+function pipelineSegments(file: UploadedFile, processingType: ProcessingType): Segment[] {
+    const steps = [UPLOAD_STEP, ...STAGES[processingType]]
+
+    if (file.status === 'complete') {
+        return steps.map(s => ({ ...s, state: 'done' as const, fill: 100 }))
+    }
+
+    if (file.status === 'cancelling') {
+        return stageSegments(file, steps, 'cancelling' )
+    }
+
+    if (file.status === 'pending') {
+        return steps.map(s => ({ ...s, state: 'pending' as const, fill: 0 }))
+    }
+
+    if (file.status === 'uploading') {
+        return steps.map((s, i) => i === 0 
+            ? { ...s, state: 'active' as const, fill: file.uploadProgress }
+            : { ...s, state: 'pending' as const, fill: 0})
+    }
+
+    // Processing: upload is done, find the active backend stage among the rest.
+    return stageSegments(file, steps, 'active')
 }
 
 /**
@@ -109,7 +122,8 @@ const PipelineProgress = ({
                             className={`flex-1 font-mono text-eyebrow uppercase transition-colors duration-200
                                 ${segment.state === 'pending' ? 'text-fg-faint/60' : ''}
                                 ${segment.state === 'done' ? 'text-fg-muted' : ''}
-                                ${segment.state === 'active' ? 'text-fg-strong' : ''}`}
+                                ${segment.state === 'active' ? 'text-fg-strong' : ''}
+                                ${segment.state === 'cancelling' ? 'text-fg-faint/60' : ''}`}
                         >
                             {segment.label}
                         </span>

@@ -3,12 +3,14 @@ import type { ReactNode } from "react"
 interface SidebarProps {
     queueCount: number
     queueContent: ReactNode
-    outputCount: number
-    outputContent: ReactNode
+    processedCount: number
+    processedContent: ReactNode
+    cancelledCount: number
+    cancelledContent: ReactNode
 }
 
 /**2 stacked sections with sticky headers (processing and done videos) */
-const Sidebar = ({ queueCount, queueContent, outputCount, outputContent }: SidebarProps) => (
+const Sidebar = ({ queueCount, queueContent, processedCount, processedContent, cancelledCount, cancelledContent }: SidebarProps) => (
     <aside className="flex flex-col w-[340px] shrink-0 border-l border-line bg-panel">
         <section className="flex flex-col flex-1 min-h-0">
             <SectionHeader label="Queue" count={queueCount}/>
@@ -16,8 +18,13 @@ const Sidebar = ({ queueCount, queueContent, outputCount, outputContent }: Sideb
         </section>
 
         <section className="flex flex-col shrink-0 max-h-[45%] border-t border-line">
-            <SectionHeader label="Output" count={outputCount}/>
-            {outputContent}
+            <SectionHeader label="Processed Videos" count={processedCount}/>
+            {processedContent}
+        </section>
+
+        <section>
+            <SectionHeader label="Cancelled Videos" count={cancelledCount}/>
+            {cancelledContent}
         </section>
     </aside>
 )

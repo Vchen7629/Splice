@@ -1,6 +1,5 @@
 import type { UploadedFile } from '../../types/file'
 
-/** Status colour stays conventional across palettes — it carries meaning, not style. */
 export const STATUS_LABEL: Record<UploadedFile['status'], { text: string; color: string; pulse: boolean }> = {
     pending:    { text: 'Queued',     color: 'text-status-idle',   pulse: false },
     uploading:  { text: 'Uploading',  color: 'text-status-upload', pulse: true  },
@@ -8,6 +7,8 @@ export const STATUS_LABEL: Record<UploadedFile['status'], { text: string; color:
     complete:   { text: 'Done',       color: 'text-status-done',   pulse: false },
     error:      { text: 'Failed',     color: 'text-status-fail',   pulse: false },
     degraded:   { text: 'Degraded',   color: 'text-status-warn',   pulse: true  },
+    cancelling: { text: 'Cancelling', color: 'text-status-idle',   pulse: true  },
+    cancelled:  { text: 'Cancelled',  color: 'text-status-fail',   pulse: false }, 
 }
 
 export const STATUS_BG: Record<UploadedFile['status'], string> = {
@@ -17,4 +18,6 @@ export const STATUS_BG: Record<UploadedFile['status'], string> = {
     complete:   'bg-status-done',
     error:      'bg-status-fail',
     degraded:   'bg-status-warn',
+    cancelling: 'bg-status-idle',
+    cancelled:  'bg-status-fail'
 }

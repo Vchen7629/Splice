@@ -2,11 +2,13 @@ import { useRef } from "react"
 import { toast } from "sonner"
 import { VideoService } from "../api/services/video"
 import { useVideoQueueStore } from "../state/videoQueue"
-import type { ProcessingType } from "../types/file"
+import type { ProcessingType, UploadedFile } from "../types/file"
 
 export function useUploadQueue(processingType: ProcessingType) {
     const abortRefs = useRef<Map<number, () => void>>(new Map())
     const removeUploadedVideoFromStore = useVideoQueueStore(s => s.removeUploadedVideo)
+    const markCancelling = useVideoQueueStore(s => s.markCancelling)
+    const updateVideoStatus = useVideoQueueStore(s => s.updateVideoStatus)
 
     function removeUploadedVideo(processingType: ProcessingType, id: number) {
         abortRefs.current.get(id)?.()
@@ -14,8 +16,20 @@ export function useUploadQueue(processingType: ProcessingType) {
         removeUploadedVideoFromStore(processingType, id)
     }
 
+    function cancelVideo(processingType: ProcessingType, file: UploadedFile) {
+        if (!file.jobId) return
+        const previousStatus = file.status
+
+        markCancelling(processingType, file.id)
+
+        VideoService.cancel(file.jobId).catch((err: Error) => {
+            updateVideoStatus(processingType, file.id, { status: previousStatus })
+            toast.error(`Failed to cancel ${file.name}`, { description: err.message })
+        })
+    }
+
     function startVideoUploads(files: Map<number, File>) {
-        const { uploadedVideos, updateVideoStatus } = useVideoQueueStore.getState()
+        const { uploadedVideos } = useVideoQueueStore.getState()
 
         uploadedVideos[processingType].forEach(video => {
             if (video.status !== 'pending') return video
@@ -47,5 +61,5 @@ export function useUploadQueue(processingType: ProcessingType) {
         })
     }
 
-    return { removeUploadedVideo, startVideoUploads }
+    return { removeUploadedVideo, cancelVideo, startVideoUploads }
 }

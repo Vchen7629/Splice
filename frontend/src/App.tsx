@@ -11,15 +11,15 @@ import AppLayout from './components/layout/AppLayout'
 import Header from './components/layout/Header'
 import Sidebar from './components/layout/Sidebar'
 import ModeNav from './components/file/ModeNav'
-import { FileOutputList, UploadedFileQueueList } from './components/file/InputOutputList'
+import { CancelledVideosList, ProcessedVideosList, UploadedFileQueueList } from './components/file/VideoDisplayList'
 import FileUploadPanel from './components/file/UploadPanel'
 
 let nextId = 0
 
 function App() {
-  const { uploadedVideos, processedVideos, addVideos, removeProcessedVideo } = useVideoQueueStore()
+  const { uploadedVideos, processedVideos, cancelledVideos, addVideos, removeProcessedVideo, removeCancelledVideo } = useVideoQueueStore()
   const [ activeFeature, setActiveFeature] = useState<ProcessingType>('Transcode')
-  const { removeUploadedVideo, startVideoUploads } = useUploadQueue(activeFeature)
+  const { removeUploadedVideo, cancelVideo, startVideoUploads } = useUploadQueue(activeFeature)
   const { resetVideo, setResolution } = useVideoQueueStore()
   const fileMap = useRef<Map<number, File>>(new Map())
   const { mode, toggleMode } = useTheme()
@@ -27,7 +27,8 @@ function App() {
   useJobEvents()
 
   const queue = uploadedVideos[activeFeature]
-  const output = processedVideos[activeFeature]
+  const processedVideo = processedVideos[activeFeature]
+  const cancelledVideo = cancelledVideos[activeFeature]
   const showResolution = activeFeature !== 'Denoise'
 
   async function handleFiles(files: File[]) {
@@ -58,8 +59,16 @@ function App() {
   }
 
   function handleRemove(processingType: ProcessingType, id: number) {
-    fileMap.current.delete(id)
-    removeUploadedVideo(processingType, id)
+    const file = uploadedVideos[processingType].find(v => v.id === id)
+    if (!file) return
+
+    if (file.jobId === null) {
+      fileMap.current.delete(id)
+      removeUploadedVideo(processingType, id)
+      return
+    }
+
+    cancelVideo(processingType, file)
   }
 
   function handleSetResolution(id: number, resolution: string) {
@@ -97,7 +106,8 @@ function App() {
         sidebar={
           <Sidebar
             queueCount={queue.length}
-            outputCount={output.length}
+            processedCount={processedVideo.length}
+            cancelledCount={cancelledVideo.length}
             queueContent={
               <UploadedFileQueueList 
                 queue={queue}
@@ -107,14 +117,15 @@ function App() {
                 handleSetResolution={handleSetResolution}
               />
             }
-            outputContent={<FileOutputList output={output} onRemove={id => removeProcessedVideo(activeFeature, id)}/>}
+            processedContent={<ProcessedVideosList processedVideos={processedVideo} onRemove={id => removeProcessedVideo(activeFeature, id)}/>}
+            cancelledContent={<CancelledVideosList cancelledVideos={cancelledVideo} onRemove={id => removeCancelledVideo(activeFeature, id)}/>}
           />
         }
       >
         <FileUploadPanel 
           activeFeature={activeFeature}
           queue={queue}
-          outputCount={output.length}
+          processedCount={processedVideo.length}
           dropzone={{ isDragging, inputRef, browse, dropHandlers, handleInputChange }}
           onStartUploads={() => startVideoUploads(fileMap.current)}
         />
