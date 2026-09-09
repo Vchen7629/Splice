@@ -54,7 +54,7 @@ async def process_msg(
         poll_interval = shared_settings.ACK_WAIT_S / 3
         async with (
             keep_alive(msg, poll_interval, logger),
-            check_cancel_event(nc, job_id, logger) as cancel_event,
+            check_cancel_event(job_milestone_kv, job_id) as cancel_event,
         ):
             chunk_messages = await process_job(cancel_event, metadata, reporter)
             await reporter.flush()

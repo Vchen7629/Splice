@@ -32,7 +32,7 @@ async def process_msg(
     nc: NATSClient,
     js: JetStreamContext,
     msg_processed_kv: KeyValue,
-    job_stage_kv: KeyValue,
+    job_milestone_kv: KeyValue,
     msg: Msg,
 ) -> None:
     """Processes a single video upscale nats message"""
@@ -48,12 +48,12 @@ async def process_msg(
             await msg.ack()
             return
 
-        await update_job_stage(job_stage_kv, job_id, SERVICE_NAME, SERVICE_NAME)
+        await update_job_stage(job_milestone_kv, job_id, SERVICE_NAME, SERVICE_NAME)
 
         interval = settings.ACK_WAIT_S / 3
         async with (
             keep_alive(msg, interval, logger),
-            check_cancel_event(nc, job_id, logger) as cancel_event,
+            check_cancel_event(job_milestone_kv, job_id) as cancel_event,
         ):
             local_video_path = await asyncio.to_thread(
                 fetch_video, metadata.storage_url, SERVICE_NAME
@@ -88,7 +88,7 @@ async def process_msg(
                 nc,
                 js,
                 msg_processed_kv,
-                job_stage_kv,
+                job_milestone_kv,
                 msg,
                 metadata,
                 local_video_path,
@@ -108,7 +108,7 @@ async def process_msg(
             job_id = metadata.job_id
 
             try:
-                await update_job_failed(job_stage_kv, job_id, str(e), SERVICE_NAME)
+                await update_job_failed(job_milestone_kv, job_id, str(e), SERVICE_NAME)
             except Exception as e:
                 needs_nak = True
                 return

@@ -312,12 +312,6 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		err = c.nc.Publish("cancel."+jobID, nil)
-		if err != nil {
-			c.logger.Error("failed to publish cancel broadcast", "job_id", jobID, "err", err)
-			// we dont fail here since KV write already succeeded so durable gate is worst case
-		}
-
 		current.State = StateCancelled
 		break
 	}

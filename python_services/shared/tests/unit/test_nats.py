@@ -5,8 +5,8 @@ from nats.aio.msg import Msg
 from nats.js.errors import APIError, KeyNotFoundError
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
-from shared_core import get_logger
 from shared_handler import consumer, check_cancel_event
+import asyncio
 import pytest
 
 MOCK_NC = AsyncMock(spec=NATSClient)
@@ -36,16 +36,55 @@ def make_mock_msg(job_id: str = "job-1") -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_check_cancel_event_unsubscribes_on_exit() -> None:
-    nc = AsyncMock(spec=NATSClient)
-    sub = AsyncMock()
-    nc.subscribe.return_value = sub
-    logger = get_logger("test")
+async def test_check_cancel_event_sets_event_when_job_cancelled(monkeypatch) -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    monkeypatch.setattr(
+        "shared_handler.nats.is_job_cancelled", AsyncMock(return_value=True)
+    )
 
-    async with check_cancel_event(nc, "job-2", logger):
+    async with check_cancel_event(mock_kv, "job-1", interval_s=0.01) as cancel_event:
+        await asyncio.sleep(0.05)
+        assert cancel_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_check_cancel_event_stays_unset_when_job_not_cancelled(
+    monkeypatch,
+) -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    monkeypatch.setattr(
+        "shared_handler.nats.is_job_cancelled", AsyncMock(return_value=False)
+    )
+
+    async with check_cancel_event(mock_kv, "job-2", interval_s=0.01) as cancel_event:
+        await asyncio.sleep(0.05)
+        assert not cancel_event.is_set()
+
+
+@pytest.mark.asyncio
+async def test_check_cancel_event_cancels_poll_task_on_exit(monkeypatch) -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    mock_is_job_cancelled = AsyncMock(return_value=False)
+    monkeypatch.setattr("shared_handler.nats.is_job_cancelled", mock_is_job_cancelled)
+
+    async with check_cancel_event(mock_kv, "job-3", interval_s=0.01) as cancel_event:
         pass
 
-    sub.unsubscribe.assert_awaited_once()
+    assert not cancel_event.is_set()
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    assert not any("_poll" in (t.get_coro().__qualname__ or "") for t in tasks)
+
+
+@pytest.mark.asyncio
+async def test_check_cancel_event_polls_at_given_interval(monkeypatch) -> None:
+    mock_kv = AsyncMock(spec=KeyValue)
+    mock_is_job_cancelled = AsyncMock(return_value=False)
+    monkeypatch.setattr("shared_handler.nats.is_job_cancelled", mock_is_job_cancelled)
+
+    async with check_cancel_event(mock_kv, "job-4", interval_s=0.01):
+        await asyncio.sleep(0.055)
+
+    assert mock_is_job_cancelled.call_count >= 4
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Awaitable, Callable
+from typing import Any, AsyncGenerator, Awaitable, Callable
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue
@@ -19,7 +19,7 @@ import json
 @contextlib.asynccontextmanager
 async def keep_alive(
     msg: Msg, interval: float, logger: BoundLogger
-) -> AsyncGenerator[None, None]:
+) -> AsyncGenerator[Any, None]:
     """Periodically calls msg.in_progress() to extend the Jetstream ack deadline,
     and subscribes to cancel.{job_id} for the duration of the work, setting
     cancel_event when a cancel broadcast arrives so long-running loops can check it."""
@@ -43,22 +43,26 @@ async def keep_alive(
 
 @contextlib.asynccontextmanager
 async def check_cancel_event(
-    nc: NATSClient, job_id: str, logger: BoundLogger
+    job_milestone_kv: KeyValue, job_id: str, interval_s: float = 2.0
 ) -> AsyncGenerator[Event, None]:
-    """"""
+    """periodically poll the job_milestone_kv to check if the job for job_id is cancelled to let the
+    services know they should stop processing"""
     cancel_event = Event()
 
-    async def _on_cancel(_: Msg) -> None:
-        cancel_event.set()
+    async def _poll() -> None:
+        while True:
+            await asyncio.sleep(interval_s)
+            if await is_job_cancelled(job_milestone_kv, job_id):
+                cancel_event.set()
+                return
 
-    cancel_sub = await nc.subscribe(f"cancel.{job_id}", cb=_on_cancel)
+    task = asyncio.create_task(_poll())
     try:
         yield cancel_event
     finally:
-        try:
-            await cancel_sub.unsubscribe()
-        except Exception as e:  # keep-alive is best-effort
-            logger.warning("failed to unsubscribe from cancel subject", err=str(e))
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 async def consumer(
