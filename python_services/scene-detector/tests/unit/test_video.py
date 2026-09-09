@@ -50,7 +50,7 @@ def test_returns_correct_chunk_paths() -> None:
             patch("src.processing.video.subprocess.run"),
         ):
             result = split_into_chunks(
-                MOCK_LOGGER, MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir
+                MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir
             )
 
     assert result == [
@@ -83,7 +83,6 @@ def test_no_scene_boundaries_copies_original_as_single_chunk() -> None:
             patch("src.processing.video.SceneManager", return_value=manager),
         ):
             result = split_into_chunks(
-                MOCK_LOGGER,
                 MOCK_CANCEL_EVENT,
                 src,
                 output_dir,
@@ -117,7 +116,7 @@ def test_on_progress_defaults_to_none_safely() -> None:
             ),
             patch("src.processing.video.SceneManager", return_value=manager),
         ):
-            result = split_into_chunks(MOCK_LOGGER, MOCK_CANCEL_EVENT, src, output_dir)
+            result = split_into_chunks(MOCK_CANCEL_EVENT, src, output_dir)
 
     assert result == [os.path.join(output_dir, "myvideo.mp4")]
 
@@ -148,7 +147,6 @@ def test_progress_capped_at_90_during_detection_then_reaches_100_after_split() -
     ):
         with tempfile.TemporaryDirectory() as output_dir:
             split_into_chunks(
-                MOCK_LOGGER,
                 MOCK_CANCEL_EVENT,
                 "/videos/myvideo.mp4",
                 output_dir,
@@ -180,11 +178,10 @@ def test_raises_job_cancelled_when_cancel_event_is_set_during_detect_scan() -> N
             patch("src.processing.video.subprocess.run"),
         ):
             with pytest.raises(
-                JobCancelledError, match="cancelled during detect scan for job"
+                JobCancelledError,
+                match="split_into_chunks cancelled during detect scan",
             ):
-                split_into_chunks(
-                    MOCK_LOGGER, cancel_event, "/videos/myvideo.mp4", output_dir
-                )
+                split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
 
 
 def test_raises_job_cancelled_when_cancel_event_is_set_before_scene_split() -> None:
@@ -207,8 +204,69 @@ def test_raises_job_cancelled_when_cancel_event_is_set_before_scene_split() -> N
             patch("src.processing.video.subprocess.run"),
         ):
             with pytest.raises(
-                JobCancelledError, match="cancelled before scene 1 for job"
+                JobCancelledError,
+                match="split_into_chunks cancelled before scene 0 for job",
             ):
-                split_into_chunks(
-                    MOCK_LOGGER, cancel_event, "/videos/myvideo.mp4", output_dir
-                )
+                split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
+
+
+def test_raises_job_cancelled_when_set_after_detect_scan_with_no_scenes() -> None:
+    """cancel_event set right after the detect loop exits must raise before the
+    no-scene shutil.copy2 fallback ever runs"""
+    manager = SimpleNamespace(
+        add_detector=MagicMock(),
+        detect_scenes=MagicMock(return_value=0),
+        get_scene_list=MagicMock(return_value=[]),
+    )
+    cancel_event = MagicMock(spec=Event)
+    cancel_event.is_set.return_value = True
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with (
+            patch(
+                "src.processing.video.open_video",
+                return_value=MagicMock(frame_rate=30, duration=None),
+            ),
+            patch("src.processing.video.SceneManager", return_value=manager),
+            patch("src.processing.video.shutil.copy2") as mock_copy2,
+        ):
+            with pytest.raises(
+                JobCancelledError,
+                match="split_into_chunks cancelled after detect scan",
+            ):
+                split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
+
+    manager.get_scene_list.assert_not_called()
+    mock_copy2.assert_not_called()
+
+
+def test_raises_job_cancelled_when_set_after_scene_split_loop_completes() -> None:
+    """cancel_event set only after the last scene's ffmpeg call finishes must still
+    raise instead of returning output_paths for a cancelled job"""
+    scenes = [(FakeTimecode(0), FakeTimecode(1))] * 2
+    manager = SimpleNamespace(
+        add_detector=MagicMock(),
+        detect_scenes=MagicMock(return_value=0),
+        get_scene_list=MagicMock(return_value=scenes),
+    )
+    cancel_event = MagicMock(spec=Event)
+    # False for the post-detect-scan check, False for each of the 2 per-scene
+    # checks, True for the final post-loop check
+    cancel_event.is_set.side_effect = [False, False, False, True]
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with (
+            patch(
+                "src.processing.video.open_video",
+                return_value=MagicMock(frame_rate=30, duration=None),
+            ),
+            patch("src.processing.video.SceneManager", return_value=manager),
+            patch("src.processing.video.subprocess.run") as mock_run,
+        ):
+            with pytest.raises(
+                JobCancelledError,
+                match="split_into_chunks during scene-split",
+            ):
+                split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
+
+    assert mock_run.call_count == 2

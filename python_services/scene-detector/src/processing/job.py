@@ -50,7 +50,6 @@ async def process_job(
         try:
             chunk_paths = await asyncio.to_thread(
                 split_into_chunks,
-                logger,
                 cancel_event,
                 local_video_path,
                 chunks_dir,
@@ -66,6 +65,11 @@ async def process_job(
                 "ffmpeg error while splitting video", job_id=metadata.job_id, err=str(e)
             )
             raise
+
+        if cancel_event.is_set():
+            raise JobCancelledError(
+                "job cancelled after scene-split, before chunk upload"
+            )
 
         results = await asyncio.gather(
             *[
@@ -86,6 +90,9 @@ async def process_job(
             if isinstance(result, BaseException):
                 raise result
             storage_urls.append(result)
+
+        if cancel_event.is_set():
+            raise JobCancelledError("job cancelled during chunk upload")
 
     finally:
         await cleanup_temp_dir(temp_dir, metadata.job_id, logger)

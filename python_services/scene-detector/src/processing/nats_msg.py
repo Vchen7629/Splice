@@ -63,8 +63,8 @@ async def process_msg(
                 await publisher(js, chunk_msg, settings.PUB_SUBJECT, service_name)
 
             await msg_processed_kv.put(metadata.job_id, b"done")
-    except JobCancelledError:
-        logger.debug("job cancelled during processing")
+    except JobCancelledError as e:
+        logger.debug("job cancelled during processing", err=str(e))
         await msg.ack()
         return
     except Exception as e:

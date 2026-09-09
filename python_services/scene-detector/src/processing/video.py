@@ -5,7 +5,6 @@ from scenedetect import (
     FrameTimecode,
 )
 from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
-from structlog.stdlib import BoundLogger
 from threading import Event
 from typing import Callable, Optional
 from shared_handler.exceptions import JobCancelledError
@@ -17,7 +16,6 @@ DETECT_SLICE_FRAMES = 150  # frames processed per detect_scenes() call
 
 
 def split_into_chunks(
-    logger: BoundLogger,
     cancel_event: Event,
     video_path: str,
     output_dir: str,
@@ -53,11 +51,13 @@ def split_into_chunks(
         > 0
     ):
         if cancel_event.is_set():
-            logger.debug("split_into_chunks cancelled during detect scan")
-            raise JobCancelledError("cancelled during detect scan for job")
+            raise JobCancelledError("split_into_chunks cancelled during detect scan")
 
         if on_progress and total_frames:
             on_progress(min(90, int(video.frame_number / total_frames * 90)))
+
+    if cancel_event.is_set():
+        raise JobCancelledError("split_into_chunks cancelled after detect scan")
 
     scene_list = scene_manager.get_scene_list()
 
@@ -75,8 +75,9 @@ def split_into_chunks(
 
     for i, (start, end) in enumerate(scene_list):
         if cancel_event.is_set():
-            logger.debug("split_into_chunks cancelled before splitting scenes")
-            raise JobCancelledError(f"cancelled before scene {i} for job")
+            raise JobCancelledError(
+                f"split_into_chunks cancelled before scene {i} for job"
+            )
 
         output_path = os.path.join(output_dir, f"{video_stem}-Scene-{i + 1:03d}.mp4")
         subprocess.run(
@@ -101,5 +102,8 @@ def split_into_chunks(
         output_paths.append(output_path)
         if on_progress:
             on_progress(90 + int((i + 1) / len(scene_list) * 10))
+
+    if cancel_event.is_set():
+        raise JobCancelledError("split_into_chunks during scene-split")
 
     return output_paths
