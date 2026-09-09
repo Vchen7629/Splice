@@ -3,10 +3,12 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"time"
+
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -27,7 +29,7 @@ type jobIDPayload struct {
 }
 
 // subscribes to Jetstream max delivery advisories on core NATS, fetches the original msg to get job ID, writes FAILED to KV bucket
-func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, kv jetstream.KeyValue, logger *slog.Logger) (*nats.Subscription, error) {
+func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue, logger *slog.Logger) (*nats.Subscription, error) {
 	sub, err := nc.Subscribe(advisorySubject, func(msg *nats.Msg) {
 		var advisory maxDeliveryAdvisory
 
@@ -60,6 +62,16 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, kv jetstream
 			return
 		}
 
+		isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
+		if err != nil {
+			logger.Error("failed to check if jobID is terminal", "job_id", payload.JobID, "err", err)
+			return
+		}
+		if isTerminal {
+			logger.Debug("job is already marked as terminal, skipping marking job as COMPLETE", "job_id", payload.JobID)
+			return
+		}
+
 		status, err := json.Marshal(JobStatus{
 			State: StateFailed,
 			Error: fmt.Sprintf("pipeline failed at stage: %s", advisory.Consumer),
@@ -69,7 +81,7 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, kv jetstream
 			return
 		}
 
-		_, err = kv.Put(ctx, payload.JobID, status)
+		_, err = jobMilestoneKV.Put(ctx, payload.JobID, status)
 		if err != nil {
 			logger.Error("failed to write failed status to kv", "job_id", payload.JobID, "err", err)
 			return
@@ -111,6 +123,18 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 			return
 		}
 
+		isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
+		if err != nil {
+			logger.Error("failed to check if jobID is terminal", "job_id", payload.JobID, "err", err)
+			sJetstream.NakWithErrHandling(logger, msg)
+			return
+		}
+		if isTerminal {
+			logger.Debug("job is already marked as terminal, skipping marking job as COMPLETE", "job_id", payload.JobID)
+			sJetstream.AckWithErrHandling(logger, msg)
+			return
+		}
+
 		status, err := json.Marshal(JobStatus{State: StateComplete})
 		if err != nil {
 			logger.Error("failed to marshal complete status", "err", err)
@@ -134,4 +158,27 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 	})
 
 	return consCtx, err
+}
+
+// check if the state is already terminal so a cancel/fail arriving before this
+// message is processed doesnt get overwritten back to COMPLETE
+func isJobTerminal(kv jetstream.KeyValue, jobID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	entry, err := kv.Get(ctx, jobID)
+	if errors.Is(err, jetstream.ErrKeyNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch from kv: %w", err)
+	}
+
+	var current sJetstream.MilestoneStatus
+	err = json.Unmarshal(entry.Value(), &current)
+	if err != nil {
+		return false, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+
+	return current.State == "COMPLETE" || current.State == "FAILED" || current.State == "CANCELLED", nil
 }
