@@ -35,7 +35,7 @@ def test_extract_video_info_returns_correct_info() -> None:
 @pytest.mark.parametrize("target_res", ["480p", "360p"])
 def test_video_downscale_produces_output_file(target_res: str, tmp_path: Path) -> None:
     output = str(tmp_path / f"out_{target_res}.mp4")
-    video_downscale(str(TEST_VIDEO), target_res, output)
+    video_downscale(MOCK_CANCEL_EVENT, str(TEST_VIDEO), target_res, output)
 
     assert Path(output).exists()
     assert Path(output).stat().st_size > 0
@@ -46,7 +46,7 @@ def test_video_downscale_output_has_correct_resolution(
     target_res: str, expected_h: int, tmp_path: Path
 ) -> None:
     output = str(tmp_path / f"out_{target_res}.mp4")
-    video_downscale(str(TEST_VIDEO), target_res, output)
+    video_downscale(MOCK_CANCEL_EVENT, str(TEST_VIDEO), target_res, output)
 
     _, h, _, _ = extract_video_info(output)
 

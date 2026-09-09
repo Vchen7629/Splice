@@ -223,7 +223,11 @@ def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[by
     ], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 def video_downscale(
-    video_path: str, target_res: str, output_path: str, on_progress: Callable[[int], None] | None = None
+    cancel_event: Event, 
+    video_path: str, 
+    target_res: str, 
+    output_path: str, 
+    on_progress: Callable[[int], None] | None = None
 ) -> None:
     """
     Uses ffmpeg to downscale a video to a lower res. Used when the target resolution
@@ -233,6 +237,7 @@ def video_downscale(
         decoder.stdout.read(frame_bytes)
 
     Args:
+        cancel_event: event thats set to tell downscale to kill ffmpeg and stop downscaling
         video_path: path to where the video is fetched and downloaded to from seaweedfs storage
         target_res: the resolution to downscale to
         output_path: path to where the final downscaled video is saved to
@@ -259,6 +264,10 @@ def video_downscale(
         )
 
         for line in proc.stdout or []:
+            if cancel_event.is_set():
+                proc.kill()
+                proc.wait()
+                raise JobCancelledError("video_upscale cancelled for downscale")
             if not line.startswith("out_time=") or on_progress is None:
                 continue
 

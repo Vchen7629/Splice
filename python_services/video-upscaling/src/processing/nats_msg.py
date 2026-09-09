@@ -72,6 +72,7 @@ async def process_msg(
                 os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
                 await _downscale_job(
+                    cancel_event,
                     nc,
                     js,
                     msg,
@@ -222,6 +223,7 @@ async def _upscale_job(
 
 
 async def _downscale_job(
+    cancel_event: Event,
     nc: NATSClient,
     js: JetStreamContext,
     msg: Msg,
@@ -243,6 +245,7 @@ async def _downscale_job(
 
     await asyncio.to_thread(
         video_downscale,
+        cancel_event,
         local_video_path,
         metadata.target_resolution,
         temp_file_loc,
