@@ -22,7 +22,7 @@ const Sidebar = ({ queueCount, queueContent, processedCount, processedContent, c
             {processedContent}
         </section>
 
-        <section>
+        <section className="flex flex-col shrink-0 max-h-[25%] border-t border-line">
             <SectionHeader label="Cancelled Videos" count={cancelledCount}/>
             {cancelledContent}
         </section>
