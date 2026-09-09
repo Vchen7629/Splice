@@ -1,4 +1,4 @@
-export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error' | 'degraded'
+export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error' | 'degraded' | 'cancelling' | 'cancelled'
 
 export type ProcessingType = 'Transcode' | 'Upscale' | 'Denoise' | 'Convert'
 

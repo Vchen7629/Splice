@@ -4,7 +4,11 @@ import { useVideoQueueStore } from "../state/videoQueue";
 import { VideoService } from "../api/services/video";
 import { toast } from "sonner";
 
-const isActiveJob = (v: UploadedFile) => (v.status === 'processing' || v.status === 'degraded') && !!v.jobId
+const isActiveJob = (v: UploadedFile) => (
+    v.status === 'processing' || 
+    v.status === 'degraded' || 
+    v.status === 'cancelling'
+) && !!v.jobId
 
 interface ActiveJob {
     jobId: string
@@ -14,7 +18,7 @@ interface ActiveJob {
 
 interface StatusEventData {
     job_id: string
-    state: 'PROCESSING' | 'COMPLETE' | 'FAILED'
+    state: 'PROCESSING' | 'COMPLETE' | 'FAILED' | 'CANCELLED'
     stage: string
     progress?: number
     error?: string
@@ -43,13 +47,18 @@ function openJobConnection(job: ActiveJob, connections: Map<string, EventSource>
 
     es.addEventListener('status', (e: MessageEvent) => {
         const data: StatusEventData = JSON.parse(e.data)
-        const { updateVideoStatus, markComplete } = useVideoQueueStore.getState()
+        const { updateVideoStatus, markComplete, markCancelled } = useVideoQueueStore.getState()
         
         switch (data.state) {
             case 'COMPLETE':
                 es.close()
                 connections.delete(job.jobId)
                 markComplete(job.processingType, job.file)
+                break
+            case 'CANCELLED':
+                es.close()
+                connections.delete(job.jobId)
+                markCancelled(job.processingType, job.file)
                 break
             case 'FAILED':
                 es.close()
@@ -87,8 +96,8 @@ function openJobConnection(job: ActiveJob, connections: Map<string, EventSource>
 
     es.onerror = () => {
         // browsers auto-retry transient drops on their own; only react
-        // once EventSource has fully given up (fatal, non-retryable)
-        if (es.readyState == EventSource.CLOSED) {
+        // once EventSource has fully given up (fatal, non-retryable).
+        if (es.readyState == EventSource.CLOSED && connections.has(job.jobId)) {
             connections.delete(job.jobId)
             useVideoQueueStore.getState().updateVideoStatus(job.processingType, job.file.id, { status: 'error' })
             toast.error(`${job.file.name} failed to ${job.processingType.toLowerCase()}`)

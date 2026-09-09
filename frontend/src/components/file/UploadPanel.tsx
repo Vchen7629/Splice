@@ -7,7 +7,7 @@ import { STATUS_LABEL } from "./StatusStyles";
 interface FileUploadPanelProps {
     activeFeature: ProcessingType
     queue: UploadedFile[]
-    outputCount: number
+    processedCount: number
     dropzone: ReturnType<typeof useFileDrop>
     onStartUploads: () => void
 }
@@ -21,7 +21,7 @@ const ACTION_VERB: Record<ProcessingType, string> = {
 
 
 /** Drop surface for user to add their file files to upload for */
-const FileUploadPanel = ({ activeFeature, queue, outputCount, dropzone, onStartUploads }: FileUploadPanelProps) => {
+const FileUploadPanel = ({ activeFeature, queue, processedCount, dropzone, onStartUploads }: FileUploadPanelProps) => {
     const { isDragging, inputRef, browse, dropHandlers, handleInputChange } = dropzone
     const pendingCount = queue.filter(v => v.status === 'pending').length
     const verb = ACTION_VERB[activeFeature]
@@ -46,7 +46,7 @@ const FileUploadPanel = ({ activeFeature, queue, outputCount, dropzone, onStartU
                 <span className="absolute inset-5 rounded-lg border border-dashed border-accent-line pointer-events-none"/>
             )}
 
-            <QueueSummary queue={queue} outputCount={outputCount} verb={verb}/>
+            <QueueSummary queue={queue} processedCount={processedCount} verb={verb}/>
             <ActiveJobsPreview queue={queue} processingType={activeFeature}/>
 
             <div className="flex flex-col items-center gap-3">
@@ -84,7 +84,7 @@ const FileUploadPanel = ({ activeFeature, queue, outputCount, dropzone, onStartU
 /**
  * Shows N files ready/in progress/finished
  */
-const QueueSummary = ({ queue, outputCount, verb }: { queue: UploadedFile[]; outputCount: number; verb: string }) => {
+const QueueSummary = ({ queue, processedCount, verb }: { queue: UploadedFile[]; processedCount: number; verb: string }) => {
     const working = queue.filter(v => v.status === 'processing' || v.status === 'uploading' || v.status === 'degraded')
     const pending = queue.filter(v => v.status === 'pending')
 
@@ -92,7 +92,7 @@ const QueueSummary = ({ queue, outputCount, verb }: { queue: UploadedFile[]; out
         ? [working.length, working.length === 1 ? 'file in progress' : 'files in progress']
         : pending.length > 0
             ? [pending.length, pending.length === 1 ? `file ready to ${verb.toLowerCase()}` : `files ready to ${verb.toLowerCase()}`]
-            : [outputCount, outputCount === 1 ? 'file finished' : 'files finished']
+            : [processedCount, processedCount === 1 ? 'file finished' : 'files finished']
 
     if (count === 0) {
         return (
