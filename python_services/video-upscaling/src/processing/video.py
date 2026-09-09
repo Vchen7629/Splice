@@ -321,6 +321,7 @@ def video_upscale(
             encoder.kill()
             encode_queue.put(None)
             encode_thread.join()
+            decoder.wait()
             raise JobCancelledError(f"video_upscale cancelled for job {job_id}")
 
         t0 = time.perf_counter()
