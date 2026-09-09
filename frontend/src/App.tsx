@@ -62,7 +62,7 @@ function App() {
     const file = uploadedVideos[processingType].find(v => v.id === id)
     if (!file) return
 
-    if (file.jobId === null) {
+    if (file.jobId === null || file.status === 'error') {
       fileMap.current.delete(id)
       removeUploadedVideo(processingType, id)
       return
