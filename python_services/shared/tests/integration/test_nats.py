@@ -1,11 +1,14 @@
+from structlog.stdlib import BoundLogger
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from nats.js.api import KeyValueConfig
 from nats.js.client import JetStreamContext
 from shared_handler import consumer, check_cancel_event
 import json
 import pytest
 import asyncio
+
+MOCK_LOGGER = MagicMock(spec=BoundLogger)
 
 
 @pytest.mark.asyncio
@@ -30,6 +33,7 @@ async def test_consumer_calls_process_msg_for_published_message(
 
     task = asyncio.create_task(
         consumer(
+            MOCK_LOGGER,
             nc,
             js,
             kv,
