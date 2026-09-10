@@ -1,3 +1,4 @@
+from structlog.stdlib import BoundLogger
 from typing import Any, AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 from nats.aio.client import Client as NATSClient
@@ -11,6 +12,7 @@ import pytest
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_KV = AsyncMock(spec=KeyValue)
+MOCK_LOGGER = MagicMock(spec=BoundLogger)
 
 
 async def async_iter(items: Any) -> AsyncGenerator[Any, None]:
@@ -96,6 +98,7 @@ async def test_consumer_calls_process_msg_once_per_message() -> None:
     mock_job_milestone_kv.get.side_effect = KeyNotFoundError()
 
     await consumer(
+        MOCK_LOGGER,
         MOCK_NC,
         mock_js,
         MOCK_KV,
@@ -119,6 +122,7 @@ async def test_consumer_passes_correct_args_to_process_msg() -> None:
     mock_process_msg = make_mock_msg()
 
     await consumer(
+        MOCK_LOGGER,
         MOCK_NC,
         mock_js,
         mock_kv,
@@ -141,6 +145,7 @@ async def test_consumer_raises_when_subscribe_fails() -> None:
 
     with pytest.raises(APIError):
         await consumer(
+            MOCK_LOGGER,
             MOCK_NC,
             mock_js,
             MOCK_KV,
@@ -164,6 +169,7 @@ async def test_consumer_terminates_and_skips_cancelled_job(monkeypatch) -> None:
     )
 
     await consumer(
+        MOCK_LOGGER,
         MOCK_NC,
         mock_js,
         MOCK_KV,
@@ -189,6 +195,7 @@ async def test_consumer_job_id_empty_string_skips_is_job_cancelled(monkeypatch) 
     monkeypatch.setattr("shared_handler.nats.is_job_cancelled", mock_is_job_cancelled)
 
     await consumer(
+        MOCK_LOGGER,
         MOCK_NC,
         mock_js,
         MOCK_KV,

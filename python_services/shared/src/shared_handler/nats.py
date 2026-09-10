@@ -66,6 +66,7 @@ async def check_cancel_event(
 
 
 async def consumer(
+    logger: BoundLogger,
     nc: NATSClient,
     js: JetStreamContext,
     msg_processed_kv: KeyValue,
@@ -88,7 +89,13 @@ async def consumer(
     )
 
     async for msg in sub.messages:
-        job_id = json.loads(msg.data)["job_id"]
+        try:
+            job_id = json.loads(msg.data)["job_id"]
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.error("malformed nats msg, terminating", err=str(e))
+            await msg.term()
+            continue
+
         if job_id and await is_job_cancelled(job_milestone_kv, job_id):
             await msg.term()
             continue

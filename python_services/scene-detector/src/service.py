@@ -30,6 +30,7 @@ async def start_service() -> None:
         msg_processed_kv = await create_kv(js, "scene-split-processed")
 
         await consumer(
+            logger,
             nc,
             js,
             msg_processed_kv,
