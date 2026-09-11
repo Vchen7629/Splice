@@ -64,6 +64,27 @@ def test_video_downscale_raises_runtime_error_when_ffmpeg_fails() -> None:
             video_downscale(MOCK_CANCEL_EVENT, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
 
 
+def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled(monkeypatch) -> None:
+    from shared_handler.exceptions import JobCancelledError
+
+    cancel_event = Event()
+    cancel_event.set()
+
+    mock_proc = MagicMock()
+    mock_proc.stdout = iter(["out_time=00:00:01.00\n"])
+
+    monkeypatch.setattr("src.processing.video._probe_duration_s", lambda p: 10.0)
+    monkeypatch.setattr(
+        "src.processing.video.subprocess.Popen", lambda *a, **kw: mock_proc
+    )
+
+    with pytest.raises(JobCancelledError):
+        video_downscale(cancel_event, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
+
+    mock_proc.kill.assert_called_once()
+    mock_proc.wait.assert_called_once()
+
+
 def test_video_decoder_calls_popen_with_video_path() -> None:
     with (
         patch("src.processing.video.torch.cuda.is_available", return_value=False),
