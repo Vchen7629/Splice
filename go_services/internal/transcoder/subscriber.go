@@ -47,22 +47,17 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		isCancelled, err := sJetstream.IsJobCancelled(jobMilestoneKV, payload.JobID)
-		if err != nil {
-			logger.Error("failed to check if job is cancelled", "job_id", payload.JobID, "err", err)
-			return
-		}
-		if isCancelled {
-			err := msg.Term()
-			if err != nil {
-				logger.Error("failed to terminate the cancelled jetstream msg", "job_id", payload.JobID, "err", err)
-			}
+		if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
 			return
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
 			chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 			defer cleanupTempFolders(chunkName, logger)
+
+			if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+				return true
+			}
 
 			chunkProcessed, outputPath := processChunk(jobMilestoneKV, msg, payload, logger)
 			if !chunkProcessed {
@@ -72,6 +67,10 @@ func ConsumeVideoChunk(
 			uploadedChunk, storageURL := uploadVideoChunk(msg, outputPath, baseStorageURL, payload.JobID, logger)
 			if !uploadedChunk {
 				return false
+			}
+
+			if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+				return true
 			}
 
 			return publishJetstreamProcessedMsg(nc, js, processedKV, msg, payload, storageURL, logger)
