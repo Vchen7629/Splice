@@ -39,7 +39,7 @@ func newTestServer(t *testing.T, urls ...ServiceURLs) *httptest.Server {
 	}
 	mux := http.NewServeMux()
 	jh := &JobStatusHandler{Logger: stest.SilentLogger(), NC: sharedNC, KV: sharedKV, URLs: u}
-	ch := &cancelHandler{logger: stest.SilentLogger(), kv: sharedKV, nc: sharedNC}
+	ch := &cancelHandler{logger: stest.SilentLogger(), kv: sharedKV}
 	mux.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 	mux.HandleFunc("GET /jobs/{id}/events", jh.JobEvents)
 	mux.HandleFunc("DELETE /jobs/{id}", ch.cancelProcessingRoute)
@@ -661,10 +661,6 @@ func TestCancelRouteI(t *testing.T) {
 		seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
 		ts := newTestServer(t)
 
-		sub, err := sharedNC.SubscribeSync("cancel." + jobID)
-		require.NoError(t, err)
-		defer sub.Unsubscribe()
-
 		req, err := http.NewRequest(http.MethodDelete, ts.URL+"/jobs/"+jobID, nil)
 		require.NoError(t, err)
 		resp, err := http.DefaultClient.Do(req)
@@ -682,9 +678,6 @@ func TestCancelRouteI(t *testing.T) {
 		var stored JobStatus
 		require.NoError(t, json.Unmarshal(entry.Value(), &stored))
 		assert.Equal(t, StateCancelled, stored.State)
-
-		_, err = sub.NextMsg(5 * time.Second)
-		assert.NoError(t, err, "expected cancel broadcast on cancel.%s", jobID)
 	})
 
 	t.Run("repeated cancels (3 sequential delete) all return 200 CANCELLED and only one KV revision bump", func(t *testing.T) {

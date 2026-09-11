@@ -52,7 +52,6 @@ func newCancelHandler(kv jetstream.KeyValue, nc *nats.Conn) *cancelHandler {
 	return &cancelHandler{
 		logger: stest.SilentLogger(),
 		kv:     kv,
-		nc:     nc,
 	}
 }
 
