@@ -64,11 +64,10 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 
 		isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
 		if err != nil {
-			logger.Error("failed to check if jobID is terminal", "job_id", payload.JobID, "err", err)
-			return
+			logger.Error("failed to check if jobID is terminal, proceeding to mark FAILED anyway", "job_id", payload.JobID, "err", err)
 		}
 		if isTerminal {
-			logger.Debug("job is already marked as terminal, skipping marking job as COMPLETE", "job_id", payload.JobID)
+			logger.Debug("job is already marked as terminal, skipping marking job as FAILED", "job_id", payload.JobID)
 			return
 		}
 
