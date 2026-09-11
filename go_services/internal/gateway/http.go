@@ -32,7 +32,7 @@ func StartHttpApi(
 
 	vh := &videoHandler{logger: logger, js: js, kv: kv, storageURL: storageURL}
 	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: urls}
-	ch := &cancelHandler{logger: logger, kv: kv, nc: nc}
+	ch := &cancelHandler{logger: logger, kv: kv}
 
 	router.HandleFunc("POST /jobs/upload", vh.uploadVideoRoute)
 	router.HandleFunc("POST /jobs/download", vh.downloadVideoRoute)
@@ -256,7 +256,6 @@ func writeSSEEvent(w io.Writer, event string, payload any) error {
 type cancelHandler struct {
 	logger *slog.Logger
 	kv     jetstream.KeyValue
-	nc     *nats.Conn
 }
 
 func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Request) {
