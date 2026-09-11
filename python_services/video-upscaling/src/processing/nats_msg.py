@@ -53,7 +53,7 @@ async def process_msg(
         interval = settings.ACK_WAIT_S / 3
         async with (
             keep_alive(msg, interval, logger),
-            check_cancel_event(job_milestone_kv, job_id) as cancel_event,
+            check_cancel_event(job_milestone_kv, job_id, logger) as cancel_event,
         ):
             local_video_path = await asyncio.to_thread(
                 fetch_video, metadata.storage_url, SERVICE_NAME

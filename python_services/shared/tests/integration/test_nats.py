@@ -70,7 +70,7 @@ async def test_check_cancel_event_sets_cancel_event_when_kv_marks_cancelled(
     await job_milestone_kv.put("job-1", json.dumps({"state": "PROCESSING"}).encode())
 
     async with check_cancel_event(
-        job_milestone_kv, "job-1", interval_s=0.05
+        job_milestone_kv, "job-1", MOCK_LOGGER, interval_s=0.05
     ) as cancel_event:
         await job_milestone_kv.put("job-1", json.dumps({"state": "CANCELLED"}).encode())
         await asyncio.wait_for(asyncio.to_thread(cancel_event.wait), timeout=5)
@@ -89,7 +89,7 @@ async def test_check_cancel_event_stays_unset_when_kv_never_cancelled(
     await job_milestone_kv.put("job-2", json.dumps({"state": "PROCESSING"}).encode())
 
     async with check_cancel_event(
-        job_milestone_kv, "job-2", interval_s=0.05
+        job_milestone_kv, "job-2", MOCK_LOGGER, interval_s=0.05
     ) as cancel_event:
         await asyncio.sleep(0.2)
 

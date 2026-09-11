@@ -43,7 +43,10 @@ async def keep_alive(
 
 @contextlib.asynccontextmanager
 async def check_cancel_event(
-    job_milestone_kv: KeyValue, job_id: str, interval_s: float = 2.0
+    job_milestone_kv: KeyValue,
+    job_id: str,
+    logger: BoundLogger,
+    interval_s: float = 2.0,
 ) -> AsyncGenerator[Event, None]:
     """periodically poll the job_milestone_kv to check if the job for job_id is cancelled to let the
     services know they should stop processing"""
@@ -52,9 +55,16 @@ async def check_cancel_event(
     async def _poll() -> None:
         while True:
             await asyncio.sleep(interval_s)
-            if await is_job_cancelled(job_milestone_kv, job_id):
-                cancel_event.set()
-                return
+            try:
+                if await is_job_cancelled(job_milestone_kv, job_id):
+                    cancel_event.set()
+                    return
+            except Exception as e:
+                logger.warning(
+                    "failed to poll job cancellation state, retrying",
+                    job_id=job_id,
+                    err=str(e),
+                )
 
     task = asyncio.create_task(_poll())
     try:
