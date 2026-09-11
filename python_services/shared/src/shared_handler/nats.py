@@ -101,7 +101,7 @@ async def consumer(
     async for msg in sub.messages:
         try:
             job_id = json.loads(msg.data)["job_id"]
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
+        except Exception as e:
             logger.error("malformed nats msg, terminating", err=str(e))
             await msg.term()
             continue
