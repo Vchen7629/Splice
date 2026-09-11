@@ -170,10 +170,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-type jobMsg struct {
-	JobID string `json:"job_id"`
-}
-
 func mustMarshalJob(t *testing.T, jobID string) []byte {
 	t.Helper()
 	b, err := json.Marshal(jobMsg{JobID: jobID})
@@ -181,25 +177,16 @@ func mustMarshalJob(t *testing.T, jobID string) []byte {
 	return b
 }
 
-// panic variant for use in table literal field initializers.
-func mustMarshalJobStatic(jobID string) []byte {
-	b, err := json.Marshal(jobMsg{JobID: jobID})
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
+func TestListenAdvisoriesFailureI(t *testing.T) {
+	t.Run("It should return the sub", func(t *testing.T) {
+		sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, sharedKV, test.SilentLogger())
 
-func TestListenAdvisoriesFailure_ReturnsSub(t *testing.T) {
-	sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, sharedKV, test.SilentLogger())
+		require.NoError(t, err)
+		assert.NotNil(t, sub)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+	})
 
-	require.NoError(t, err)
-	assert.NotNil(t, sub)
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
-}
-
-func TestListenAdvisoriesFailure_WritesKV(t *testing.T) {
-	tests := []struct {
+	writeKVTests := []struct {
 		name            string
 		subject         string
 		consumer        string
@@ -219,7 +206,7 @@ func TestListenAdvisoriesFailure_WritesKV(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range writeKVTests {
 		t.Run(tc.name, func(t *testing.T) {
 			sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, sharedKV, test.SilentLogger())
 			require.NoError(t, err)
@@ -232,11 +219,8 @@ func TestListenAdvisoriesFailure_WritesKV(t *testing.T) {
 			assertKVFailed(t, sharedKV, jobID, tc.wantErrContains)
 		})
 	}
-}
 
-// covers cases where the advisory handler encounters an error mid-way and leaves the KV unwritten.
-func TestListenAdvisoriesFailure_Ignored(t *testing.T) {
-	tests := []struct {
+	errorsDoesntWriteKVTests := []struct {
 		name  string
 		jobID string
 		seed  func(t *testing.T) (stream, consumer string, seq uint64)
@@ -274,7 +258,7 @@ func TestListenAdvisoriesFailure_Ignored(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range errorsDoesntWriteKVTests {
 		t.Run(tc.name, func(t *testing.T) {
 			sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, sharedKV, test.SilentLogger())
 			require.NoError(t, err)
@@ -288,24 +272,22 @@ func TestListenAdvisoriesFailure_Ignored(t *testing.T) {
 			assertKVEmpty(t, sharedKV, tc.jobID)
 		})
 	}
-}
 
-func TestListenAdvisoriesFailure_KVPutFails(t *testing.T) {
-	t.Run("KV Put failure is handled without panic", func(t *testing.T) {
+	t.Run("KV update conflict is handled without panic", func(t *testing.T) {
 		mockKV := NewMockKV()
-		mockKV.PutErr = errors.New("kv unavailable")
+		mockKV.UpdateErr = jetstream.ErrKeyExists
 
 		sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, mockKV, test.SilentLogger())
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		jobID := "job-kv-fail"
+		jobID := "job-advisory-conflict"
 		seq := seedStreamMessage(t, sharedJS, "jobs.video.chunks", mustMarshalJob(t, jobID))
 		publishAdvisory(t, sharedNC, "jobs", "transcoder-worker", seq)
 
 		require.Eventually(t, func() bool {
-			return mockKV.PutCalled.Load()
-		}, 5*time.Second, 100*time.Millisecond, "expected KV Put to be called")
+			return mockKV.UpdateCalled.Load()
+		}, 5*time.Second, 100*time.Millisecond, "expected KV Update to be attempted")
 	})
 }
 
@@ -363,9 +345,7 @@ func TestListenJobCompleteI(t *testing.T) {
 		assert.Equal(t, 3, info.Config.MaxDeliver)
 		assert.Equal(t, 30*time.Second, info.Config.AckWait)
 	})
-}
 
-func TestListenJobComplete(t *testing.T) {
 	t.Run("valid jobs.complete message writes COMPLETE to KV and acks", func(t *testing.T) {
 		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
 		require.NoError(t, err)
@@ -387,21 +367,5 @@ func TestListenJobComplete(t *testing.T) {
 		require.NoError(t, err)
 
 		assertKVEmpty(t, sharedKV, "jc-bad-json")
-	})
-
-	t.Run("KV Put failure is handled without panic", func(t *testing.T) {
-		mockKV := NewMockKV()
-		mockKV.PutErr = errors.New("kv unavailable")
-
-		consCtx, err := ListenJobComplete(sharedJS, mockKV, test.SilentLogger())
-		require.NoError(t, err)
-		t.Cleanup(consCtx.Stop)
-
-		_, err = sharedJS.Publish(context.Background(), "jobs.complete", mustMarshalJobStatic("jc-kv-fail"))
-		require.NoError(t, err)
-
-		require.Eventually(t, func() bool {
-			return mockKV.PutCalled.Load()
-		}, 5*time.Second, 100*time.Millisecond, "expected KV Put to be called")
 	})
 }

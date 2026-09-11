@@ -62,7 +62,7 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 			return
 		}
 
-		isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
+		revision, isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
 		if err != nil {
 			logger.Error("failed to check if jobID is terminal, proceeding to mark FAILED anyway", "job_id", payload.JobID, "err", err)
 		}
@@ -80,7 +80,7 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 			return
 		}
 
-		_, err = jobMilestoneKV.Put(ctx, payload.JobID, status)
+		_, err = jobMilestoneKV.Update(ctx, payload.JobID, status, revision)
 		if err != nil {
 			logger.Error("failed to write failed status to kv", "job_id", payload.JobID, "err", err)
 			return
@@ -122,7 +122,7 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 			return
 		}
 
-		isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
+		revision, isTerminal, err := isJobTerminal(jobMilestoneKV, payload.JobID)
 		if err != nil {
 			logger.Error("failed to check if jobID is terminal", "job_id", payload.JobID, "err", err)
 			sJetstream.NakWithErrHandling(logger, msg)
@@ -141,7 +141,7 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 			return
 		}
 
-		_, err = jobMilestoneKV.Put(context.Background(), payload.JobID, status)
+		_, err = jobMilestoneKV.Update(context.Background(), payload.JobID, status, revision)
 		if err != nil {
 			logger.Error("failed to write complete status to kv", "job_id", payload.JobID, "err", err)
 			sJetstream.NakWithErrHandling(logger, msg)
@@ -161,23 +161,23 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 
 // check if the state is already terminal so a cancel/fail arriving before this
 // message is processed doesnt get overwritten back to COMPLETE
-func isJobTerminal(kv jetstream.KeyValue, jobID string) (bool, error) {
+func isJobTerminal(kv jetstream.KeyValue, jobID string) (uint64, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	entry, err := kv.Get(ctx, jobID)
 	if errors.Is(err, jetstream.ErrKeyNotFound) {
-		return false, nil
+		return 0, false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch from kv: %w", err)
+		return 0, false, fmt.Errorf("failed to fetch from kv: %w", err)
 	}
 
 	var current sJetstream.MilestoneStatus
 	err = json.Unmarshal(entry.Value(), &current)
 	if err != nil {
-		return false, fmt.Errorf("failed to unmarshal json: %w", err)
+		return 0, false, fmt.Errorf("failed to unmarshal json: %w", err)
 	}
 
-	return current.State == "COMPLETE" || current.State == "FAILED" || current.State == "CANCELLED", nil
+	return entry.Revision(), current.State == "COMPLETE" || current.State == "FAILED" || current.State == "CANCELLED", nil
 }

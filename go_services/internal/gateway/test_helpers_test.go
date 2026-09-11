@@ -5,6 +5,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mime/multipart"
@@ -191,4 +192,17 @@ func patchOsExit(t *testing.T) *int {
 	osExit = func(c int) { *code = c }
 	t.Cleanup(func() { osExit = os.Exit })
 	return code
+}
+
+type jobMsg struct {
+	JobID string `json:"job_id"`
+}
+
+// panic variant for use in table literal field initializers.
+func mustMarshalJobStatic(jobID string) []byte {
+	b, err := json.Marshal(jobMsg{JobID: jobID})
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
