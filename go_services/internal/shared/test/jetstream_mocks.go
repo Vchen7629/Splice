@@ -142,13 +142,13 @@ func (m *MockStream) CreateOrUpdateConsumer(_ context.Context, _ jetstream.Consu
 // needed for subscriber behaviour and carries no value elsewhere.
 type MockMsg struct {
 	jetstream.Msg
-	Payload   []byte
-	NakCalled bool
-	AckCalled bool
+	Payload    []byte
+	NakCalled  bool
+	AckCalled  bool
 	TermCalled bool
-	NakErr    error
-	AckErr    error
-	TermErr   error
+	NakErr     error
+	AckErr     error
+	TermErr    error
 }
 
 func (m *MockMsg) Data() []byte { return m.Payload }
@@ -220,4 +220,14 @@ func (m *MockDrainer) Publish(subj string, data []byte) error {
 	m.PublishSubj = subj
 	m.PublishData = data
 	return m.PublishErr
+}
+
+// mockJetStream embeds the interface and overrides only Publish
+type MockJetStream struct {
+	jetstream.JetStream
+	PublishErr error
+}
+
+func (m *MockJetStream) Publish(_ context.Context, _ string, _ []byte, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+	return nil, m.PublishErr
 }

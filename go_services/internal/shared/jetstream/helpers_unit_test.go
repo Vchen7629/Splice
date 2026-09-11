@@ -3,11 +3,9 @@
 package jetstream_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
@@ -52,20 +50,10 @@ func TestNakWithErrHandling(t *testing.T) {
 	})
 }
 
-// mockJetStream embeds the interface and overrides only Publish
-type mockJetStream struct {
-	jetstream.JetStream
-	publishErr error
-}
-
-func (m *mockJetStream) Publish(_ context.Context, _ string, _ []byte, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
-	return nil, m.publishErr
-}
-
 func TestPublishChunkComplete(t *testing.T) {
 	t.Run("publish error is returned", func(t *testing.T) {
 		publishErr := errors.New("nats publish failed")
-		mock := &mockJetStream{publishErr: publishErr}
+		mock := &test.MockJetStream{PublishErr: publishErr}
 
 		err := sJetstream.PublishJetstreamMsg(mock, handler.ChunkCompleteMessage{
 			JobID:       "job-1",

@@ -31,13 +31,13 @@ func validPayload(t *testing.T, jobID string) []byte {
 	return data
 }
 
-func TestReturnError(t *testing.T) {
+func TestRecombineVideo(t *testing.T) {
 	streamNameErr := errors.New("no stream")
 	streamErr := errors.New("stream error")
 	consumerErr := errors.New("consumer error")
 	consumeErr := errors.New("consume error")
 
-	tests := []struct {
+	returnErrorTests := []struct {
 		name    string
 		js      *test.MockJS
 		wantErr error
@@ -64,7 +64,7 @@ func TestReturnError(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range returnErrorTests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := recombiner.RecombineVideo(tc.js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
 
@@ -72,9 +72,9 @@ func TestReturnError(t *testing.T) {
 			assert.ErrorIs(t, err, tc.wantErr)
 		})
 	}
-}
 
-func TestMessageHandling(t *testing.T) {
+	// Messaging Handling tests
+
 	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: []byte("not valid json")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
@@ -146,9 +146,9 @@ func TestMessageHandling(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "job-1", jobMilestoneKV.CreateKey)
 	})
-}
 
-func TestIdempotency(t *testing.T) {
+	// Idempotency tests
+
 	t.Run("already processed chunk acks and skips processing", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
@@ -193,9 +193,9 @@ func TestIdempotency(t *testing.T) {
 		expected := fmt.Sprintf("%s.%d", jobID, chunkIndex)
 		assert.Equal(t, "abc-123.3", expected)
 	})
-}
 
-func TestCancelledCases(t *testing.T) {
+	// Cancelled Cases
+
 	t.Run("cancelled job terminates message and does no other work", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
