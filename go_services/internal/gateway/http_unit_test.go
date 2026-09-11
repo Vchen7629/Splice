@@ -404,4 +404,23 @@ func TestCancelProcessing(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 		assert.Contains(t, rec.Body.String(), "failed to update current stage for jobID as CANCELLED")
 	})
+
+	t.Run("Retries and succeeds after a revision conflict from a concurrent cancel", func(t *testing.T) {
+		kv := NewMockKV()
+		status, err := json.Marshal(JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		require.NoError(t, err)
+		kv.Seed("job-4", status)
+		// simulates another concurrent DELETE request winning the race and bumping the revision first
+		kv.UpdateErr = jetstream.ErrKeyExists
+
+		c := newCancelHandler(kv, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-4", nil)
+		req.SetPathValue("id", "job-4")
+		rec := httptest.NewRecorder()
+
+		c.cancelProcessingRoute(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), string(StateCancelled))
+	})
 }

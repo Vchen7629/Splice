@@ -135,9 +135,18 @@ func (m *MockKV) Watch(_ context.Context, _ string, _ ...jetstream.WatchOpt) (je
 	return &MockKeyWatcher{updates: make(chan jetstream.KeyValueEntry)}, nil
 }
 
-func (m *MockKV) Update(_ context.Context, _ string, _ []byte, _ uint64) (uint64, error) {
+func (m *MockKV) Update(_ context.Context, key string, value []byte, _ uint64) (uint64, error) {
 	m.UpdateCalled.Store(true)
-	return 0, m.UpdateErr
+	if m.UpdateErr != nil {
+		err := m.UpdateErr
+		m.UpdateErr = nil // consumed: only the first call fails, so a caller retrying after a revision conflict succeeds
+		return 0, err
+	}
+	if m.entries == nil {
+		m.entries = make(map[string][]byte)
+	}
+	m.entries[key] = value
+	return 0, nil
 }
 
 // stubs jetstream.KeyWatcher. Only used to satisfy MockKV.Watch's success return type
