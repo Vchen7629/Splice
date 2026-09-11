@@ -42,20 +42,15 @@ func RecombineVideo(
 			return
 		}
 
-		isCancelled, err := sJetstream.IsJobCancelled(jobMilestoneKV, payload.JobID)
-		if err != nil {
-			logger.Error("failed to check if job is cancelled", "job_id", payload.JobID, "err", err)
-			return
-		}
-		if isCancelled {
-			err := msg.Term()
-			if err != nil {
-				logger.Error("failed to terminate the cancelled jetstream msg", "job_id", payload.JobID, "err", err)
-			}
+		if terminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
 			return
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
+			if terminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+				return true
+			}
+
 			recombined, outputPath := recombineChunks(nc, jobMilestoneKV, msgRecievedKV, msg, payload, logger)
 			if !recombined {
 				return false
@@ -68,6 +63,11 @@ func RecombineVideo(
 			uploadedVideoChunk := uploadVideoChunk(outputPath, baseStorageURL, msg, payload, logger)
 			if !uploadedVideoChunk {
 				return false
+			}
+
+			if terminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+				CleanUpTempFolders(payload.JobID, logger)
+				return true
 			}
 
 			return publishJetstreamCompleteMsg(js, msgRecievedKV, msg, payload, logger)
@@ -151,4 +151,22 @@ func recombineChunks(
 	}
 
 	return true, outputPath
+}
+
+// terminate the nats msg if the job is cancelled and return true
+func terminateIfCancelled(jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, jobID string, logger *slog.Logger) bool {
+	isCancelled, err := sJetstream.IsJobCancelled(jobMilestoneKV, jobID)
+	if err != nil {
+		logger.Error("failed to check if job is cancelled", "job_id", jobID, "err", err)
+		return true
+	}
+	if isCancelled {
+		err := msg.Term()
+		if err != nil {
+			logger.Error("failed to terminate the cancelled jetstream msg", "job_id", jobID, "err", err)
+		}
+		return true
+	}
+
+	return false
 }
