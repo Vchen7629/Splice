@@ -64,11 +64,30 @@ def test_video_downscale_raises_runtime_error_when_ffmpeg_fails() -> None:
             video_downscale(MOCK_CANCEL_EVENT, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
 
 
-def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled(monkeypatch) -> None:
+def test_video_downscale_raises_before_starting_ffmpeg_when_already_cancelled(
+    monkeypatch,
+) -> None:
     from shared_handler.exceptions import JobCancelledError
 
     cancel_event = Event()
     cancel_event.set()
+
+    mock_popen = MagicMock()
+    monkeypatch.setattr("src.processing.video.subprocess.Popen", mock_popen)
+
+    with pytest.raises(JobCancelledError):
+        video_downscale(cancel_event, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
+
+    mock_popen.assert_not_called()
+
+
+def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
+    monkeypatch,
+) -> None:
+    from shared_handler.exceptions import JobCancelledError
+
+    cancel_event = MagicMock(spec=Event)
+    cancel_event.is_set.side_effect = [False, True]
 
     mock_proc = MagicMock()
     mock_proc.stdout = iter(["out_time=00:00:01.00\n"])
