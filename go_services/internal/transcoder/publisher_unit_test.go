@@ -76,7 +76,7 @@ func TestUploadVideoChunk(t *testing.T) {
 }
 
 func TestPublishJetstreamProcessedMsg(t *testing.T) {
-	payload := VideoChunkMessage{JobID: "job-1", ChunkIndex: 0, TotalChunks: 4}
+	payload := VideoChunkMessage{JobID: "job-abc", ChunkIndex: 2, TotalChunks: 4}
 
 	t.Run("publish failure naks msg and does not write kv or ack", func(t *testing.T) {
 		js := &test.MockJetStream{PublishErr: errors.New("nats unavailable")}
@@ -116,8 +116,8 @@ func TestPublishJetstreamProcessedMsg(t *testing.T) {
 		assert.True(t, ok)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-		assert.Equal(t, "job-1.0", kv.PutKey)
-		assert.Contains(t, pub.published, "progress.job-1")
+		assert.Equal(t, "job-abc.2", kv.PutKey)
+		assert.Contains(t, pub.published, "progress.job-abc")
 	})
 
 	t.Run("ack failure is logged but still returns true", func(t *testing.T) {
