@@ -115,6 +115,7 @@ type MockJS struct {
 	JStreamNameErr error
 	JStreamErr     error
 	JStream        jetstream.Stream
+	PublishErr     error
 }
 
 func (m *MockJS) StreamNameBySubject(_ context.Context, _ string) (string, error) {
@@ -123,6 +124,10 @@ func (m *MockJS) StreamNameBySubject(_ context.Context, _ string) (string, error
 
 func (m *MockJS) Stream(_ context.Context, _ string) (jetstream.Stream, error) {
 	return m.JStream, m.JStreamErr
+}
+
+func (m *MockJS) Publish(_ context.Context, _ string, _ []byte, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+	return nil, m.PublishErr
 }
 
 // MockStream stubs jetstream.Stream.
@@ -220,14 +225,4 @@ func (m *MockDrainer) Publish(subj string, data []byte) error {
 	m.PublishSubj = subj
 	m.PublishData = data
 	return m.PublishErr
-}
-
-// mockJetStream embeds the interface and overrides only Publish
-type MockJetStream struct {
-	jetstream.JetStream
-	PublishErr error
-}
-
-func (m *MockJetStream) Publish(_ context.Context, _ string, _ []byte, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
-	return nil, m.PublishErr
 }

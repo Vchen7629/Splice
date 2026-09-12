@@ -53,7 +53,7 @@ func TestNakWithErrHandling(t *testing.T) {
 func TestPublishChunkComplete(t *testing.T) {
 	t.Run("publish error is returned", func(t *testing.T) {
 		publishErr := errors.New("nats publish failed")
-		mock := &test.MockJetStream{PublishErr: publishErr}
+		mock := &test.MockJS{PublishErr: publishErr}
 
 		err := sJetstream.PublishJetstreamMsg(mock, handler.ChunkCompleteMessage{
 			JobID:       "job-1",
