@@ -47,7 +47,8 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+		_, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
+		if stopJob {
 			return
 		}
 
@@ -55,8 +56,9 @@ func ConsumeVideoChunk(
 			chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 			defer cleanupTempFolders(chunkName, logger)
 
-			if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
-				return true
+			shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
+			if stopJob {
+				return shouldCancel
 			}
 
 			chunkProcessed, outputPath := processChunk(jobMilestoneKV, msg, payload, logger)
@@ -69,8 +71,9 @@ func ConsumeVideoChunk(
 				return false
 			}
 
-			if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
-				return true
+			shouldCancel, stopJob = sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
+			if stopJob {
+				return shouldCancel
 			}
 
 			return publishJetstreamProcessedMsg(nc, js, processedKV, msg, payload, storageURL, logger)

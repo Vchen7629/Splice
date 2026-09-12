@@ -54,19 +54,22 @@ func PublishJetstreamMsg(js jetstream.JetStream, msg any, pubSubject string) err
 }
 
 // terminate the nats msg if the job is cancelled and return true
-func TerminateIfCancelled(jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, jobID string, logger *slog.Logger) bool {
+func TerminateIfCancelled(
+	jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, jobID string, logger *slog.Logger,
+) (shouldCancel, stopJob bool) {
 	isCancelled, err := IsJobCancelled(jobMilestoneKV, jobID)
 	if err != nil {
 		logger.Error("failed to check if job is cancelled", "job_id", jobID, "err", err)
-		return true
+		NakWithErrHandling(logger, msg)
+		return false, true
 	}
-	if isCancelled {
-		err := msg.Term()
-		if err != nil {
-			logger.Error("failed to terminate the cancelled jetstream msg", "job_id", jobID, "err", err)
-		}
-		return true
+	if !isCancelled {
+		return false, false
 	}
 
-	return false
+	err = msg.Term()
+	if err != nil {
+		logger.Error("failed to terminate the cancelled jetstream msg", "job_id", jobID, "err", err)
+	}
+	return true, true
 }
