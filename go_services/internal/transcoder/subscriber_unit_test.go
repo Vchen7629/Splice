@@ -5,7 +5,6 @@ package transcoder_test
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -106,13 +105,6 @@ func TestIdempotency(t *testing.T) {
 		_, _ = transcoder.ConsumeVideoChunk("http://localhost:1", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
 
 		assert.Empty(t, kv.PutKey, "kv.Put should not be called when processing fails")
-	})
-
-	t.Run("kv key format is job_id.chunk_index", func(t *testing.T) {
-		jobID := "abc-123"
-		chunkIndex := 3
-		expected := fmt.Sprintf("%s.%d", jobID, chunkIndex)
-		assert.Equal(t, "abc-123.3", expected)
 	})
 }
 
