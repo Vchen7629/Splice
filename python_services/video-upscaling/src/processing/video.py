@@ -247,6 +247,9 @@ def video_downscale(
         RuntimeError when calling the ffmpeg subprocess fails with an error
     """
     try:
+        if cancel_event.is_set():
+            raise JobCancelledError("video_upscale cancelled for downscale")
+        
         tgt_res = Resolution.from_string(target_res)
         cmd = [
             "ffmpeg",
