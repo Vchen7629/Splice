@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestConsumeVideoChunk(t *testing.T) {
+func TestConsumeVideoChunkI(t *testing.T) {
 	t.Run("consumer is created with correct config", func(t *testing.T) {
 		ctx := context.Background()
 		js, nc := test.SetupNats(t)
