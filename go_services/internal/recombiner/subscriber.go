@@ -42,13 +42,15 @@ func RecombineVideo(
 			return
 		}
 
-		if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+		_, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
+		if stopJob {
 			return
 		}
 
 		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
-			if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
-				return true
+			shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
+			if stopJob {
+				return shouldCancel
 			}
 
 			recombined, outputPath := recombineChunks(nc, jobMilestoneKV, msgRecievedKV, msg, payload, logger)
@@ -65,9 +67,10 @@ func RecombineVideo(
 				return false
 			}
 
-			if sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger) {
+			shouldCancel, stopJob = sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
+			if stopJob {
 				CleanUpTempFolders(payload.JobID, logger)
-				return true
+				return shouldCancel
 			}
 
 			return publishJetstreamCompleteMsg(js, msgRecievedKV, msg, payload, logger)
