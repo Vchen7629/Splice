@@ -65,3 +65,58 @@ func TestPublishChunkComplete(t *testing.T) {
 		assert.ErrorIs(t, err, publishErr)
 	})
 }
+
+func TestTerminateIfCancelled(t *testing.T) {
+	t.Run("Naks and returns correct shouldCancel and stopJob when IsJobCancelled returns an err", func(t *testing.T) {
+		mockKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
+		msg := &test.MockMsg{}
+
+		shouldCancel, stopJob := sJetstream.TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
+
+		assert.False(t, shouldCancel)
+		assert.True(t, stopJob)
+		assert.True(t, msg.NakCalled)
+		assert.False(t, msg.TermCalled)
+	})
+
+	t.Run("Returns false for both when job isnt cancelled", func(t *testing.T) {
+		mockKV := &test.MockKV{}
+		msg := &test.MockMsg{}
+
+		shouldCancel, stopJob := sJetstream.TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
+
+		assert.False(t, shouldCancel)
+		assert.False(t, stopJob)
+		assert.False(t, msg.NakCalled)
+		assert.False(t, msg.TermCalled)
+	})
+
+	t.Run("Returns true when msg termination fails", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+		}
+		msg := &test.MockMsg{TermErr: errors.New("term failed")}
+
+		shouldCancel, stopJob := sJetstream.TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
+
+		assert.True(t, shouldCancel)
+		assert.True(t, stopJob)
+		assert.True(t, msg.TermCalled)
+	})
+
+	t.Run("Returns true when msg Term is successful", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+		}
+		msg := &test.MockMsg{}
+
+		shouldCancel, stopJob := sJetstream.TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
+
+		assert.True(t, shouldCancel)
+		assert.True(t, stopJob)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.NakCalled)
+	})
+}
