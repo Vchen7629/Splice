@@ -1,4 +1,5 @@
 from queue import Queue
+from threading import Event
 from typing import Optional
 from unittest.mock import MagicMock
 from src.processing.worker import encode_worker
@@ -10,12 +11,20 @@ def _make_encoder(has_stdin: bool = True) -> MagicMock:
     return encoder
 
 
-def _run(frames: list[Optional[bytes]], encoder: MagicMock) -> None:
+def _run(
+    frames: list[Optional[bytes]],
+    encoder: MagicMock,
+    fail_event: Optional[MagicMock] = None,
+) -> None:
+    if fail_event is None:
+        fail_event = MagicMock(spec=Event)
+
     q: Queue[Optional[bytes]] = Queue()
     for f in frames:
         q.put(f)
     q.put(None)
-    encode_worker(q, encoder)
+
+    encode_worker(q, encoder, fail_event)
 
 
 def test_writes_each_frame_to_encoder_stdin() -> None:
@@ -72,3 +81,24 @@ def test_does_not_close_stdin_when_stdin_is_none() -> None:
     _run([b"frame"], encoder)
 
     assert encoder.stdin is None  # no close attempted, no AttributeError
+
+
+def test_sets_event_when_write_fails() -> None:
+    encoder = _make_encoder()
+    encoder.stdin.write.side_effect = OSError("broken pipe")
+    encoder.wait.return_value = 0
+    fail_event = MagicMock(spec=Event)
+
+    _run([b"frame"], encoder, fail_event)
+
+    fail_event.set.assert_called_once()
+
+
+def test_sets_event_when_wait_nonzero_return_val() -> None:
+    encoder = _make_encoder()
+    encoder.wait.return_value = 999
+    fail_event = MagicMock(spec=Event)
+
+    _run([b"frame"], encoder, fail_event)
+
+    fail_event.set.assert_called_once()
