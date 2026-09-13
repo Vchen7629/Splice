@@ -127,7 +127,7 @@ def test_drains_remaining_frames_after_first_failure_instead_of_leaving_them_stu
 
 def test_sets_event_when_encoder_close_raises() -> None:
     encoder = _make_encoder()
-    encoder.stdin.write.side_effect = BrokenPipeError("some broken pipe")
+    encoder.stdin.close.side_effect = BrokenPipeError("some broken pipe")
     encoder.wait.return_value = 0
     fail_event = MagicMock(spec=Event)
 
