@@ -1,9 +1,14 @@
 from queue import Queue
 from typing import Optional
 from subprocess import Popen
+from threading import Event
 
 
-def encode_worker(encode_queue: Queue[Optional[bytes]], encoder: Popen[bytes]) -> None:
+def encode_worker(
+    encode_queue: Queue[Optional[bytes]],
+    encoder: Popen[bytes],
+    encoder_fail_event: Event,
+) -> None:
     """
     runs in a background thread. pulls upscaled frames from encode_queue
     and writes them to ffmpeg encoder's stdin for further processing
@@ -11,16 +16,22 @@ def encode_worker(encode_queue: Queue[Optional[bytes]], encoder: Popen[bytes]) -
     Args:
         encode_queue: the queue to pull upscaled frames from to write to encoder
         encoder: the encoder to write the upscaled frames to
+        encoder_fail_event: threading event set whenever encoder write fails or wait is nonzero to
+        signal and error
     """
-    while True:
-        frame = encode_queue.get()
-        if frame is None:
-            break
+    try:
+        while True:
+            frame = encode_queue.get()
+            if frame is None:
+                break
 
+            if encoder.stdin:
+                encoder.stdin.write(frame)
+    except Exception:
+        encoder_fail_event.set()
+    finally:
         if encoder.stdin:
-            encoder.stdin.write(frame)
+            encoder.stdin.close()
 
-    if encoder.stdin:
-        encoder.stdin.close()
-
-    encoder.wait()
+    if encoder.wait() != 0:  # exit status of 0 is success, fail otherwise
+        encoder_fail_event.set()

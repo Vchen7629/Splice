@@ -304,10 +304,11 @@ def video_upscale(
 
     encode_queue: Queue[Optional[bytes]] = Queue(maxsize=4)
 
-    encode_thread = threading.Thread(
-        target=encode_worker, args=(encode_queue, encoder), daemon=True
+    encoder_fail_event = Event()
+    encoder_thread = threading.Thread(
+        target=encode_worker, args=(encode_queue, encoder, encoder_fail_event), daemon=True
     )
-    encode_thread.start()
+    encoder_thread.start()
 
     frame_bytes = h * w * 3
     t_read = t_infer = t_enq = 0.0
@@ -318,14 +319,11 @@ def video_upscale(
     while True:
         # check for cancel and stop and cleanup before running any processing
         if cancel_event.is_set():
-            if decoder.stdout:
-                decoder.stdout.close()
-            decoder.kill()
-            encoder.kill()
-            encode_queue.put(None)
-            encode_thread.join()
-            decoder.wait()
+            _cleanup_upscale_resources(decoder, encoder, encode_queue, encoder_thread)
             raise JobCancelledError(f"video_upscale cancelled for job {job_id}")
+        if encoder_fail_event.is_set():
+            _cleanup_upscale_resources(decoder, encoder, encode_queue, encoder_thread)
+            raise Exception("encoder failed")
 
         t0 = time.perf_counter()
         if not decoder.stdout:
@@ -365,7 +363,25 @@ def video_upscale(
     encode_queue.put(None)
 
     t_enc_start = time.perf_counter()
-    encode_thread.join()
+    encoder_thread.join()
+    if encoder_fail_event.is_set():
+        raise Exception("encoder failed")
+    
     t_enc = time.perf_counter() - t_enc_start
 
     log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
+
+def _cleanup_upscale_resources(
+    decoder: Popen[bytes], 
+    encoder: Popen[bytes], 
+    encode_queue: Queue[Optional[bytes]], 
+    encoder_thread: threading.Thread
+) -> None:
+    """used to kill/cleanup processing processes in upscaling"""
+    if decoder.stdout:
+        decoder.stdout.close()
+    decoder.kill()
+    encoder.kill()
+    encode_queue.put(None)
+    encoder_thread.join()
+    decoder.wait()
