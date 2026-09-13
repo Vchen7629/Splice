@@ -1,6 +1,8 @@
-from shared_core import get_logger, settings
 import os
+
 import requests
+
+from shared_core import get_logger, settings
 
 TEMP_DIR: str = "../temp"
 

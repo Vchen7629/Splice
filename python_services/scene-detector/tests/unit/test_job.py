@@ -1,10 +1,12 @@
-from shared_handler import ProcessJobMessage, VideoChunkMessage, JobCancelledError
-from scenedetect import VideoOpenFailure
-from threading import Event
-from unittest.mock import patch, MagicMock
-from src.processing.job import process_job, logger
 import asyncio
+from threading import Event
+from unittest.mock import MagicMock, patch
+
 import pytest
+from scenedetect import VideoOpenFailure
+from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
+
+from src.processing.job import logger, process_job
 
 METADATA = ProcessJobMessage(
     job_id="test-123",

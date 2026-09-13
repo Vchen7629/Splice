@@ -1,7 +1,9 @@
-from pathlib import Path
-from shared_storage import upload_video
 import os
+from pathlib import Path
+
 import requests
+
+from shared_storage import upload_video
 
 
 def test_upload_chunks_happy_path(seaweedfs_url: str, chunk_files: list[str]) -> None:

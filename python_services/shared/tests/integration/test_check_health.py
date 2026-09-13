@@ -1,7 +1,9 @@
-from unittest.mock import patch, MagicMock
-from shared_storage import check_storage_health
-import requests
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
+
+from shared_storage import check_storage_health
 
 
 def test_check_health_succeeds(

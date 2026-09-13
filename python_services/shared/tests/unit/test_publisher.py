@@ -1,10 +1,12 @@
 from typing import Any
 from unittest.mock import AsyncMock
-from nats.errors import TimeoutError
-from nats.js.errors import APIError
-from nats.js.client import JetStreamContext
-from shared_handler import publisher, VideoChunkMessage
+
 import pytest
+from nats.errors import TimeoutError
+from nats.js.client import JetStreamContext
+from nats.js.errors import APIError
+
+from shared_handler import VideoChunkMessage, publisher
 
 
 @pytest.mark.asyncio

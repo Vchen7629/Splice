@@ -1,6 +1,6 @@
 from queue import Queue
-from typing import Optional
 from subprocess import Popen
+from typing import Optional
 
 
 def encode_worker(encode_queue: Queue[Optional[bytes]], encoder: Popen[bytes]) -> None:

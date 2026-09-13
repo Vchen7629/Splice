@@ -1,13 +1,13 @@
+import asyncio
+import concurrent.futures
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
-from unittest.mock import AsyncMock, MagicMock, patch
+
 from shared_util import ProgressReporter
-
-import asyncio
-import concurrent.futures
-import pytest
-
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)

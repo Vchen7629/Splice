@@ -1,8 +1,8 @@
 [project]
 name = "shared_python"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "shared python code between scene-detector and video-upscaling"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "nats-py>=2.14.0",
@@ -33,6 +33,12 @@ unannotated-parameter = "error"
 unannotated-return = "error"
 unannotated-attribute = "error"
 implicit-any = "error"
+
+[tool.ruff.lint]
+select = ["I"] # linting catches unsorted imports
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
 
 [dependency-groups]
 dev = [

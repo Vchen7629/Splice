@@ -1,6 +1,6 @@
-from typing import Optional
 from enum import IntEnum
 from pathlib import Path
+from typing import Optional
 
 _BASE = Path(__file__).parent.parent
 

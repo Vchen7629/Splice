@@ -1,19 +1,22 @@
-from typing import Any, AsyncGenerator, Awaitable, Callable
-from nats.aio.client import Client as NATSClient
-from nats.aio.msg import Msg
-from nats.js.kv import KeyValue
-from nats.js.api import ConsumerConfig
-from nats.errors import TimeoutError
-from nats.js.errors import APIError
-from nats.js.client import JetStreamContext
-from structlog.stdlib import BoundLogger
-from threading import Event
-from shared_core import get_logger, settings
-from shared_handler import UpscaleCompleteMsg, is_job_cancelled
-from .messages import VideoChunkMessage
 import asyncio
 import contextlib
 import json
+from threading import Event
+from typing import Any, AsyncGenerator, Awaitable, Callable
+
+from nats.aio.client import Client as NATSClient
+from nats.aio.msg import Msg
+from nats.errors import TimeoutError
+from nats.js.api import ConsumerConfig
+from nats.js.client import JetStreamContext
+from nats.js.errors import APIError
+from nats.js.kv import KeyValue
+from structlog.stdlib import BoundLogger
+
+from shared_core import get_logger, settings
+from shared_handler import UpscaleCompleteMsg, is_job_cancelled
+
+from .messages import VideoChunkMessage
 
 
 @contextlib.asynccontextmanager

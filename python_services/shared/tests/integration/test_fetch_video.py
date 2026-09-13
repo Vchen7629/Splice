@@ -1,8 +1,10 @@
-from typing import Tuple
-from shared_storage import fetch_video
-import requests
-import pytest
 import os
+from typing import Tuple
+
+import pytest
+import requests
+
+from shared_storage import fetch_video
 
 
 def test_fetch_video_downloads_file(seeded_video: Tuple[str, str]) -> None:

@@ -1,7 +1,8 @@
+import asyncio
 from os import remove
 from shutil import rmtree
+
 from structlog.stdlib import BoundLogger
-import asyncio
 
 
 async def cleanup_temp_dir(

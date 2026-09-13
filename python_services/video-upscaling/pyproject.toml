@@ -1,7 +1,8 @@
 [project]
 name = "video-upscaling"
 version = "0.1.0"
-description = "Add your description here"
+description = "Processing service for doing video upscaling (and sometimes downscaling) for Splice"
+license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "structlog",
@@ -58,6 +59,13 @@ filterwarnings = [
 
 [tool.ruff]                                                                                                                                                                             
 exclude = ["src/processing/video.py"]
+
+[tool.ruff.lint]
+select = ["I"] # linting catches unsorted imports
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
 
 [dependency-groups]
 dev = [

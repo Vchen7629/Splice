@@ -1,13 +1,12 @@
-from pathlib import Path
-from typing import Any
-from typing import Generator
-from unittest.mock import patch
-from unittest.mock import MagicMock
-from src.processing.video import recombine_video_audio
-import pytest
 import subprocess
-import numpy as np
+from pathlib import Path
+from typing import Any, Generator
+from unittest.mock import MagicMock, patch
 
+import numpy as np
+import pytest
+
+from src.processing.video import recombine_video_audio
 
 TEST_VIDEO = Path(__file__).parent / "testvideo.mp4"
 

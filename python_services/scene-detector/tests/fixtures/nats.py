@@ -1,10 +1,11 @@
-from typing import Any
-from typing import AsyncGenerator
-from nats.js import JetStreamContext
-from nats.aio.msg import Msg
-from src.core.settings import settings
 import json
+from typing import Any, AsyncGenerator
+
 import pytest_asyncio
+from nats.aio.msg import Msg
+from nats.js import JetStreamContext
+
+from src.core.settings import settings
 
 
 @pytest_asyncio.fixture

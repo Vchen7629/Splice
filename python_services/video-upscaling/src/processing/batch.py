@@ -1,9 +1,10 @@
 from queue import Queue
-from typing import Optional
-from realesrgan import RealESRGANer
 from time import perf_counter
-import torch
+from typing import Optional
+
 import numpy as np
+import torch
+from realesrgan import RealESRGANer
 
 
 def flush_batch(

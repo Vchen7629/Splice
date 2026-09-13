@@ -1,8 +1,10 @@
-from typing import Any
-from nats.js.client import JetStreamContext
-from shared_handler import advance_milestone
 import json
+from typing import Any
+
 import pytest
+from nats.js.client import JetStreamContext
+
+from shared_handler import advance_milestone
 
 
 @pytest.mark.asyncio

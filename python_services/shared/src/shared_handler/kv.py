@@ -1,10 +1,12 @@
-from nats.js.kv import KeyValue
+import json
+
+import nats.js.errors as js_errors
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
+from nats.js.kv import KeyValue
+
 from shared_core import get_logger, settings
-import json
-import nats.js.errors as js_errors
 
 
 async def connect_kv(js: JetStreamContext, kv_name: str) -> KeyValue:

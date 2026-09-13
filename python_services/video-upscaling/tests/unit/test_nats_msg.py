@@ -1,16 +1,17 @@
-from typing import Any
 from pathlib import Path
+from typing import Any
 from unittest.mock import ANY, AsyncMock, patch
+
+import pytest
 from nats.aio.client import Client as NATSClient
-from nats.js.kv import KeyValue
 from nats.js.client import JetStreamContext
-from src.core.settings import settings
-from src.processing.nats_msg import process_msg, _finalize_job
+from nats.js.kv import KeyValue
 from shared_handler import UpscaleCompleteMsg
 from shared_util import ProgressReporter
 from test_helpers.nats import make_msg
-import pytest
 
+from src.core.settings import settings
+from src.processing.nats_msg import _finalize_job, process_msg
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)

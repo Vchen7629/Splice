@@ -1,12 +1,14 @@
-from structlog.stdlib import BoundLogger
-from threading import Event
-from unittest.mock import patch, MagicMock
-from types import SimpleNamespace
-from src.processing.video import split_into_chunks
-from shared_handler.exceptions import JobCancelledError
 import os
 import tempfile
+from threading import Event
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 import pytest
+from shared_handler.exceptions import JobCancelledError
+from structlog.stdlib import BoundLogger
+
+from src.processing.video import split_into_chunks
 
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
 MOCK_CANCEL_EVENT.is_set.return_value = False

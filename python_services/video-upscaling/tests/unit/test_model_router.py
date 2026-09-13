@@ -1,5 +1,6 @@
-from src.utils import Resolution, select_model
 import pytest
+
+from src.utils import Resolution, select_model
 
 
 @pytest.mark.parametrize(

@@ -1,8 +1,10 @@
 from typing import Any
+
+import pytest
 from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
+
 from shared_handler import nats_connect
-import pytest
 
 
 @pytest.mark.asyncio
