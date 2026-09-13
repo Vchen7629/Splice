@@ -30,8 +30,11 @@ def encode_worker(
     except Exception:
         encoder_fail_event.set()
     finally:
-        if encoder.stdin:
-            encoder.stdin.close()
+        try:
+            if encoder.stdin:
+                encoder.stdin.close()
+        except BrokenPipeError:
+            encoder_fail_event.set()
 
     if encoder.wait() != 0:  # exit status of 0 is success, fail otherwise
         encoder_fail_event.set()

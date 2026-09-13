@@ -102,3 +102,14 @@ def test_sets_event_when_wait_nonzero_return_val() -> None:
     _run([b"frame"], encoder, fail_event)
 
     fail_event.set.assert_called_once()
+
+
+def test_sets_event_when_encoder_close_raises() -> None:
+    encoder = _make_encoder()
+    encoder.stdin.write.side_effect = BrokenPipeError("some broken pipe")
+    encoder.wait.return_value = 0
+    fail_event = MagicMock(spec=Event)
+
+    _run([b"frame"], encoder, fail_event)
+
+    fail_event.set.assert_called_once()
