@@ -2,6 +2,7 @@ from queue import Queue
 from threading import Event
 from typing import Optional
 from unittest.mock import MagicMock
+
 from src.processing.worker import encoder_worker
 
 
