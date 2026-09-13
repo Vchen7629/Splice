@@ -104,7 +104,9 @@ def test_sets_event_when_wait_nonzero_return_val() -> None:
     fail_event.set.assert_called_once()
 
 
-def test_drains_remaining_frames_after_first_failure_instead_of_leaving_them_stuck() -> None:
+def test_drains_remaining_frames_after_first_failure_instead_of_leaving_them_stuck() -> (
+    None
+):
     encoder = _make_encoder()
     encoder.stdin.write.side_effect = OSError("broken pipe")
     encoder.wait.return_value = 0
