@@ -7,7 +7,7 @@ from utils import log_timing, Resolution
 from shared_handler import JobCancelledError
 from core.settings import settings
 from .batch import flush_batch
-from .worker import encode_worker
+from .worker import encoder_worker
 from .load_model import load_model
 import time
 import threading
@@ -306,7 +306,7 @@ def video_upscale(
 
     encoder_fail_event = Event()
     encoder_thread = threading.Thread(
-        target=encode_worker, args=(encode_queue, encoder, encoder_fail_event), daemon=True
+        target=encoder_worker, args=(encode_queue, encoder, encoder_fail_event), daemon=True
     )
     encoder_thread.start()
 
