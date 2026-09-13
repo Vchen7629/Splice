@@ -1,7 +1,9 @@
-from typing import Any
 from pathlib import Path
-from src.processing.load_model import load_model
+from typing import Any
+
 import pytest
+
+from src.processing.load_model import load_model
 
 
 @pytest.mark.parametrize("scale", [1, 3, 8])

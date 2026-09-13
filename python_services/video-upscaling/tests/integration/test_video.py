@@ -1,18 +1,19 @@
+import subprocess
 from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock
+
+import pytest
+import torch
+
 from src.processing.video import (
-    video_decoder,
-    video_upscale,
-    video_downscale,
     extract_video_info,
     recombine_video_audio,
+    video_decoder,
+    video_downscale,
+    video_upscale,
 )
 from tests.fixtures.processing_helpers import TEST_VIDEO
-import torch
-import pytest
-import subprocess
-
 
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
 MOCK_CANCEL_EVENT.is_set.return_value = False

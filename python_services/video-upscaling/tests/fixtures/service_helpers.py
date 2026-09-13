@@ -1,7 +1,8 @@
+import subprocess
 from pathlib import Path
+
 import pytest
 import requests
-import subprocess
 
 TEST_VIDEO = Path(__file__).parent.parent / "fixtures" / "testvideo.mp4"
 

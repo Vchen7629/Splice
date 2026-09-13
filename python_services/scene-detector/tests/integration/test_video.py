@@ -1,10 +1,12 @@
-from src.processing.video import split_into_chunks
-from structlog.stdlib import BoundLogger
-from threading import Event
-from unittest.mock import MagicMock
 import os
 import subprocess
 import tempfile
+from threading import Event
+from unittest.mock import MagicMock
+
+from structlog.stdlib import BoundLogger
+
+from src.processing.video import split_into_chunks
 
 VIDEO_PATH = os.path.join(os.path.dirname(__file__), "../videos/ForBiggerBlazes.mp4")
 MOCK_LOGGER = MagicMock(spec=BoundLogger)

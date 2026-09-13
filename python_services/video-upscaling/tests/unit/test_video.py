@@ -1,21 +1,22 @@
+import subprocess
+from pathlib import Path
+from subprocess import CalledProcessError
 from threading import Event
 from typing import Any
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-from subprocess import CalledProcessError
+
+import numpy as np
+import pytest
+
 from src.processing.video import (
-    video_decoder,
-    video_encoder,
-    video_upscale,
-    video_downscale,
     extract_video_info,
     recombine_video_audio,
+    video_decoder,
+    video_downscale,
+    video_encoder,
+    video_upscale,
 )
 from tests.fixtures.processing_helpers import make_fake_decoder
-import pytest
-import subprocess
-import numpy as np
-
 
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
 MOCK_CANCEL_EVENT.is_set.return_value = False
@@ -289,6 +290,7 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
 
 def test_video_upscale_kill_processes_and_raises_when_cancelled(monkeypatch) -> None:
     from threading import Event
+
     from shared_handler.exceptions import JobCancelledError
 
     cancel_event = Event()

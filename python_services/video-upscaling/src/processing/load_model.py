@@ -1,7 +1,8 @@
 from pathlib import Path
+
+import torch
 from realesrgan import RealESRGANer
 from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-import torch
 
 
 def load_model(model_path: Path, scale: int) -> RealESRGANer:

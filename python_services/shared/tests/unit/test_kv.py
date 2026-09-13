@@ -1,10 +1,11 @@
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from nats.js.errors import KeyNotFoundError, KeyWrongLastSequenceError
 from nats.js.kv import KeyValue
+
 from shared_handler import advance_milestone, is_job_cancelled
 from test_helpers.nats import milestone_entry
-import pytest
-
 
 mock_kv = AsyncMock(spec=KeyValue)
 

@@ -1,28 +1,31 @@
+import asyncio
+import os
+from pathlib import Path
+from threading import Event
+
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
-from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
-from threading import Event
+from nats.js.kv import KeyValue
 from shared_core import get_logger
 from shared_handler import (
-    publisher,
-    keep_alive,
-    check_cancel_event,
-    update_job_stage,
-    update_job_failed,
-    check_already_processed,
+    JobCancelledError,
     ProcessJobMessage,
     UpscaleCompleteMsg,
-    JobCancelledError,
+    check_already_processed,
+    check_cancel_event,
+    keep_alive,
+    publisher,
+    update_job_failed,
+    update_job_stage,
 )
 from shared_storage import fetch_video, upload_video
-from shared_util import cleanup_temp_dir, cleanup_temp_file, ProgressReporter
-from ..core.settings import settings
-from .video import video_upscale, video_downscale, recombine_video_audio
+from shared_util import ProgressReporter, cleanup_temp_dir, cleanup_temp_file
+
 from utils import select_model
-from pathlib import Path
-import os
-import asyncio
+
+from ..core.settings import settings
+from .video import recombine_video_audio, video_downscale, video_upscale
 
 logger = get_logger(settings.SERVICE_NAME)
 SERVICE_NAME = settings.SERVICE_NAME

@@ -1,5 +1,6 @@
-from shared_handler import ProcessJobMessage
 import pytest
+
+from shared_handler import ProcessJobMessage
 
 
 def test_process_job_message_accepts_valid_job_id() -> None:

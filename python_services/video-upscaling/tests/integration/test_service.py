@@ -1,13 +1,14 @@
-from typing import Any
-from unittest.mock import patch
-from unittest.mock import AsyncMock
-from nats.js import JetStreamContext
-from src.service import start_service
-from src.core.settings import settings
+import asyncio
 import json
 import uuid
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
 import pytest
-import asyncio
+from nats.js import JetStreamContext
+
+from src.core.settings import settings
+from src.service import start_service
 
 
 def _make_payload(

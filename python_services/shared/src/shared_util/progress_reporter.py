@@ -1,7 +1,9 @@
-from concurrent.futures import Future
-from nats.aio.client import Client as NATSClient
-from shared_handler import ProgressMessage
 import asyncio
+from concurrent.futures import Future
+
+from nats.aio.client import Client as NATSClient
+
+from shared_handler import ProgressMessage
 
 
 class ProgressReporter:

@@ -1,7 +1,8 @@
-from shared_core import get_logger, settings
-from nats.js.client import JetStreamContext
-from nats.aio.client import Client as NATSClient
 import nats.js.errors as js_errors
+from nats.aio.client import Client as NATSClient
+from nats.js.client import JetStreamContext
+
+from shared_core import get_logger, settings
 
 
 async def check_js_stream_exists(js: JetStreamContext, subject_name: str) -> None:

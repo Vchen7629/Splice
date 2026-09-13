@@ -1,12 +1,14 @@
-from structlog.stdlib import BoundLogger
+import asyncio
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from nats.js.api import KeyValueConfig
 from nats.js.client import JetStreamContext
-from shared_handler import consumer, check_cancel_event
-import json
-import pytest
-import asyncio
+from structlog.stdlib import BoundLogger
+
+from shared_handler import check_cancel_event, consumer
 
 MOCK_LOGGER = MagicMock(spec=BoundLogger)
 

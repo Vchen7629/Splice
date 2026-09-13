@@ -1,9 +1,10 @@
-from unittest.mock import patch
-from unittest.mock import MagicMock
 from pathlib import Path
-from shared_storage import fetch_video, queries
-import requests
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
+
+from shared_storage import fetch_video, queries
 
 
 @pytest.mark.parametrize("status_code", [500, 502, 503])

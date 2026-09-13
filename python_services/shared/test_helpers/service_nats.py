@@ -1,14 +1,16 @@
 from typing import Any, AsyncGenerator
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import nats  # type: ignore[import-untyped]
+import pytest
+import pytest_asyncio
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 from src.core.settings import settings
+
 from test_helpers.nats import milestone_entry
-import nats  # type: ignore[import-untyped]
-import pytest
-import pytest_asyncio
 
 
 @pytest_asyncio.fixture

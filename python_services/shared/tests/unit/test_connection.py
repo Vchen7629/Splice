@@ -1,14 +1,12 @@
 from typing import Any
-from unittest.mock import patch
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from nats.aio.client import Client as NATSClient
-from nats.errors import TimeoutError
-from nats.errors import NoServersError
-from nats.errors import AuthorizationError
-from nats.js.client import JetStreamContext
-from shared_handler import nats_connect
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
+from nats.aio.client import Client as NATSClient
+from nats.errors import AuthorizationError, NoServersError, TimeoutError
+from nats.js.client import JetStreamContext
+
+from shared_handler import nats_connect
 
 
 @pytest.mark.asyncio

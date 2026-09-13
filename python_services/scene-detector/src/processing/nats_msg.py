@@ -1,22 +1,24 @@
-from nats.js.kv import KeyValue
+import asyncio
+
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
+from nats.js.client import JetStreamContext
+from nats.js.kv import KeyValue
 from shared_core import get_logger, settings as shared_settings
 from shared_handler import (
-    ProcessJobMessage,
     JobCancelledError,
-    update_job_stage,
-    update_job_failed,
+    ProcessJobMessage,
     check_already_processed,
-    publisher,
-    keep_alive,
     check_cancel_event,
+    keep_alive,
+    publisher,
+    update_job_failed,
+    update_job_stage,
 )
 from shared_util import ProgressReporter
+
 from ..core.settings import settings
 from ..processing.job import process_job
-from nats.js.client import JetStreamContext
-import asyncio
 
 logger = get_logger("scene-detector")
 

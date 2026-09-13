@@ -1,6 +1,8 @@
 from pathlib import Path
-from shared_storage import queries
+
 import pytest
+
+from shared_storage import queries
 
 
 @pytest.fixture(autouse=True)

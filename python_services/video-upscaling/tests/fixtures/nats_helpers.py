@@ -1,5 +1,6 @@
 from typing import Any, Generator
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 

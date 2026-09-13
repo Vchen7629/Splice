@@ -1,14 +1,16 @@
-from shared_core import get_logger
-from shared_storage import fetch_video, upload_video
-from shared_handler import VideoChunkMessage, ProcessJobMessage, JobCancelledError
-from shared_util import cleanup_temp_dir
-from ..core.settings import settings
-from .video import split_into_chunks
-from scenedetect import VideoOpenFailure
+import asyncio
+import os
 from threading import Event
 from typing import Callable, Optional
-import os
-import asyncio
+
+from scenedetect import VideoOpenFailure
+from shared_core import get_logger
+from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
+from shared_storage import fetch_video, upload_video
+from shared_util import cleanup_temp_dir
+
+from ..core.settings import settings
+from .video import split_into_chunks
 
 logger = get_logger(settings.SERVICE_NAME)
 

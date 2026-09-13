@@ -1,13 +1,14 @@
+import json
+import uuid
 from typing import Any
-from unittest.mock import patch
-from unittest.mock import AsyncMock, ANY
+from unittest.mock import ANY, AsyncMock, patch
+
+import pytest
 from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from shared_handler import ProcessJobMessage
+
 from src.processing.nats_msg import process_msg
-import json
-import pytest
-import uuid
 
 
 @pytest.mark.asyncio

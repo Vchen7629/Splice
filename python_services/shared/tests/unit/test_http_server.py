@@ -1,10 +1,12 @@
-from typing import Any
-from http.server import ThreadingHTTPServer
-from unittest.mock import MagicMock, create_autospec, patch
-from shared_handler import start_health_server, HealthEnpointHandler
 import json
-import pytest
 import threading
+from http.server import ThreadingHTTPServer
+from typing import Any
+from unittest.mock import MagicMock, create_autospec, patch
+
+import pytest
+
+from shared_handler import HealthEnpointHandler, start_health_server
 
 
 def make_handler(path: str) -> MagicMock:

@@ -1,16 +1,17 @@
-from scenedetect import (
-    open_video,
-    SceneManager,
-    AdaptiveDetector,
-    FrameTimecode,
-)
-from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
-from threading import Event
-from typing import Callable, Optional
-from shared_handler.exceptions import JobCancelledError
 import os
 import shutil
 import subprocess
+from threading import Event
+from typing import Callable, Optional
+
+from scenedetect import (
+    AdaptiveDetector,
+    FrameTimecode,
+    SceneManager,
+    open_video,
+)
+from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
+from shared_handler.exceptions import JobCancelledError
 
 DETECT_SLICE_FRAMES = 150  # frames processed per detect_scenes() call
 

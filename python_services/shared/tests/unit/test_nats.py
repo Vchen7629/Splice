@@ -1,14 +1,16 @@
-from structlog.stdlib import BoundLogger
+import asyncio
 from typing import Any, AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
-from nats.js.errors import APIError, KeyNotFoundError
 from nats.js.client import JetStreamContext
+from nats.js.errors import APIError, KeyNotFoundError
 from nats.js.kv import KeyValue
-from shared_handler import consumer, check_cancel_event
-import asyncio
-import pytest
+from structlog.stdlib import BoundLogger
+
+from shared_handler import check_cancel_event, consumer
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_KV = AsyncMock(spec=KeyValue)
