@@ -289,8 +289,6 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
 
 
 def test_video_upscale_kill_processes_and_raises_when_cancelled(monkeypatch) -> None:
-    from threading import Event
-
     from shared_handler.exceptions import JobCancelledError
 
     cancel_event = Event()
@@ -311,6 +309,37 @@ def test_video_upscale_kill_processes_and_raises_when_cancelled(monkeypatch) -> 
     )
 
     with pytest.raises(JobCancelledError):
+        video_upscale(cancel_event, "job-1", "video.mp4", Path("model.pth"), 2)
+
+    mock_decoder.stdout.close.assert_called_once()
+    mock_decoder.kill.assert_called_once()
+    mock_encoder.kill.assert_called_once()
+
+
+def test_video_upscale_kill_processes_and_raises_when_encoder_fails(
+    monkeypatch,
+) -> None:
+    cancel_event = Event()
+
+    mock_decoder = MagicMock()
+    mock_decoder.stdout = MagicMock()
+    mock_encoder = MagicMock()
+
+    mock_fail_event = MagicMock(spec=Event)
+    mock_fail_event.is_set.return_value = True
+
+    monkeypatch.setattr(
+        "src.processing.video.extract_video_info", lambda p: (100, 100, 30.0, 10)
+    )
+    monkeypatch.setattr("src.processing.video.load_model", lambda *a: MagicMock())
+    monkeypatch.setattr("src.processing.video.video_decoder", lambda p: mock_decoder)
+    monkeypatch.setattr("src.processing.video.video_encoder", lambda *a: mock_encoder)
+    monkeypatch.setattr(
+        "src.processing.video.threading.Thread", lambda *a, **kw: MagicMock()
+    )
+    monkeypatch.setattr("src.processing.video.Event", lambda: mock_fail_event)
+
+    with pytest.raises(Exception, match="encoder failed"):
         video_upscale(cancel_event, "job-1", "video.mp4", Path("model.pth"), 2)
 
     mock_decoder.stdout.close.assert_called_once()
