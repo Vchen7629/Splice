@@ -1,8 +1,10 @@
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from shared_storage import upload_video
-import requests
+from unittest.mock import MagicMock, patch
+
 import pytest
+import requests
+
+from shared_storage import upload_video
 
 fake_storage_url = "idk/idk2/chunk-001.mp4"
 

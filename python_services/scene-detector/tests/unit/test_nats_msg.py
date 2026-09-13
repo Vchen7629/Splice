@@ -1,17 +1,17 @@
-from typing import Any
-from unittest.mock import patch
-from unittest.mock import MagicMock
-from unittest.mock import AsyncMock
-from nats.aio.client import Client as NATSClient
-from nats.js.kv import KeyValue
-from nats.js.errors import KeyNotFoundError
-from nats.js.client import JetStreamContext
-from shared_handler import VideoChunkMessage
-from src.processing.nats_msg import process_msg, JobCancelledError
-from src.core.settings import settings
-from test_helpers.nats import milestone_entry, make_msg
 import json
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
+from nats.aio.client import Client as NATSClient
+from nats.js.client import JetStreamContext
+from nats.js.errors import KeyNotFoundError
+from nats.js.kv import KeyValue
+from shared_handler import VideoChunkMessage
+from test_helpers.nats import make_msg, milestone_entry
+
+from src.core.settings import settings
+from src.processing.nats_msg import JobCancelledError, process_msg
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)

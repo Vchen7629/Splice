@@ -1,10 +1,10 @@
 from typing import Any
-from unittest.mock import patch
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import nats.js.errors as js_errors
-from src.service import start_service
 import pytest
+
+from src.service import start_service
 
 
 @pytest.mark.asyncio

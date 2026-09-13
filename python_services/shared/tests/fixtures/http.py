@@ -1,6 +1,8 @@
 from typing import Any
-from shared_handler import start_health_server
+
 import pytest
+
+from shared_handler import start_health_server
 
 
 @pytest.fixture

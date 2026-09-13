@@ -1,7 +1,7 @@
 from queue import Queue
-from typing import Optional
 from subprocess import Popen
 from threading import Event
+from typing import Optional
 
 
 def encoder_worker(

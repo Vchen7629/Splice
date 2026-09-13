@@ -1,15 +1,16 @@
-from threading import Event
-from typing import Any
-from unittest.mock import patch
-from unittest.mock import AsyncMock
-from nats.js import JetStreamContext
-from shared_handler import VideoChunkMessage
-from src.service import start_service
-from src.core.settings import settings
 import asyncio
 import json
-import pytest
 import uuid
+from threading import Event
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from nats.js import JetStreamContext
+from shared_handler import VideoChunkMessage
+
+from src.core.settings import settings
+from src.service import start_service
 
 
 @pytest.mark.asyncio

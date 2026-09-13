@@ -1,9 +1,10 @@
+import os
+import uuid
 from pathlib import Path
 from typing import Generator, Tuple
-import requests
+
 import pytest
-import uuid
-import os
+import requests
 
 TEST_VIDEO_PATH = os.path.join(
     os.path.dirname(__file__), "..", "videos", "ForBiggerBlazes.mp4"

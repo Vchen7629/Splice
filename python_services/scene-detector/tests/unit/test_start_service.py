@@ -1,8 +1,10 @@
 from typing import Any
 from unittest.mock import AsyncMock
-from src.service import start_service
-import pytest
+
 import nats.js.errors as js_errors
+import pytest
+
+from src.service import start_service
 
 
 @pytest.mark.asyncio

@@ -1,8 +1,10 @@
-from typing import Any
-from nats.js.client import JetStreamContext
-from shared_handler import VideoChunkMessage, publisher
 import asyncio
+from typing import Any
+
 import pytest
+from nats.js.client import JetStreamContext
+
+from shared_handler import VideoChunkMessage, publisher
 
 
 @pytest.mark.asyncio

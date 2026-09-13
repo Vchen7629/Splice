@@ -1,9 +1,10 @@
-from typing import Generator
-from testcontainers.core.container import DockerContainer
 import time
 import uuid
-import requests
+from typing import Generator
+
 import pytest
+import requests
+from testcontainers.core.container import DockerContainer
 
 
 def _wait_for_seaweedfs(

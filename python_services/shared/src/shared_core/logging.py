@@ -1,7 +1,9 @@
-from .settings import settings
-import sys
 import logging
+import sys
+
 import structlog
+
+from .settings import settings
 
 
 def configure_logging() -> None:

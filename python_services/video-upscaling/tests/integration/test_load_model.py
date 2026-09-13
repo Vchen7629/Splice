@@ -1,8 +1,10 @@
 from pathlib import Path
-from realesrgan import RealESRGANer
-from src.processing.load_model import load_model
+
 import pytest
 import torch
+from realesrgan import RealESRGANer
+
+from src.processing.load_model import load_model
 
 WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
 

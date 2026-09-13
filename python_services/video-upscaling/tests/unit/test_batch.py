@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from queue import Queue
 from typing import Generator, Optional
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pytest
 import torch

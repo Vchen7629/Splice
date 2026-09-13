@@ -1,9 +1,11 @@
+import json
 from typing import Generator
 from unittest.mock import AsyncMock, MagicMock
-from testcontainers.nats import NatsContainer
-from shared_handler import ProcessJobMessage
-import json
+
 import pytest
+from testcontainers.nats import NatsContainer
+
+from shared_handler import ProcessJobMessage
 
 
 @pytest.fixture(scope="session")

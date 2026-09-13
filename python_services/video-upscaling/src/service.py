@@ -1,16 +1,18 @@
+import asyncio
+
 from shared_core import get_logger
 from shared_handler import (
-    create_kv,
+    check_js_stream_exists,
     connect_kv,
     consumer,
+    create_kv,
     nats_connect,
-    check_js_stream_exists,
     start_health_server,
 )
 from shared_storage import check_storage_health
+
 from .core.settings import settings
 from .processing.nats_msg import process_msg
-import asyncio
 
 logger = get_logger(settings.SERVICE_NAME)
 
