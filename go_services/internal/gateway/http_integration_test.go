@@ -308,7 +308,9 @@ func setupServer(t *testing.T) *serverEnv {
 	httpPort := stest.FreePort(t)
 	url := "http://localhost:" + httpPort
 
-	server := StartHttpApi(stest.SilentLogger(), nil, js, kv, httpPort, sharedFilerUrl, ServiceURLs{})
+	server := StartHttpApi(stest.SilentLogger(), nil, js, kv, Config{
+		httpPort, sharedFilerUrl, ServiceURLs{},
+	})
 	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
 
 	require.Eventually(t, func() bool {

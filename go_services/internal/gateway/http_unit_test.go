@@ -32,7 +32,7 @@ func startTestServer(t *testing.T, kv jetstream.KeyValue) (*http.Server, string)
 	t.Cleanup(fakeSrv.Close)
 
 	httpPort := stest.FreePort(t)
-	server := StartHttpApi(stest.SilentLogger(), nil, &MockJS{}, kv, httpPort, fakeSrv.URL, ServiceURLs{})
+	server := StartHttpApi(stest.SilentLogger(), nil, &MockJS{}, kv, Config{HTTPPort: httpPort, StorageURL: fakeSrv.URL, URLs: ServiceURLs{}})
 	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
 
 	return server, httpPort
@@ -97,9 +97,9 @@ func TestStartHttp(t *testing.T) {
 				}
 
 				server := StartHttpApi(
-					stest.SilentLogger(), nil, &MockJS{}, NewMockKV(),
-					tc.httpPort, "http://localhost:1", ServiceURLs{},
-				)
+					stest.SilentLogger(), nil, &MockJS{}, NewMockKV(), Config{
+						HTTPPort: tc.httpPort, StorageURL: "http://localhost:1", URLs: ServiceURLs{},
+					})
 				t.Cleanup(func() { _ = server.Close() })
 
 				assert.Equal(t, wantAddr, server.Addr)
@@ -182,8 +182,9 @@ func TestStartHttpApiRouting(t *testing.T) {
 
 		exitCode := patchOsExit(t)
 		server := StartHttpApi(
-			stest.SilentLogger(), nil, &MockJS{}, NewMockKV(),
-			fmt.Sprintf("%d", port), "http://localhost:1", ServiceURLs{},
+			stest.SilentLogger(), nil, &MockJS{}, NewMockKV(), Config{
+				HTTPPort: fmt.Sprintf("%d", port), StorageURL: "http://localhost:1", URLs: ServiceURLs{},
+			},
 		)
 		t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
 

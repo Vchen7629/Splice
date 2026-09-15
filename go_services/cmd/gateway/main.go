@@ -82,15 +82,16 @@ func runGateway(cfg *Config, logger *slog.Logger, quit <-chan os.Signal) error {
 
 	logger.Debug("starting service...")
 
-	server := gateway.StartHttpApi(
-		logger, nc, js, jobMilestoneKV, cfg.HTTPPort, cfg.StorageURL,
-		gateway.ServiceURLs{
+	server := gateway.StartHttpApi(logger, nc, js, jobMilestoneKV, gateway.Config{
+		HTTPPort:   cfg.HTTPPort,
+		StorageURL: cfg.StorageURL,
+		URLs: gateway.ServiceURLs{
 			SceneDetector:  cfg.SceneDetectorURL,
 			Transcoder:     cfg.TranscoderURL,
 			Recombiner:     cfg.RecombinerURL,
 			VideoUpscaling: cfg.VideoUpscalingURL,
 		},
-	)
+	})
 
 	<-quit
 

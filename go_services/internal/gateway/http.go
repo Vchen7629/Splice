@@ -20,18 +20,23 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+type Config struct {
+	HTTPPort   string
+	StorageURL string
+	URLs       ServiceURLs
+}
+
 func StartHttpApi(
 	logger *slog.Logger,
 	nc *nats.Conn,
 	js jetstream.JetStream,
 	kv jetstream.KeyValue,
-	httpPort, storageURL string,
-	urls ServiceURLs,
+	cfg Config,
 ) *http.Server {
 	router := http.NewServeMux()
 
-	vh := &videoHandler{logger: logger, js: js, kv: kv, storageURL: storageURL}
-	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: urls}
+	vh := &videoHandler{logger: logger, js: js, kv: kv, storageURL: cfg.StorageURL}
+	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: cfg.URLs}
 	ch := &cancelHandler{logger: logger, kv: kv}
 
 	router.HandleFunc("POST /jobs/upload", vh.uploadVideoRoute)
@@ -50,7 +55,7 @@ func StartHttpApi(
 	router.HandleFunc("DELETE /jobs/{id}", ch.cancelProcessingRoute)
 
 	server := &http.Server{
-		Addr:              ":" + httpPort,
+		Addr:              ":" + cfg.HTTPPort,
 		Handler:           Cors(middleware.ApiRequestLogging(router)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -59,7 +64,7 @@ func StartHttpApi(
 	}
 
 	go func() {
-		fmt.Printf("server running on http://localhost:%s\n", httpPort)
+		fmt.Printf("server running on http://localhost:%s\n", cfg.HTTPPort)
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			logger.Error("http server error", "err", err)
