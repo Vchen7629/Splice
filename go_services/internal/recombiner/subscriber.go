@@ -20,7 +20,8 @@ func RecombineVideo(
 	msgRecievedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
-	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "video-recombiner", ackWait)
+	maxAckPending := 10
+	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "video-recombiner", ackWait, maxAckPending)
 	if err != nil {
 		return nil, err
 	}

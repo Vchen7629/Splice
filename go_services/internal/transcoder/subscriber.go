@@ -25,7 +25,8 @@ func ConsumeVideoChunk(
 	js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
-	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait)
+	maxAckPending := 10
+	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait, maxAckPending)
 	if err != nil {
 		return nil, err
 	}
