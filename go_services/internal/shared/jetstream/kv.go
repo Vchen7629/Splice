@@ -141,10 +141,7 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneSt
 			return fmt.Errorf("failed: %w", err)
 		}
 
-		var current struct {
-			State string `json:"state"`
-			Stage string `json:"stage"`
-		}
+		var current MilestoneStatus
 		err = json.Unmarshal(entry.Value(), &current)
 		if err != nil {
 			return fmt.Errorf("failed: %w", err)
