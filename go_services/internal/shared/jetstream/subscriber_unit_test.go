@@ -44,7 +44,7 @@ func TestReturnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := jetstream.CreateDurableConsumer(tc.js, "idk", "idk", 30*time.Second)
+			_, err := jetstream.CreateDurableConsumer(tc.js, "idk", "idk", 30*time.Second, 10)
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
