@@ -77,27 +77,26 @@ func PutKeyKV(kv jetstream.KeyValue, key string, value []byte) error {
 	return nil
 }
 
-// checks whether a job's milestone entry is CANCELLED. A missing entry means its not cancelled yet
-// since it hasnt been written to the kv yet
-func IsJobCancelled(kv jetstream.KeyValue, jobID string) (bool, error) {
+// reads a job's milestone entry for the jobID and returns the revision, MilestoneSTatus, and err (if applicable)
+func GetMilestoneKV(kv jetstream.KeyValue, jobID string) (uint64, MilestoneStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	entry, err := kv.Get(ctx, jobID)
 	if errors.Is(err, jetstream.ErrKeyNotFound) {
-		return false, nil
+		return 0, MilestoneStatus{}, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch from kv: %w", err)
+		return 0, MilestoneStatus{}, fmt.Errorf("failed to fetch from kv: %w", err)
 	}
 
 	var current MilestoneStatus
 	err = json.Unmarshal(entry.Value(), &current)
 	if err != nil {
-		return false, fmt.Errorf("failed to unmarshal json: %w", err)
+		return 0, MilestoneStatus{}, fmt.Errorf("failed to unmarshal json: %w", err)
 	}
 
-	return current.State == "CANCELLED", nil
+	return entry.Revision(), current, nil
 }
 
 // For job mileston kv
@@ -126,8 +125,11 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneSt
 	}
 
 	for {
-		entry, err := kv.Get(ctx, jobID)
-		if errors.Is(err, jetstream.ErrKeyNotFound) {
+		revision, milestoneStatus, err := GetMilestoneKV(kv, jobID)
+		if err != nil {
+			return fmt.Errorf("failed: %w", err)
+		}
+		if milestoneStatus.State == "" {
 			_, err = kv.Create(ctx, jobID, newValue)
 			if errors.Is(err, jetstream.ErrKeyExists) {
 				continue // lost create race, reread and compare against winner
@@ -137,21 +139,12 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneSt
 			}
 			return nil
 		}
-		if err != nil {
-			return fmt.Errorf("failed: %w", err)
-		}
 
-		var current MilestoneStatus
-		err = json.Unmarshal(entry.Value(), &current)
-		if err != nil {
-			return fmt.Errorf("failed: %w", err)
-		}
-
-		if current.State == "COMPLETE" || current.State == "FAILED" || current.State == "CANCELLED" || milestoneStageOrder[current.Stage] >= milestoneStageOrder[newStatus.Stage] {
+		if milestoneStatus.State == "COMPLETE" || milestoneStatus.State == "FAILED" || milestoneStatus.State == "CANCELLED" || milestoneStageOrder[milestoneStatus.Stage] >= milestoneStageOrder[newStatus.Stage] {
 			return nil
 		}
 
-		_, err = kv.Update(ctx, jobID, newValue, entry.Revision())
+		_, err = kv.Update(ctx, jobID, newValue, revision)
 		if errors.Is(err, jetstream.ErrKeyExists) {
 			continue // revision change concurrently, reread and compare again
 		}

@@ -134,27 +134,13 @@ func TestIsJobTerminal(t *testing.T) {
 		assert.Zero(t, revision)
 	})
 
-	t.Run("error fetching from keyValue returns revision 0, false, and error", func(t *testing.T) {
+	t.Run("propagates GetMilestoneKV error unchanged", func(t *testing.T) {
 		mockKV := &test.MockKV{GetErr: errors.New("Some error")}
 
 		revision, isTerminal, err := isJobTerminal(mockKV, "some-jobID")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to fetch from kv: Some error")
-		assert.False(t, isTerminal)
-		assert.Zero(t, revision)
-	})
-
-	t.Run("returns false and revision 0 if the its invalid json", func(t *testing.T) {
-		mockKV := &test.MockKV{
-			GetFound: true,
-			GetValue: []byte(`{[`),
-		}
-
-		revision, isTerminal, err := isJobTerminal(mockKV, "job-1")
-
-		require.Error(t, err)
-		assert.Equal(t, err.Error(), "failed to unmarshal json: invalid character '[' looking for beginning of object key string")
 		assert.False(t, isTerminal)
 		assert.Zero(t, revision)
 	})

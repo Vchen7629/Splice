@@ -67,7 +67,7 @@ func TestPublishChunkComplete(t *testing.T) {
 }
 
 func TestTerminateIfCancelled(t *testing.T) {
-	t.Run("Naks and returns correct shouldCancel and stopJob when IsJobCancelled returns an err", func(t *testing.T) {
+	t.Run("Naks and returns correct shouldCancel and stopJob when GetMilestoneKV returns an err", func(t *testing.T) {
 		mockKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
 		msg := &test.MockMsg{}
 

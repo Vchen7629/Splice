@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -144,22 +143,10 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 // check if the state is already terminal so a cancel/fail arriving before this
 // message is processed doesnt get overwritten back to COMPLETE
 func isJobTerminal(kv jetstream.KeyValue, jobID string) (uint64, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	entry, err := kv.Get(ctx, jobID)
-	if errors.Is(err, jetstream.ErrKeyNotFound) {
-		return 0, false, nil
-	}
+	revision, milestoneStatus, err := sJetstream.GetMilestoneKV(kv, jobID)
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to fetch from kv: %w", err)
+		return 0, false, err
 	}
 
-	var current sJetstream.MilestoneStatus
-	err = json.Unmarshal(entry.Value(), &current)
-	if err != nil {
-		return 0, false, fmt.Errorf("failed to unmarshal json: %w", err)
-	}
-
-	return entry.Revision(), current.State == "COMPLETE" || current.State == "FAILED" || current.State == "CANCELLED", nil
+	return revision, milestoneStatus.State == "COMPLETE" || milestoneStatus.State == "FAILED" || milestoneStatus.State == "CANCELLED", nil
 }

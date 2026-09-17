@@ -90,62 +90,55 @@ func TestPutKeyKV(t *testing.T) {
 	})
 }
 
-func TestIsJobCancelled(t *testing.T) {
+func TestGetMilestoneKV(t *testing.T) {
 
-	t.Run("key that doesnt exist just returns false", func(t *testing.T) {
+	t.Run("key that doesnt exist returns revision 0 and zero-value status", func(t *testing.T) {
 		mockKV := &test.MockKV{}
 
-		isCancelled, err := IsJobCancelled(mockKV, "some-jobID")
+		revision, status, err := GetMilestoneKV(mockKV, "some-jobID")
 
 		require.NoError(t, err)
-		assert.False(t, isCancelled)
+		assert.Zero(t, revision)
+		assert.Equal(t, MilestoneStatus{}, status)
 	})
 
-	t.Run("error fetching from keyValue returns false and error", func(t *testing.T) {
+	t.Run("error fetching from keyValue returns error", func(t *testing.T) {
 		mockKV := &test.MockKV{GetErr: errors.New("Some error")}
 
-		isCancelled, err := IsJobCancelled(mockKV, "some-jobID")
+		revision, status, err := GetMilestoneKV(mockKV, "some-jobID")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to fetch from kv: Some error")
-		assert.False(t, isCancelled)
+		assert.Zero(t, revision)
+		assert.Equal(t, MilestoneStatus{}, status)
 	})
 
-	t.Run("returns false if the its invalid json", func(t *testing.T) {
+	t.Run("returns error if its invalid json", func(t *testing.T) {
 		mockKV := &test.MockKV{
 			GetFound: true,
 			GetValue: []byte(`{[`),
 		}
 
-		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+		revision, status, err := GetMilestoneKV(mockKV, "job-1")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to unmarshal json: invalid character '[' looking for beginning of object key string")
-		assert.False(t, isCancelled)
+		assert.Zero(t, revision)
+		assert.Equal(t, MilestoneStatus{}, status)
 	})
 
-	t.Run("returns true if the KV state is CANCELLED", func(t *testing.T) {
+	t.Run("returns revision and status for an existing entry", func(t *testing.T) {
 		mockKV := &test.MockKV{
-			GetFound: true,
-			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetFound:         true,
+			GetValue:         []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetEntryRevision: 5,
 		}
 
-		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+		revision, status, err := GetMilestoneKV(mockKV, "job-1")
 
 		require.NoError(t, err)
-		assert.True(t, isCancelled)
-	})
-
-	t.Run("returns false if the KV state is non CANCELLED (PROCESSING)", func(t *testing.T) {
-		mockKV := &test.MockKV{
-			GetFound: true,
-			GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`),
-		}
-
-		isCancelled, err := IsJobCancelled(mockKV, "job-1")
-
-		require.NoError(t, err)
-		assert.False(t, isCancelled)
+		assert.Equal(t, uint64(5), revision)
+		assert.Equal(t, MilestoneStatus{State: "CANCELLED", Stage: "transcoder"}, status)
 	})
 }
 

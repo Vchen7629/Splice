@@ -57,13 +57,13 @@ func PublishJetstreamMsg(js jetstream.JetStream, msg any, pubSubject string) err
 func TerminateIfCancelled(
 	jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, jobID string, logger *slog.Logger,
 ) (shouldCancel, stopJob bool) {
-	isCancelled, err := IsJobCancelled(jobMilestoneKV, jobID)
+	_, milestoneStatus, err := GetMilestoneKV(jobMilestoneKV, jobID)
 	if err != nil {
-		logger.Error("failed to check if job is cancelled", "job_id", jobID, "err", err)
+		logger.Error("failed to fetch milestoneStatus from KV", "job_id", jobID, "err", err)
 		NakWithErrHandling(logger, msg)
 		return false, true
 	}
-	if !isCancelled {
+	if milestoneStatus.State != "CANCELLED" {
 		return false, false
 	}
 
