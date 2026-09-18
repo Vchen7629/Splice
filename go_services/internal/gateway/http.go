@@ -293,7 +293,7 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 
 		// terminal job status, we just return 200 and don't update anything
 		// since cancelling it in this state makes no sense
-		if current.State == sJetstream.StateComplete || current.State == sJetstream.StateFailed || current.State == sJetstream.StateCancelled {
+		if current.IsTerminal() {
 			break
 		}
 

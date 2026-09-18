@@ -148,5 +148,5 @@ func isJobTerminal(kv jetstream.KeyValue, jobID string) (uint64, bool, error) {
 		return 0, false, err
 	}
 
-	return revision, milestoneStatus.State == "COMPLETE" || milestoneStatus.State == "FAILED" || milestoneStatus.State == "CANCELLED", nil
+	return revision, milestoneStatus.IsTerminal(), nil
 }

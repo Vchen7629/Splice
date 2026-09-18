@@ -231,7 +231,7 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if current.State == sJetstream.StateComplete || current.State == sJetstream.StateFailed || current.State == sJetstream.StateCancelled {
+			if current.IsTerminal() {
 				return
 			}
 			launchHealthProbe(current.Stage)
