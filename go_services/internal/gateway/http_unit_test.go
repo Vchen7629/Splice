@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
+
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -361,17 +363,17 @@ func TestCancelProcessing(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		state JobState
+		state sJetstream.JobState
 	}{
-		{"COMPLETE", StateComplete},
-		{"FAILED", StateFailed},
-		{"CANCELLED", StateCancelled},
+		{"COMPLETE", sJetstream.StateComplete},
+		{"FAILED", sJetstream.StateFailed},
+		{"CANCELLED", sJetstream.StateCancelled},
 	}
 
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("terminal state %s returns 200 and update never called", tc.name), func(t *testing.T) {
 			kv := NewMockKV()
-			status, err := json.Marshal(JobStatus{State: tc.state, Stage: "scene-detector"})
+			status, err := json.Marshal(sJetstream.JobStatus{State: tc.state, Stage: "scene-detector"})
 			require.NoError(t, err)
 			kv.Seed("job-2", status)
 
@@ -390,7 +392,7 @@ func TestCancelProcessing(t *testing.T) {
 
 	t.Run("Returns 500 when KV update returns non ErrKeyExists error", func(t *testing.T) {
 		kv := NewMockKV()
-		status, err := json.Marshal(JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		require.NoError(t, err)
 		kv.Seed("job-3", status)
 		kv.UpdateErr = errors.New("update failed")
@@ -408,7 +410,7 @@ func TestCancelProcessing(t *testing.T) {
 
 	t.Run("Retries and succeeds after a revision conflict from a concurrent cancel", func(t *testing.T) {
 		kv := NewMockKV()
-		status, err := json.Marshal(JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		require.NoError(t, err)
 		kv.Seed("job-4", status)
 		// simulates another concurrent DELETE request winning the race and bumping the revision first
@@ -422,6 +424,6 @@ func TestCancelProcessing(t *testing.T) {
 		c.cancelProcessingRoute(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Contains(t, rec.Body.String(), string(StateCancelled))
+		assert.Contains(t, rec.Body.String(), string(sJetstream.StateCancelled))
 	})
 }

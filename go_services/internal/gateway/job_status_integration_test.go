@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/jetstream"
 )
 
 type sseEvent struct {
@@ -92,7 +93,7 @@ func decodeSSEEvent[T any](t *testing.T, ev sseEvent, wantEvent string) T {
 
 func TestJobEvents_FullLifecycle(t *testing.T) {
 	jobID := "job-events-lifecycle"
-	seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "upload"})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "upload"})
 	ts := newTestServer(t, ServiceURLs{})
 	_, r := connectSSE(t, context.Background(), ts, jobID)
 
@@ -112,12 +113,12 @@ func TestJobEvents_FullLifecycle(t *testing.T) {
 	assert.Equal(t, 42, got.Progress)
 
 	// stage transition
-	seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"})
 	status = decodeSSEEvent[jobStatusResponse](t, waitForSSEEvent(t, r, 5*time.Second), "status")
 	assert.Equal(t, "scene-detector", status.Stage)
 
 	// terminal state closes the conn
-	seedStatus(t, jobID, JobStatus{State: StateComplete})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateComplete})
 	status = decodeSSEEvent[jobStatusResponse](t, waitForSSEEvent(t, r, 5*time.Second), "status")
 	assert.Equal(t, "COMPLETE", string(status.State))
 
@@ -138,7 +139,7 @@ func TestJobEvents_HealthFlip(t *testing.T) {
 	defer stageSrv.Close()
 
 	jobID := "job-events-health"
-	seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"})
 	ts := newTestServer(t, ServiceURLs{SceneDetector: stageSrv.URL})
 	_, r := connectSSE(t, context.Background(), ts, jobID)
 
@@ -148,20 +149,20 @@ func TestJobEvents_HealthFlip(t *testing.T) {
 	assert.Equal(t, "DEGRADED", string(h.State))
 
 	healthy.Store(true)
-	seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"})
 
 	waitForSSEEvent(t, r, 5*time.Second) // status event for the re-Put
 	h = decodeSSEEvent[healthEvent](t, waitForSSEEvent(t, r, 5*time.Second), "health")
 	assert.Equal(t, "PROCESSING", string(h.State))
 
-	seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"})
 	ev := waitForSSEEvent(t, r, 5*time.Second)
 	assert.Equal(t, "status", ev.Event, "no duplicate health event should follow an unchanged reading")
 }
 
 func TestJobEvents_ClientDisconnect(t *testing.T) {
 	jobID := "job-events-disconnect"
-	seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "upload"})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "upload"})
 	ts := newTestServer(t, ServiceURLs{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -173,7 +174,7 @@ func TestJobEvents_ClientDisconnect(t *testing.T) {
 	resp.Body.Close()
 
 	// give the handler goroutine a moment to unwind, then confirm the server is still healthy
-	seedStatus(t, jobID, JobStatus{State: StateComplete})
+	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateComplete})
 	time.Sleep(200 * time.Millisecond)
 
 	statusResp, err := http.Get(ts.URL + "/jobs/" + jobID + "/status")

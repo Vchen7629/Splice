@@ -168,7 +168,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
 
 	kh := KVHandler{logger: v.logger, kv: v.kv}
-	err = kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateProcessing, Stage: "upload"})
+	err = kh.updateJobStatusKV(r.Context(), result.JobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
 	if err != nil {
 		http.Error(w, "failed to record job status", http.StatusInternalServerError)
 		return
@@ -181,7 +181,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	)
 	if err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)
-		kvErr := kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateFailed, Stage: "upload"})
+		kvErr := kh.updateJobStatusKV(r.Context(), result.JobID, sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "upload"})
 		if kvErr != nil {
 			v.logger.Error("failed to mark job failed after publish error", "err", kvErr)
 		}
@@ -276,7 +276,7 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 	defer cancel()
 
 	w.Header().Set("Content-Type", "application/json")
-	var current JobStatus
+	var current sJetstream.JobStatus
 
 	for {
 		entry, httpStatusCode, err := kh.getJobStatusKV(ctx, jobID)
@@ -293,11 +293,11 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 
 		// terminal job status, we just return 200 and don't update anything
 		// since cancelling it in this state makes no sense
-		if current.State == StateComplete || current.State == StateFailed || current.State == StateCancelled {
+		if current.State == sJetstream.StateComplete || current.State == sJetstream.StateFailed || current.State == sJetstream.StateCancelled {
 			break
 		}
 
-		newValue, err := json.Marshal(JobStatus{State: StateCancelled, Stage: current.Stage})
+		newValue, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateCancelled, Stage: current.Stage})
 		if err != nil {
 			errMsg := "error marshalling status"
 			http.Error(w, errMsg, http.StatusInternalServerError)
@@ -316,7 +316,7 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		current.State = StateCancelled
+		current.State = sJetstream.StateCancelled
 		break
 	}
 

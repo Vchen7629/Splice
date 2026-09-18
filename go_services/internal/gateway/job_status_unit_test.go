@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,7 @@ func newHandler(kv *MockKV, urls ...ServiceURLs) *JobStatusHandler {
 	return &JobStatusHandler{Logger: test.SilentLogger(), KV: kv, URLs: u}
 }
 
-func mustMarshalStatus(t *testing.T, status JobStatus) []byte {
+func mustMarshalStatus(t *testing.T, status jetstream.JobStatus) []byte {
 	t.Helper()
 	b, err := json.Marshal(status)
 	require.NoError(t, err)
@@ -104,7 +105,7 @@ func TestUpdateJobStatusKV(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			h := &KVHandler{logger: test.SilentLogger(), kv: tc.kv}
-			err := h.updateJobStatusKV(context.Background(), "job-1", JobStatus{State: StateProcessing, Stage: "scene-detector"})
+			err := h.updateJobStatusKV(context.Background(), "job-1", jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"})
 
 			if tc.wantErr {
 				assert.Error(t, err)
@@ -189,40 +190,40 @@ func TestPollJobStatus_KVErrors(t *testing.T) {
 func TestPollJobStatus_States(t *testing.T) {
 	tests := []struct {
 		name       string
-		status     JobStatus
-		wantState  JobState
+		status     jetstream.JobStatus
+		wantState  jetstream.JobState
 		wantErrMsg string
 	}{
 		{
 			name:      "PROCESSING state",
-			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
-			wantState: StateProcessing,
+			status:    jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"},
+			wantState: jetstream.StateProcessing,
 		},
 		{
 			name:      "COMPLETE state",
-			status:    JobStatus{State: StateComplete, Stage: "scene-detector"},
-			wantState: StateComplete,
+			status:    jetstream.JobStatus{State: jetstream.StateComplete, Stage: "scene-detector"},
+			wantState: jetstream.StateComplete,
 		},
 		{
 			name:      "CANCELLED state",
-			status:    JobStatus{State: StateCancelled, Stage: "scene-detector"},
-			wantState: StateCancelled,
+			status:    jetstream.JobStatus{State: jetstream.StateCancelled, Stage: "scene-detector"},
+			wantState: jetstream.StateCancelled,
 		},
 		{
 			name:       "FAILED state includes error message",
-			status:     JobStatus{State: StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: transcoder-worker"},
-			wantState:  StateFailed,
+			status:     jetstream.JobStatus{State: jetstream.StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: transcoder-worker"},
+			wantState:  jetstream.StateFailed,
 			wantErrMsg: "pipeline failed at stage: transcoder-worker",
 		},
 		{
 			name:      "FAILED with empty error field",
-			status:    JobStatus{State: StateFailed, Stage: "transcoder"},
-			wantState: StateFailed,
+			status:    jetstream.JobStatus{State: jetstream.StateFailed, Stage: "transcoder"},
+			wantState: jetstream.StateFailed,
 		},
 		{
 			name:       "DEGRADED state includes error message",
-			status:     JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
-			wantState:  StateDegraded,
+			status:     jetstream.JobStatus{State: jetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			wantState:  jetstream.StateDegraded,
 			wantErrMsg: "service unavailable at stage: transcoder",
 		},
 	}
@@ -261,7 +262,7 @@ func TestPollJobStatus_ResponseShape(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kv := NewMockKV()
-			kv.Seed(tc.jobID, mustMarshalStatus(t, JobStatus{State: StateProcessing}))
+			kv.Seed(tc.jobID, mustMarshalStatus(t, jetstream.JobStatus{State: jetstream.StateProcessing}))
 			h := newHandler(kv)
 
 			req := httptest.NewRequest(http.MethodGet, "/jobs/"+tc.jobID+"/status", nil)
@@ -284,11 +285,11 @@ func TestPollJobStatus_ResponseShape(t *testing.T) {
 func TestPollJobStatus_DroppedConnection(t *testing.T) {
 	tests := []struct {
 		name   string
-		status JobStatus
+		status jetstream.JobStatus
 	}{
-		{"does not panic on dropped connection (PROCESSING)", JobStatus{State: StateProcessing, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (COMPLETE)", JobStatus{State: StateComplete, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (FAILED)", JobStatus{State: StateFailed, Stage: "transcoder", Error: "something broke"}},
+		{"does not panic on dropped connection (PROCESSING)", jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (COMPLETE)", jetstream.JobStatus{State: jetstream.StateComplete, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (FAILED)", jetstream.JobStatus{State: jetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
 	}
 
 	for _, tc := range tests {

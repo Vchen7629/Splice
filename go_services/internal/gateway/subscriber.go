@@ -70,8 +70,8 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 			return
 		}
 
-		status, err := json.Marshal(JobStatus{
-			State: StateFailed,
+		status, err := json.Marshal(sJetstream.JobStatus{
+			State: sJetstream.StateFailed,
 			Error: fmt.Sprintf("pipeline failed at stage: %s", advisory.Consumer),
 		})
 		if err != nil {
@@ -115,7 +115,7 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 			return
 		}
 
-		status, err := json.Marshal(JobStatus{State: StateComplete})
+		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateComplete})
 		if err != nil {
 			logger.Error("failed to marshal complete status", "err", err)
 			sJetstream.NakWithErrHandling(logger, msg)

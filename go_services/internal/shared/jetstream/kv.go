@@ -77,23 +77,23 @@ func PutKeyKV(kv jetstream.KeyValue, key string, value []byte) error {
 	return nil
 }
 
-// reads a job's milestone entry for the jobID and returns the revision, MilestoneSTatus, and err (if applicable)
-func GetMilestoneKV(kv jetstream.KeyValue, jobID string) (uint64, MilestoneStatus, error) {
+// reads a job's milestone entry for the jobID and returns the revision, JobStatus, and err (if applicable)
+func GetMilestoneKV(kv jetstream.KeyValue, jobID string) (uint64, JobStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	entry, err := kv.Get(ctx, jobID)
 	if errors.Is(err, jetstream.ErrKeyNotFound) {
-		return 0, MilestoneStatus{}, nil
+		return 0, JobStatus{}, nil
 	}
 	if err != nil {
-		return 0, MilestoneStatus{}, fmt.Errorf("failed to fetch from kv: %w", err)
+		return 0, JobStatus{}, fmt.Errorf("failed to fetch from kv: %w", err)
 	}
 
-	var current MilestoneStatus
+	var current JobStatus
 	err = json.Unmarshal(entry.Value(), &current)
 	if err != nil {
-		return 0, MilestoneStatus{}, fmt.Errorf("failed to unmarshal json: %w", err)
+		return 0, JobStatus{}, fmt.Errorf("failed to unmarshal json: %w", err)
 	}
 
 	return entry.Revision(), current, nil
@@ -108,14 +108,9 @@ var milestoneStageOrder = map[string]int{
 	"video-recombiner": 2,
 }
 
-type MilestoneStatus struct {
-	State string `json:"state"`
-	Stage string `json:"stage"`
-}
-
 // writes a job's milestone entry only if newStage is not behind currently stored stage and
 // job isnt already in terminal state.
-func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneStatus) error {
+func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus JobStatus) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -125,11 +120,11 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneSt
 	}
 
 	for {
-		revision, milestoneStatus, err := GetMilestoneKV(kv, jobID)
+		revision, jobStatus, err := GetMilestoneKV(kv, jobID)
 		if err != nil {
 			return fmt.Errorf("failed: %w", err)
 		}
-		if milestoneStatus.State == "" {
+		if jobStatus.State == "" {
 			_, err = kv.Create(ctx, jobID, newValue)
 			if errors.Is(err, jetstream.ErrKeyExists) {
 				continue // lost create race, reread and compare against winner
@@ -140,7 +135,11 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus MilestoneSt
 			return nil
 		}
 
-		if milestoneStatus.State == "COMPLETE" || milestoneStatus.State == "FAILED" || milestoneStatus.State == "CANCELLED" || milestoneStageOrder[milestoneStatus.Stage] >= milestoneStageOrder[newStatus.Stage] {
+		if jobStatus.IsTerminal() {
+			return nil
+		}
+
+		if !newStatus.IsTerminal() && milestoneStageOrder[jobStatus.Stage] >= milestoneStageOrder[newStatus.Stage] {
 			return nil
 		}
 

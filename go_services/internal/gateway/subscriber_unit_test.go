@@ -146,16 +146,16 @@ func TestIsJobTerminal(t *testing.T) {
 	})
 
 	tests := []struct {
-		state string
+		state sJetstream.JobState
 	}{
-		{state: "COMPLETE"},
-		{state: "FAILED"},
-		{state: "CANCELLED"},
+		{state: sJetstream.StateComplete},
+		{state: sJetstream.StateFailed},
+		{state: sJetstream.StateCancelled},
 	}
 
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("returns true if the KV state is in terminal state (%s)", tc.state), func(t *testing.T) {
-			b, err := json.Marshal(sJetstream.MilestoneStatus{State: tc.state, Stage: "transcoder"})
+			b, err := json.Marshal(sJetstream.JobStatus{State: tc.state, Stage: "transcoder"})
 			require.NoError(t, err)
 
 			mockKV := &test.MockKV{

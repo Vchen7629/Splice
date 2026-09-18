@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
+
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/shared/handler"
@@ -35,7 +37,7 @@ func (h *KVHandler) getJobStatusKV(ctx context.Context, jobID string) (jetstream
 	return entry, http.StatusOK, nil
 }
 
-func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status JobStatus) error {
+func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status sJetstream.JobStatus) error {
 	data, err := json.Marshal(status)
 	if err != nil {
 		h.logger.Error("error marshalling status", "err", err)
@@ -51,29 +53,12 @@ func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status 
 	return nil
 }
 
-type JobState string
-
-const (
-	StateProcessing JobState = "PROCESSING"
-	StateComplete   JobState = "COMPLETE"
-	StateCancelled  JobState = "CANCELLED"
-	StateFailed     JobState = "FAILED"
-	StateDegraded   JobState = "DEGRADED"
-)
-
-type JobStatus struct {
-	State    JobState `json:"state"`
-	Stage    string   `json:"stage"`
-	Progress *int     `json:"progress,omitempty"`
-	Error    string   `json:"error,omitempty"`
-}
-
 type jobStatusResponse struct {
-	JobID    string   `json:"job_id"`
-	State    JobState `json:"state"`
-	Stage    string   `json:"stage"`
-	Progress *int     `json:"progress,omitempty"`
-	Error    string   `json:"error,omitempty"`
+	JobID    string              `json:"job_id"`
+	State    sJetstream.JobState `json:"state"`
+	Stage    string              `json:"stage"`
+	Progress *int                `json:"progress,omitempty"`
+	Error    string              `json:"error,omitempty"`
 }
 
 type JobStatusHandler struct {
@@ -99,7 +84,7 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var status JobStatus
+	var status sJetstream.JobStatus
 	err = json.Unmarshal(entry.Value(), &status)
 	if err != nil {
 		j.Logger.Error("failed to unmarshal job status", "job_id", jobID, "err", err)
@@ -115,13 +100,13 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 }
 
 type healthEvent struct {
-	State JobState `json:"state"`
-	Error string   `json:"error,omitempty"`
+	State sJetstream.JobState `json:"state"`
+	Error string              `json:"error,omitempty"`
 }
 
 type healthProbeResult struct {
 	stage  string
-	state  JobState
+	state  sJetstream.JobState
 	errMsg string
 }
 
@@ -191,8 +176,8 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(7 * time.Second)
 	defer ticker.Stop()
 
-	var current JobStatus
-	var lastHealth JobState
+	var current sJetstream.JobStatus
+	var lastHealth sJetstream.JobState
 
 	healthCh := make(chan healthProbeResult, 1)
 	probing := false
@@ -207,10 +192,10 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		probing = true
 		go func() {
-			state := StateProcessing
+			state := sJetstream.StateProcessing
 			errMsg := ""
 			if !isServiceHealthy(serviceURL, j.Logger) {
-				state = StateDegraded
+				state = sJetstream.StateDegraded
 				errMsg = fmt.Sprintf("service unavailable at stage: %s", stage)
 			}
 			healthCh <- healthProbeResult{stage: stage, state: state, errMsg: errMsg}
@@ -246,7 +231,7 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if current.State == StateComplete || current.State == StateFailed || current.State == StateCancelled {
+			if current.State == sJetstream.StateComplete || current.State == sJetstream.StateFailed || current.State == sJetstream.StateCancelled {
 				return
 			}
 			launchHealthProbe(current.Stage)
