@@ -20,3 +20,16 @@ type JobStatus struct {
 func (m JobStatus) IsTerminal() bool {
 	return m.State == "COMPLETE" || m.State == "FAILED" || m.State == "CANCELLED"
 }
+
+// checks if the current or newStatus jobStatus is stale (terminal)
+func IsStaleTransition(currentStatus, newStatus JobStatus) bool {
+	if currentStatus.IsTerminal() {
+		return true
+	}
+
+	if !newStatus.IsTerminal() && milestoneStageOrder[currentStatus.Stage] >= milestoneStageOrder[newStatus.Stage] {
+		return true
+	}
+
+	return false
+}

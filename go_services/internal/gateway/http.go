@@ -271,56 +271,33 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	kh := KVHandler{logger: c.logger, kv: c.kv}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
 	w.Header().Set("Content-Type", "application/json")
-	var current sJetstream.JobStatus
 
+	var result sJetstream.JobStatus
+	var outcome milestoneWriteOutcome
+	var err error
 	for {
-		entry, httpStatusCode, err := kh.getJobStatusKV(ctx, jobID)
-		if err != nil {
-			http.Error(w, err.Error(), httpStatusCode)
-			return
-		}
-
-		err = json.Unmarshal(entry.Value(), &current)
-		if err != nil {
-			http.Error(w, "failed to unmarshall kv value into JobStatus", http.StatusInternalServerError)
-			return
-		}
-
-		// terminal job status, we just return 200 and don't update anything
-		// since cancelling it in this state makes no sense
-		if current.IsTerminal() {
-			break
-		}
-
-		newValue, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateCancelled, Stage: current.Stage})
-		if err != nil {
-			errMsg := "error marshalling status"
-			http.Error(w, errMsg, http.StatusInternalServerError)
-			c.logger.Error(errMsg, "err", err)
-			return
-		}
-
-		_, err = c.kv.Update(ctx, jobID, newValue, entry.Revision())
+		result, outcome, err = tryUpdateMilestone(ctx, c.kv, jobID, sJetstream.JobStatus{State: sJetstream.StateCancelled})
 		if errors.Is(err, jetstream.ErrKeyExists) {
-			continue // revision change concurrently, reread and compare again
+			continue // revision changed concurrently, reread and compare again
 		}
-		if err != nil {
-			errMsg := "failed to update current stage for jobID as CANCELLED"
-			http.Error(w, errMsg, http.StatusInternalServerError)
-			c.logger.Error(errMsg, "job_id", jobID, "stage", current.Stage, "err", err)
-			return
-		}
-
-		current.State = sJetstream.StateCancelled
 		break
 	}
+	if err != nil {
+		errMsg := "failed to update current stage for jobID as CANCELLED"
+		http.Error(w, errMsg, http.StatusInternalServerError)
+		c.logger.Error(errMsg, "job_id", jobID, "err", err)
+		return
+	}
+	if outcome == milestoneNotFound {
+		http.Error(w, "job not found", http.StatusNotFound)
+		return
+	}
 
-	err := json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: current.State, Stage: current.Stage})
+	err = json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: result.State, Stage: result.Stage})
 	if err != nil {
 		c.logger.Error("error encoding success http response", "err", err)
 		return

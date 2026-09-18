@@ -135,11 +135,7 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus JobStatus) 
 			return nil
 		}
 
-		if jobStatus.IsTerminal() {
-			return nil
-		}
-
-		if !newStatus.IsTerminal() && milestoneStageOrder[jobStatus.Stage] >= milestoneStageOrder[newStatus.Stage] {
+		if IsStaleTransition(jobStatus, newStatus) {
 			return nil
 		}
 

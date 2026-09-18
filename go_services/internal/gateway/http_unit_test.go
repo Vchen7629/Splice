@@ -344,58 +344,37 @@ func TestCancelProcessing(t *testing.T) {
 		c.cancelProcessingRoute(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Contains(t, rec.Body.String(), "failed to get job status")
+		assert.Contains(t, rec.Body.String(), "failed to update current stage for jobID as CANCELLED")
 	})
 
-	t.Run("Returns 500 when malformed JSON in stored entry", func(t *testing.T) {
+	// Write-policy branching (not found / terminal skip / stage-order skip / errors) is
+	// TryUpdateMilestone's own logic and is covered by TestTryUpdateMilestoneWritePolicy
+	// and TestTryUpdateMilestoneErrors in the shared jetstream package. What's left here
+	// is just this route's own outcome -> HTTP response mapping, plus its own retry loop.
+
+	t.Run("terminal state returns 200 with the existing status and update never called", func(t *testing.T) {
 		kv := NewMockKV()
-		kv.Seed("job-1", []byte("Not valid json{{"))
+		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateCancelled, Stage: "scene-detector"})
+		require.NoError(t, err)
+		kv.Seed("job-2", status)
+
 		c := newCancelHandler(kv, nil)
-		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-1", nil)
-		req.SetPathValue("id", "job-1")
+		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-2", nil)
+		req.SetPathValue("id", "job-2")
 		rec := httptest.NewRecorder()
 
 		c.cancelProcessingRoute(rec, req)
 
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Contains(t, rec.Body.String(), "failed to unmarshall kv value into JobStatus")
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), string(sJetstream.StateCancelled))
+		assert.False(t, kv.UpdateCalled.Load())
 	})
 
-	tests := []struct {
-		name  string
-		state sJetstream.JobState
-	}{
-		{"COMPLETE", sJetstream.StateComplete},
-		{"FAILED", sJetstream.StateFailed},
-		{"CANCELLED", sJetstream.StateCancelled},
-	}
-
-	for _, tc := range tests {
-		t.Run(fmt.Sprintf("terminal state %s returns 200 and update never called", tc.name), func(t *testing.T) {
-			kv := NewMockKV()
-			status, err := json.Marshal(sJetstream.JobStatus{State: tc.state, Stage: "scene-detector"})
-			require.NoError(t, err)
-			kv.Seed("job-2", status)
-
-			c := newCancelHandler(kv, nil)
-			req := httptest.NewRequest(http.MethodDelete, "/jobs/job-2", nil)
-			req.SetPathValue("id", "job-2")
-			rec := httptest.NewRecorder()
-
-			c.cancelProcessingRoute(rec, req)
-
-			assert.Equal(t, http.StatusOK, rec.Code)
-			assert.Contains(t, rec.Body.String(), string(tc.state))
-			assert.False(t, kv.UpdateCalled.Load())
-		})
-	}
-
-	t.Run("Returns 500 when KV update returns non ErrKeyExists error", func(t *testing.T) {
+	t.Run("cancels a processing job and returns 200 with the new status", func(t *testing.T) {
 		kv := NewMockKV()
 		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		require.NoError(t, err)
 		kv.Seed("job-3", status)
-		kv.UpdateErr = errors.New("update failed")
 
 		c := newCancelHandler(kv, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-3", nil)
@@ -404,8 +383,9 @@ func TestCancelProcessing(t *testing.T) {
 
 		c.cancelProcessingRoute(rec, req)
 
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Contains(t, rec.Body.String(), "failed to update current stage for jobID as CANCELLED")
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), string(sJetstream.StateCancelled))
+		assert.True(t, kv.UpdateCalled.Load())
 	})
 
 	t.Run("Retries and succeeds after a revision conflict from a concurrent cancel", func(t *testing.T) {

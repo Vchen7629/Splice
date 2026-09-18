@@ -53,6 +53,46 @@ func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status 
 	return nil
 }
 
+type milestoneWriteOutcome int
+
+const (
+	milestoneWritten  milestoneWriteOutcome = iota // wrote newStatus
+	milestoneSkipped                               // entry exists so we skip write (terminal or stale stage)
+	milestoneNotFound                              // no entry exists yet for this jobID
+	milestoneError                                 // op failed
+)
+
+func tryUpdateMilestone(ctx context.Context, milestoneKV jetstream.KeyValue, jobID string, newStatus sJetstream.JobStatus) (sJetstream.JobStatus, milestoneWriteOutcome, error) {
+	revision, milestoneStatus, err := sJetstream.GetMilestoneKV(milestoneKV, jobID)
+	if err != nil {
+		return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", err)
+	}
+	if milestoneStatus.State == "" {
+		return sJetstream.JobStatus{}, milestoneNotFound, nil
+	}
+
+	toWrite := newStatus
+	if toWrite.Stage == "" {
+		toWrite.Stage = milestoneStatus.Stage
+	}
+
+	if sJetstream.IsStaleTransition(milestoneStatus, toWrite) {
+		return milestoneStatus, milestoneSkipped, nil
+	}
+
+	newValue, err := json.Marshal(toWrite)
+	if err != nil {
+		return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", err)
+	}
+
+	_, err = milestoneKV.Update(ctx, jobID, newValue, revision)
+	if err != nil {
+		return sJetstream.JobStatus{}, milestoneError, err
+	}
+
+	return toWrite, milestoneWritten, nil
+}
+
 type jobStatusResponse struct {
 	JobID    string              `json:"job_id"`
 	State    sJetstream.JobState `json:"state"`
