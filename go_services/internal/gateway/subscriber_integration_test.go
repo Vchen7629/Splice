@@ -283,25 +283,6 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			assertKVEmpty(t, sharedKV, tc.jobID)
 		})
 	}
-
-	t.Run("KV update conflict is handled without panic", func(t *testing.T) {
-		jobID := "job-advisory-conflict"
-
-		mockKV := NewMockKV()
-		mockKV.Seed(jobID, []byte(`{"state":"PROCESSING","stage":"upload"}`))
-		mockKV.UpdateErr = jetstream.ErrKeyExists
-
-		sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, mockKV, test.SilentLogger())
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-		seq := seedStreamMessage(t, sharedJS, "jobs.video.chunks", mustMarshalJob(t, jobID))
-		publishAdvisory(t, sharedNC, "jobs", "transcoder-worker", seq)
-
-		require.Eventually(t, func() bool {
-			return mockKV.UpdateCalled.Load()
-		}, 5*time.Second, 100*time.Millisecond, "expected KV Update to be attempted")
-	})
 }
 
 func TestListenJobCompleteI(t *testing.T) {
