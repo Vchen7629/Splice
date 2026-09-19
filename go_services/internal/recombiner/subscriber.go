@@ -118,7 +118,7 @@ func recombineChunks(
 		return true, ""
 	}
 
-	err = sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"})
+	err = sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 		sJetstream.NakWithErrHandling(logger, msg)

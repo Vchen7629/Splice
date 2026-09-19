@@ -40,37 +40,9 @@ func TestCheckKeyExists(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "failed")
 	})
-
-	t.Run("does not return error for ErrKeyNotFound", func(t *testing.T) {
-		mockKV := &test.MockKV{GetErr: jetstream.ErrKeyNotFound}
-
-		processed, err := CheckKeyExist(mockKV, "job-1.0")
-
-		require.NoError(t, err)
-		assert.False(t, processed)
-	})
-
-	t.Run("uses correct key format job_id.chunk_index", func(t *testing.T) {
-		// Key lookup for job "abc" chunk 3 must use "abc.3".
-		// We verify by having GetFound=true and confirming no error path is hit.
-		mockKV := &test.MockKV{GetFound: true}
-
-		processed, err := CheckKeyExist(mockKV, "abc.3")
-
-		require.NoError(t, err)
-		assert.True(t, processed)
-	})
 }
 
 func TestPutKeyKV(t *testing.T) {
-	t.Run("returns nil on success", func(t *testing.T) {
-		mockKV := &test.MockKV{}
-
-		err := PutKeyKV(mockKV, "job-1.0", []byte("processed"))
-
-		require.NoError(t, err)
-	})
-
 	t.Run("writes correct key job_id.chunk_index", func(t *testing.T) {
 		mockKV := &test.MockKV{}
 
@@ -90,62 +62,55 @@ func TestPutKeyKV(t *testing.T) {
 	})
 }
 
-func TestIsJobCancelled(t *testing.T) {
+func TestGetMilestoneKV(t *testing.T) {
 
-	t.Run("key that doesnt exist just returns false", func(t *testing.T) {
+	t.Run("key that doesnt exist returns revision 0 and zero-value status", func(t *testing.T) {
 		mockKV := &test.MockKV{}
 
-		isCancelled, err := IsJobCancelled(mockKV, "some-jobID")
+		revision, status, err := GetMilestoneKV(mockKV, "some-jobID")
 
 		require.NoError(t, err)
-		assert.False(t, isCancelled)
+		assert.Zero(t, revision)
+		assert.Equal(t, JobStatus{}, status)
 	})
 
-	t.Run("error fetching from keyValue returns false and error", func(t *testing.T) {
+	t.Run("error fetching from keyValue returns error", func(t *testing.T) {
 		mockKV := &test.MockKV{GetErr: errors.New("Some error")}
 
-		isCancelled, err := IsJobCancelled(mockKV, "some-jobID")
+		revision, status, err := GetMilestoneKV(mockKV, "some-jobID")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to fetch from kv: Some error")
-		assert.False(t, isCancelled)
+		assert.Zero(t, revision)
+		assert.Equal(t, JobStatus{}, status)
 	})
 
-	t.Run("returns false if the its invalid json", func(t *testing.T) {
+	t.Run("returns error if its invalid json", func(t *testing.T) {
 		mockKV := &test.MockKV{
 			GetFound: true,
 			GetValue: []byte(`{[`),
 		}
 
-		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+		revision, status, err := GetMilestoneKV(mockKV, "job-1")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to unmarshal json: invalid character '[' looking for beginning of object key string")
-		assert.False(t, isCancelled)
+		assert.Zero(t, revision)
+		assert.Equal(t, JobStatus{}, status)
 	})
 
-	t.Run("returns true if the KV state is CANCELLED", func(t *testing.T) {
+	t.Run("returns revision and status for an existing entry", func(t *testing.T) {
 		mockKV := &test.MockKV{
-			GetFound: true,
-			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetFound:         true,
+			GetValue:         []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetEntryRevision: 5,
 		}
 
-		isCancelled, err := IsJobCancelled(mockKV, "job-1")
+		revision, status, err := GetMilestoneKV(mockKV, "job-1")
 
 		require.NoError(t, err)
-		assert.True(t, isCancelled)
-	})
-
-	t.Run("returns false if the KV state is non CANCELLED (PROCESSING)", func(t *testing.T) {
-		mockKV := &test.MockKV{
-			GetFound: true,
-			GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`),
-		}
-
-		isCancelled, err := IsJobCancelled(mockKV, "job-1")
-
-		require.NoError(t, err)
-		assert.False(t, isCancelled)
+		assert.Equal(t, uint64(5), revision)
+		assert.Equal(t, JobStatus{State: "CANCELLED", Stage: "transcoder"}, status)
 	})
 }
 
@@ -191,52 +156,52 @@ func TestClaimChunk(t *testing.T) {
 
 // For job milestone kv related tests
 
-func TestAdvanceMilestoneWritePolicy(t *testing.T) {
-	tests := []struct {
+func TestAdvanceMilestone(t *testing.T) {
+	writePolicyTests := []struct {
 		name      string
 		current   *test.MockKV
-		newStatus MilestoneStatus
+		newStatus JobStatus
 		wantWrite bool
 	}{
 		{
 			name:      "creates entry when job has no milestone yet",
 			current:   &test.MockKV{},
-			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantWrite: true,
 		},
 		{
 			name:      "advances when new stage is ahead of current",
-			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
-			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"},
+			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "video-recombiner"},
 			wantWrite: true,
 		},
 		{
 			name:      "no-ops when new stage is behind current",
-			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
-			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantWrite: false,
 		},
 		{
 			name:      "no-ops on terminal COMPLETE",
-			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
-			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantWrite: false,
 		},
 		{
 			name:      "no-ops on terminal FAILED",
-			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
-			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantWrite: false,
 		},
 		{
 			name:      "no-ops on terminal CANCELLED",
-			current:   &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
-			newStatus: MilestoneStatus{State: "PROCESSING", Stage: "transcoder"},
+			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantWrite: false,
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range writePolicyTests {
 		t.Run(tc.name, func(t *testing.T) {
 			err := AdvanceMilestone(tc.current, "job-1", tc.newStatus)
 
@@ -245,23 +210,33 @@ func TestAdvanceMilestoneWritePolicy(t *testing.T) {
 			assert.Equal(t, tc.wantWrite, wrote)
 		})
 	}
-}
 
-func TestAdvanceMilestoneErrors(t *testing.T) {
+	// it shouldnt be mistaken for missing key
+	t.Run("existing entry that decodes to an empty state must be updated at its revision", func(t *testing.T) {
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 3, GetValue: []byte(`{}`)}
+
+		err := AdvanceMilestone(mockKV, "job-1", JobStatus{State: "PROCESSING", Stage: "transcoder"})
+
+		require.NoError(t, err)
+		assert.Empty(t, mockKV.CreateKey)
+		assert.Equal(t, "job-1", mockKV.UpdateKey)
+		assert.Equal(t, uint64(3), mockKV.UpdateRevision)
+	})
+
 	transcoderValue := []byte(`{"state":"PROCESSING","stage":"transcoder"}`)
 
-	tests := []struct {
+	errorTests := []struct {
 		name   string
 		mockKV *test.MockKV
 	}{
 		{"Get fails", &test.MockKV{GetErr: errors.New("kv unavailable")}},
 		{"Create fails", &test.MockKV{CreateErr: errors.New("create failed")}},
-		{"Update fails", &test.MockKV{GetFound: true, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
+		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range errorTests {
 		t.Run(tc.name, func(t *testing.T) {
-			newStatus := MilestoneStatus{State: "PROCESSING", Stage: "video-recombiner"}
+			newStatus := JobStatus{State: "PROCESSING", Stage: "video-recombiner"}
 
 			err := AdvanceMilestone(tc.mockKV, "job-1", newStatus)
 

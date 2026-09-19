@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
+
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/shared/handler"
@@ -35,7 +37,7 @@ func (h *KVHandler) getJobStatusKV(ctx context.Context, jobID string) (jetstream
 	return entry, http.StatusOK, nil
 }
 
-func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status JobStatus) error {
+func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status sJetstream.JobStatus) error {
 	data, err := json.Marshal(status)
 	if err != nil {
 		h.logger.Error("error marshalling status", "err", err)
@@ -51,29 +53,67 @@ func (h *KVHandler) updateJobStatusKV(ctx context.Context, JobID string, status 
 	return nil
 }
 
-type JobState string
+type milestoneWriteOutcome int
 
 const (
-	StateProcessing JobState = "PROCESSING"
-	StateComplete   JobState = "COMPLETE"
-	StateCancelled  JobState = "CANCELLED"
-	StateFailed     JobState = "FAILED"
-	StateDegraded   JobState = "DEGRADED"
+	milestoneWritten  milestoneWriteOutcome = iota // wrote newStatus
+	milestoneSkipped                               // entry exists so we skip write (terminal or stale stage)
+	milestoneNotFound                              // no entry exists yet for this jobID
+	milestoneError                                 // op failed
 )
 
-type JobStatus struct {
-	State    JobState `json:"state"`
-	Stage    string   `json:"stage"`
-	Progress *int     `json:"progress,omitempty"`
-	Error    string   `json:"error,omitempty"`
+const maxMilestoneAttempts = 5
+
+func tryUpdateMilestone(ctx context.Context, milestoneKV jetstream.KeyValue, jobID string, newStatus sJetstream.JobStatus) (sJetstream.JobStatus, milestoneWriteOutcome, error) {
+	var err error
+	for attempt := range maxMilestoneAttempts {
+		if ctx.Err() != nil {
+			return sJetstream.JobStatus{}, milestoneError, ctx.Err()
+		}
+
+		revision, milestoneStatus, getErr := sJetstream.GetMilestoneKV(milestoneKV, jobID)
+		if getErr != nil {
+			return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", getErr)
+		}
+		if revision == 0 {
+			return sJetstream.JobStatus{}, milestoneNotFound, nil
+		}
+
+		toWrite := newStatus
+		if toWrite.Stage == "" {
+			toWrite.Stage = milestoneStatus.Stage
+		}
+
+		if sJetstream.IsStaleTransition(milestoneStatus, toWrite) {
+			return milestoneStatus, milestoneSkipped, nil
+		}
+
+		newValue, marshalErr := json.Marshal(toWrite)
+		if marshalErr != nil {
+			return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", marshalErr)
+		}
+
+		_, err = milestoneKV.Update(ctx, jobID, newValue, revision)
+		if err == nil {
+			return toWrite, milestoneWritten, nil
+		}
+		if !errors.Is(err, jetstream.ErrKeyExists) {
+			return sJetstream.JobStatus{}, milestoneError, err
+		}
+
+		// revision changed concurrently, back off briefly then reread and compare again
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	}
+
+	return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("milestone update conflicted %d times: %w", maxMilestoneAttempts, err)
 }
 
 type jobStatusResponse struct {
-	JobID    string   `json:"job_id"`
-	State    JobState `json:"state"`
-	Stage    string   `json:"stage"`
-	Progress *int     `json:"progress,omitempty"`
-	Error    string   `json:"error,omitempty"`
+	JobID    string              `json:"job_id"`
+	State    sJetstream.JobState `json:"state"`
+	Stage    string              `json:"stage"`
+	Progress *int                `json:"progress,omitempty"`
+	Error    string              `json:"error,omitempty"`
 }
 
 type JobStatusHandler struct {
@@ -99,7 +139,7 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var status JobStatus
+	var status sJetstream.JobStatus
 	err = json.Unmarshal(entry.Value(), &status)
 	if err != nil {
 		j.Logger.Error("failed to unmarshal job status", "job_id", jobID, "err", err)
@@ -115,13 +155,13 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 }
 
 type healthEvent struct {
-	State JobState `json:"state"`
-	Error string   `json:"error,omitempty"`
+	State sJetstream.JobState `json:"state"`
+	Error string              `json:"error,omitempty"`
 }
 
 type healthProbeResult struct {
 	stage  string
-	state  JobState
+	state  sJetstream.JobState
 	errMsg string
 }
 
@@ -191,8 +231,8 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(7 * time.Second)
 	defer ticker.Stop()
 
-	var current JobStatus
-	var lastHealth JobState
+	var current sJetstream.JobStatus
+	var lastHealth sJetstream.JobState
 
 	healthCh := make(chan healthProbeResult, 1)
 	probing := false
@@ -207,10 +247,10 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		probing = true
 		go func() {
-			state := StateProcessing
+			state := sJetstream.StateProcessing
 			errMsg := ""
 			if !isServiceHealthy(serviceURL, j.Logger) {
-				state = StateDegraded
+				state = sJetstream.StateDegraded
 				errMsg = fmt.Sprintf("service unavailable at stage: %s", stage)
 			}
 			healthCh <- healthProbeResult{stage: stage, state: state, errMsg: errMsg}
@@ -246,7 +286,7 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if current.State == StateComplete || current.State == StateFailed || current.State == StateCancelled {
+			if current.IsTerminal() {
 				return
 			}
 			launchHealthProbe(current.Stage)

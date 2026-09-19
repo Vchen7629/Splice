@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
 )
 
@@ -213,6 +214,8 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 			jobID := "job-" + tc.consumer
+			seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
+
 			seq := seedStreamMessage(t, sharedJS, tc.subject, mustMarshalJob(t, jobID))
 			publishAdvisory(t, sharedNC, "jobs", tc.consumer, seq)
 
@@ -256,6 +259,14 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 				return "jobs", "transcoder-worker", seq
 			},
 		},
+		{
+			name:  "job has no milestone entry yet",
+			jobID: "job-advisory-unknown",
+			seed: func(t *testing.T) (string, string, uint64) {
+				seq := seedStreamMessage(t, sharedJS, "jobs.video.chunks", mustMarshalJob(t, "job-advisory-unknown"))
+				return "jobs", "transcoder-worker", seq
+			},
+		},
 	}
 
 	for _, tc := range errorsDoesntWriteKVTests {
@@ -272,23 +283,6 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			assertKVEmpty(t, sharedKV, tc.jobID)
 		})
 	}
-
-	t.Run("KV update conflict is handled without panic", func(t *testing.T) {
-		mockKV := NewMockKV()
-		mockKV.UpdateErr = jetstream.ErrKeyExists
-
-		sub, err := ListenAdvisoriesFailure(sharedNC, sharedJS, mockKV, test.SilentLogger())
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-		jobID := "job-advisory-conflict"
-		seq := seedStreamMessage(t, sharedJS, "jobs.video.chunks", mustMarshalJob(t, jobID))
-		publishAdvisory(t, sharedNC, "jobs", "transcoder-worker", seq)
-
-		require.Eventually(t, func() bool {
-			return mockKV.UpdateCalled.Load()
-		}, 5*time.Second, 100*time.Millisecond, "expected KV Update to be attempted")
-	})
 }
 
 func TestListenJobCompleteI(t *testing.T) {
@@ -352,10 +346,26 @@ func TestListenJobCompleteI(t *testing.T) {
 		t.Cleanup(consCtx.Stop)
 
 		jobID := "job-complete-kv"
+		// a real job always has a milestone entry from upload before any downstream
+		// stage publishes, tryUpdateMilestone deliberately never originates one
+		// from nothing, so this must exist for the completion write to land.
+		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "video-recombiner"})
+
 		_, err = sharedJS.Publish(context.Background(), "jobs.complete", mustMarshalJob(t, jobID))
 		require.NoError(t, err)
 
 		assertKVComplete(t, sharedKV, jobID)
+	})
+
+	t.Run("jobs.complete message for an unknown job naks and never writes KV", func(t *testing.T) {
+		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
+		require.NoError(t, err)
+		t.Cleanup(consCtx.Stop)
+
+		_, err = sharedJS.Publish(context.Background(), "jobs.complete", mustMarshalJob(t, "job-complete-unknown"))
+		require.NoError(t, err)
+
+		assertKVEmpty(t, sharedKV, "job-complete-unknown")
 	})
 
 	t.Run("invalid JSON does not write KV", func(t *testing.T) {

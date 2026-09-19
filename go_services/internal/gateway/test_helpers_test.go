@@ -119,7 +119,7 @@ func (m *MockKV) Get(_ context.Context, key string) (jetstream.KeyValueEntry, er
 	if !ok {
 		return nil, jetstream.ErrKeyNotFound
 	}
-	return &MockKVEntry{value: v, revision: 0}, nil
+	return &MockKVEntry{value: v, revision: 1}, nil // a seeded entry exists, and real entries start at revision 1
 }
 
 func (m *MockKV) Put(_ context.Context, _ string, _ []byte) (uint64, error) {

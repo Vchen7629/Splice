@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	sJetstream "splice.com/go_services/internal/shared/jetstream"
+
 	nats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +50,7 @@ func newTestServer(t *testing.T, urls ...ServiceURLs) *httptest.Server {
 	return ts
 }
 
-func seedStatus(t *testing.T, jobID string, status JobStatus) {
+func seedStatus(t *testing.T, jobID string, status sJetstream.JobStatus) {
 	t.Helper()
 	b, err := json.Marshal(status)
 	require.NoError(t, err)
@@ -60,7 +62,7 @@ func TestResponse(t *testing.T) {
 	tests := []struct {
 		name      string
 		jobID     string
-		status    JobStatus
+		status    sJetstream.JobStatus
 		wantCode  int
 		wantState string
 		wantErr   string
@@ -68,21 +70,21 @@ func TestResponse(t *testing.T) {
 		{
 			name:      "PROCESSING job returns 200 with correct state",
 			jobID:     "job-processing",
-			status:    JobStatus{State: StateProcessing, Stage: "scene-detector"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"},
 			wantCode:  http.StatusOK,
 			wantState: "PROCESSING",
 		},
 		{
 			name:      "COMPLETE job returns 200 with correct state",
 			jobID:     "job-complete",
-			status:    JobStatus{State: StateComplete, Stage: "transcoder"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"},
 			wantCode:  http.StatusOK,
 			wantState: "COMPLETE",
 		},
 		{
 			name:      "FAILED job returns 200 with error field populated",
 			jobID:     "job-failed",
-			status:    JobStatus{State: StateFailed, Stage: "transcoder", Error: "pipeline failed at stage: transcoder-worker"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "pipeline failed at stage: transcoder-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "FAILED",
 			wantErr:   "pipeline failed at stage: transcoder-worker",
@@ -90,7 +92,7 @@ func TestResponse(t *testing.T) {
 		{
 			name:      "DEGRADED job returns 200 with error field and stage",
 			jobID:     "job-degraded",
-			status:    JobStatus{State: StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
 			wantCode:  http.StatusOK,
 			wantState: "DEGRADED",
 			wantErr:   "service unavailable at stage: transcoder",
@@ -143,12 +145,12 @@ func TestConnectionDrop(t *testing.T) {
 	tests := []struct {
 		name   string
 		jobID  string
-		status JobStatus
+		status sJetstream.JobStatus
 	}{
-		{"does not panic on dropped connection (PROCESSING)", "drop-processing", JobStatus{State: StateProcessing, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (COMPLETE)", "drop-complete", JobStatus{State: StateComplete, Stage: "transcoder"}},
-		{"does not panic on dropped connection (FAILED)", "drop-failed", JobStatus{State: StateFailed, Stage: "transcoder", Error: "something broke"}},
-		{"does not panic on dropped connection (not found)", "drop-notfound", JobStatus{}},
+		{"does not panic on dropped connection (PROCESSING)", "drop-processing", sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (COMPLETE)", "drop-complete", sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"}},
+		{"does not panic on dropped connection (FAILED)", "drop-failed", sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
+		{"does not panic on dropped connection (not found)", "drop-notfound", sJetstream.JobStatus{}},
 	}
 
 	for _, tc := range tests {
@@ -170,7 +172,7 @@ func TestConnectionDrop(t *testing.T) {
 
 func TestConcurrentRequests(t *testing.T) {
 	t.Run("concurrent requests for a completed job return consistent state", func(t *testing.T) {
-		seedStatus(t, "concurrent-job", JobStatus{State: StateComplete, Stage: "transcoder"})
+		seedStatus(t, "concurrent-job", sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"})
 		ts := newTestServer(t)
 
 		const goroutines = 20
@@ -230,7 +232,7 @@ func TestConcurrentRequests(t *testing.T) {
 
 // continues serving requests after a client disconnects
 func TestServerContinuesAfterDisconnect(t *testing.T) {
-	seedStatus(t, "reconnect-job", JobStatus{State: StateProcessing, Stage: "scene-detector"})
+	seedStatus(t, "reconnect-job", sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 	ts := newTestServer(t)
 
 	firstResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
@@ -660,7 +662,7 @@ func TestGracefulShutdown(t *testing.T) {
 func TestCancelRouteI(t *testing.T) {
 	t.Run("happy path for processing", func(t *testing.T) {
 		jobID := "cancel-happy-path"
-		seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		ts := newTestServer(t)
 
 		req, err := http.NewRequest(http.MethodDelete, ts.URL+"/jobs/"+jobID, nil)
@@ -677,14 +679,14 @@ func TestCancelRouteI(t *testing.T) {
 
 		entry, err := sharedKV.Get(context.Background(), jobID)
 		require.NoError(t, err)
-		var stored JobStatus
+		var stored sJetstream.JobStatus
 		require.NoError(t, json.Unmarshal(entry.Value(), &stored))
-		assert.Equal(t, StateCancelled, stored.State)
+		assert.Equal(t, sJetstream.StateCancelled, stored.State)
 	})
 
 	t.Run("repeated cancels (3 sequential delete) all return 200 CANCELLED and only one KV revision bump", func(t *testing.T) {
 		jobID := "cancel-repeated"
-		seedStatus(t, jobID, JobStatus{State: StateProcessing, Stage: "scene-detector"})
+		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		ts := newTestServer(t)
 
 		before, err := sharedKV.Get(context.Background(), jobID)
@@ -710,7 +712,7 @@ func TestCancelRouteI(t *testing.T) {
 
 	t.Run("cancel on COMPLETED job is no-op", func(t *testing.T) {
 		jobID := "cancel-terminal"
-		seedStatus(t, jobID, JobStatus{State: StateComplete, Stage: "scene-detector"})
+		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "scene-detector"})
 		ts := newTestServer(t)
 
 		before, err := sharedKV.Get(context.Background(), jobID)

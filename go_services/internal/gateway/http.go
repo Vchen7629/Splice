@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -168,7 +167,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
 
 	kh := KVHandler{logger: v.logger, kv: v.kv}
-	err = kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateProcessing, Stage: "upload"})
+	err = kh.updateJobStatusKV(r.Context(), result.JobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
 	if err != nil {
 		http.Error(w, "failed to record job status", http.StatusInternalServerError)
 		return
@@ -181,7 +180,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	)
 	if err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)
-		kvErr := kh.updateJobStatusKV(r.Context(), result.JobID, JobStatus{State: StateFailed, Stage: "upload"})
+		kvErr := kh.updateJobStatusKV(r.Context(), result.JobID, sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "upload"})
 		if kvErr != nil {
 			v.logger.Error("failed to mark job failed after publish error", "err", kvErr)
 		}
@@ -271,56 +270,27 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	kh := KVHandler{logger: c.logger, kv: c.kv}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
 	w.Header().Set("Content-Type", "application/json")
-	var current JobStatus
 
-	for {
-		entry, httpStatusCode, err := kh.getJobStatusKV(ctx, jobID)
-		if err != nil {
-			http.Error(w, err.Error(), httpStatusCode)
-			return
-		}
+	var result sJetstream.JobStatus
+	var outcome milestoneWriteOutcome
 
-		err = json.Unmarshal(entry.Value(), &current)
-		if err != nil {
-			http.Error(w, "failed to unmarshall kv value into JobStatus", http.StatusInternalServerError)
-			return
-		}
-
-		// terminal job status, we just return 200 and don't update anything
-		// since cancelling it in this state makes no sense
-		if current.State == StateComplete || current.State == StateFailed || current.State == StateCancelled {
-			break
-		}
-
-		newValue, err := json.Marshal(JobStatus{State: StateCancelled, Stage: current.Stage})
-		if err != nil {
-			errMsg := "error marshalling status"
-			http.Error(w, errMsg, http.StatusInternalServerError)
-			c.logger.Error(errMsg, "err", err)
-			return
-		}
-
-		_, err = c.kv.Update(ctx, jobID, newValue, entry.Revision())
-		if errors.Is(err, jetstream.ErrKeyExists) {
-			continue // revision change concurrently, reread and compare again
-		}
-		if err != nil {
-			errMsg := "failed to update current stage for jobID as CANCELLED"
-			http.Error(w, errMsg, http.StatusInternalServerError)
-			c.logger.Error(errMsg, "job_id", jobID, "stage", current.Stage, "err", err)
-			return
-		}
-
-		current.State = StateCancelled
-		break
+	result, outcome, err := tryUpdateMilestone(ctx, c.kv, jobID, sJetstream.JobStatus{State: sJetstream.StateCancelled})
+	if err != nil {
+		errMsg := "failed to update current stage for jobID as CANCELLED"
+		http.Error(w, errMsg, http.StatusInternalServerError)
+		c.logger.Error(errMsg, "job_id", jobID, "err", err)
+		return
+	}
+	if outcome == milestoneNotFound {
+		http.Error(w, "job not found", http.StatusNotFound)
+		return
 	}
 
-	err := json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: current.State, Stage: current.Stage})
+	err = json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: result.State, Stage: result.Stage})
 	if err != nil {
 		c.logger.Error("error encoding success http response", "err", err)
 		return

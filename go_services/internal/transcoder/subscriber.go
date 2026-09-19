@@ -102,7 +102,7 @@ func ConsumeVideoChunk(
 func processChunk(
 	jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, payload VideoChunkMessage, logger *slog.Logger,
 ) (bool, string) {
-	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.MilestoneStatus{State: "PROCESSING", Stage: "transcoder"})
+	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 		sJetstream.NakWithErrHandling(logger, msg)
