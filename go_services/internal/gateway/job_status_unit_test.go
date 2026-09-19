@@ -225,7 +225,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 		})
 	}
 
-	t.Run("Update conflict surfaces ErrKeyExists unchanged (no internal retry)", func(t *testing.T) {
+	t.Run("Persistent update conflict gives up after max attempts and surfaces ErrKeyExists", func(t *testing.T) {
 		mockKV := &test.MockKV{GetFound: true, GetValue: transcoderValue, UpdateErr: jetstream.ErrKeyExists}
 		newStatus := sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"}
 
@@ -234,6 +234,35 @@ func TestTryUpdateMilestone(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, jetstream.ErrKeyExists)
 		assert.Equal(t, milestoneError, outcome)
+	})
+
+	t.Run("Transient update conflict is retried and the write lands", func(t *testing.T) {
+		mockKV := NewMockKV()
+		mockKV.Seed("job-1", transcoderValue)
+		mockKV.UpdateErr = jetstream.ErrKeyExists // MockKV consumes this after the first Update call
+		failed := sJetstream.JobStatus{State: sJetstream.StateFailed, Error: "pipeline failed at stage: transcoder"}
+
+		result, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", failed)
+
+		require.NoError(t, err)
+		assert.Equal(t, milestoneWritten, outcome)
+		assert.Equal(t, sJetstream.StateFailed, result.State)
+
+		var stored sJetstream.JobStatus
+		require.NoError(t, json.Unmarshal(mockKV.entries["job-1"], &stored))
+		assert.Equal(t, sJetstream.StateFailed, stored.State)
+	})
+
+	t.Run("Cancelled context returns without attempting an update", func(t *testing.T) {
+		mockKV := &test.MockKV{GetFound: true, GetValue: transcoderValue}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, outcome, err := tryUpdateMilestone(ctx, mockKV, "job-1", sJetstream.JobStatus{State: sJetstream.StateFailed})
+
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, milestoneError, outcome)
+		assert.Empty(t, mockKV.UpdateKey, "Update must not be called once ctx is done")
 	})
 }
 

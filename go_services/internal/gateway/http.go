@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -278,14 +277,8 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 
 	var result sJetstream.JobStatus
 	var outcome milestoneWriteOutcome
-	var err error
-	for {
-		result, outcome, err = tryUpdateMilestone(ctx, c.kv, jobID, sJetstream.JobStatus{State: sJetstream.StateCancelled})
-		if errors.Is(err, jetstream.ErrKeyExists) {
-			continue // revision changed concurrently, reread and compare again
-		}
-		break
-	}
+
+	result, outcome, err := tryUpdateMilestone(ctx, c.kv, jobID, sJetstream.JobStatus{State: sJetstream.StateCancelled})
 	if err != nil {
 		errMsg := "failed to update current stage for jobID as CANCELLED"
 		http.Error(w, errMsg, http.StatusInternalServerError)

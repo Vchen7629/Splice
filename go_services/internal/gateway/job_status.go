@@ -62,35 +62,50 @@ const (
 	milestoneError                                 // op failed
 )
 
+const maxMilestoneAttempts = 5
+
 func tryUpdateMilestone(ctx context.Context, milestoneKV jetstream.KeyValue, jobID string, newStatus sJetstream.JobStatus) (sJetstream.JobStatus, milestoneWriteOutcome, error) {
-	revision, milestoneStatus, err := sJetstream.GetMilestoneKV(milestoneKV, jobID)
-	if err != nil {
-		return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", err)
-	}
-	if milestoneStatus.State == "" {
-		return sJetstream.JobStatus{}, milestoneNotFound, nil
+	var err error
+	for attempt := range maxMilestoneAttempts {
+		if ctx.Err() != nil {
+			return sJetstream.JobStatus{}, milestoneError, ctx.Err()
+		}
+
+		revision, milestoneStatus, getErr := sJetstream.GetMilestoneKV(milestoneKV, jobID)
+		if getErr != nil {
+			return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", getErr)
+		}
+		if milestoneStatus.State == "" {
+			return sJetstream.JobStatus{}, milestoneNotFound, nil
+		}
+
+		toWrite := newStatus
+		if toWrite.Stage == "" {
+			toWrite.Stage = milestoneStatus.Stage
+		}
+
+		if sJetstream.IsStaleTransition(milestoneStatus, toWrite) {
+			return milestoneStatus, milestoneSkipped, nil
+		}
+
+		newValue, marshalErr := json.Marshal(toWrite)
+		if marshalErr != nil {
+			return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", marshalErr)
+		}
+
+		_, err = milestoneKV.Update(ctx, jobID, newValue, revision)
+		if err == nil {
+			return toWrite, milestoneWritten, nil
+		}
+		if !errors.Is(err, jetstream.ErrKeyExists) {
+			return sJetstream.JobStatus{}, milestoneError, err
+		}
+
+		// revision changed concurrently, back off briefly then reread and compare again
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
 	}
 
-	toWrite := newStatus
-	if toWrite.Stage == "" {
-		toWrite.Stage = milestoneStatus.Stage
-	}
-
-	if sJetstream.IsStaleTransition(milestoneStatus, toWrite) {
-		return milestoneStatus, milestoneSkipped, nil
-	}
-
-	newValue, err := json.Marshal(toWrite)
-	if err != nil {
-		return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", err)
-	}
-
-	_, err = milestoneKV.Update(ctx, jobID, newValue, revision)
-	if err != nil {
-		return sJetstream.JobStatus{}, milestoneError, err
-	}
-
-	return toWrite, milestoneWritten, nil
+	return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("milestone update conflicted %d times: %w", maxMilestoneAttempts, err)
 }
 
 type jobStatusResponse struct {
