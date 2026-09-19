@@ -347,11 +347,6 @@ func TestCancelProcessing(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), "failed to update current stage for jobID as CANCELLED")
 	})
 
-	// Write-policy branching (not found / terminal skip / stage-order skip / errors) is
-	// TryUpdateMilestone's own logic and is covered by TestTryUpdateMilestoneWritePolicy
-	// and TestTryUpdateMilestoneErrors in the shared jetstream package. What's left here
-	// is just this route's own outcome -> HTTP response mapping, plus its own retry loop.
-
 	t.Run("terminal state returns 200 with the existing status and update never called", func(t *testing.T) {
 		kv := NewMockKV()
 		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateCancelled, Stage: "scene-detector"})

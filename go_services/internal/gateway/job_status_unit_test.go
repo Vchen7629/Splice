@@ -132,31 +132,31 @@ func TestTryUpdateMilestone(t *testing.T) {
 		},
 		{
 			name:        "writes when new stage is ahead of current",
-			current:     &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
 			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"},
 			wantOutcome: milestoneWritten,
 		},
 		{
 			name:        "skips when new stage is behind current",
-			current:     &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
 			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
 			name:        "skips on existing terminal COMPLETE",
-			current:     &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
 			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
 			name:        "skips on existing terminal FAILED",
-			current:     &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
 			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
 			name:        "skips on existing terminal CANCELLED",
-			current:     &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
 			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
 			wantOutcome: milestoneSkipped,
 		},
@@ -165,7 +165,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 			// guard would otherwise reject it (a terminal newStatus has no ranked stage of its
 			// own unless inherited, so it must bypass the ordinal comparison entirely).
 			name:        "writes terminal status even when current stage is furthest along",
-			current:     &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
 			newStatus:   sJetstream.JobStatus{State: "CANCELLED"},
 			wantOutcome: milestoneWritten,
 		},
@@ -181,8 +181,19 @@ func TestTryUpdateMilestone(t *testing.T) {
 		})
 	}
 
+	// an existing entry that decodes to an empty state must not be mistaken for a missing key
+	t.Run("existing entry with empty state is updated, not reported as not found", func(t *testing.T) {
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 3, GetValue: []byte(`{}`)}
+
+		_, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"})
+
+		require.NoError(t, err)
+		assert.Equal(t, milestoneWritten, outcome)
+		assert.Equal(t, uint64(3), mockKV.UpdateRevision)
+	})
+
 	t.Run("inherits current stage when newStatus.Stage is empty", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)}
 
 		result, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "COMPLETE"})
 
@@ -192,7 +203,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 	})
 
 	t.Run("keeps explicit stage over the inherited current stage", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)}
 
 		result, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "COMPLETE", Stage: "video-recombiner"})
 
@@ -210,8 +221,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 		mockKV *test.MockKV
 	}{
 		{"Get fails", &test.MockKV{GetErr: errors.New("kv unavailable")}},
-		{"malformed JSON in stored entry", &test.MockKV{GetFound: true, GetValue: []byte("not valid json{{")}},
-		{"Update fails", &test.MockKV{GetFound: true, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
+		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
 	}
 
 	for _, tc := range errorTests {
@@ -226,7 +236,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 	}
 
 	t.Run("Persistent update conflict gives up after max attempts and surfaces ErrKeyExists", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetValue: transcoderValue, UpdateErr: jetstream.ErrKeyExists}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: jetstream.ErrKeyExists}
 		newStatus := sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"}
 
 		_, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", newStatus)
@@ -254,7 +264,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 	})
 
 	t.Run("Cancelled context returns without attempting an update", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetValue: transcoderValue}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 

@@ -75,7 +75,7 @@ func tryUpdateMilestone(ctx context.Context, milestoneKV jetstream.KeyValue, job
 		if getErr != nil {
 			return sJetstream.JobStatus{}, milestoneError, fmt.Errorf("failed: %w", getErr)
 		}
-		if milestoneStatus.State == "" {
+		if revision == 0 {
 			return sJetstream.JobStatus{}, milestoneNotFound, nil
 		}
 
