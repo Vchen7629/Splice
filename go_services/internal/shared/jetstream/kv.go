@@ -124,7 +124,7 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus JobStatus) 
 		if err != nil {
 			return fmt.Errorf("failed: %w", err)
 		}
-		if jobStatus.State == "" {
+		if revision == 0 {
 			_, err = kv.Create(ctx, jobID, newValue)
 			if errors.Is(err, jetstream.ErrKeyExists) {
 				continue // lost create race, reread and compare against winner
