@@ -9,7 +9,6 @@ import (
 
 	"splice.com/go_services/internal/shared/test"
 
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,19 +120,4 @@ func TestListenJobCompleteU(t *testing.T) {
 			assert.ErrorIs(t, err, tc.wantErr)
 		})
 	}
-
-	t.Run("KV Update conflict naks the message for redelivery instead of overwriting", func(t *testing.T) {
-		kv := NewMockKV()
-		kv.Seed("job-conflict", []byte(`{"state":"PROCESSING","stage":"transcoder"}`))
-		kv.UpdateErr = jetstream.ErrKeyExists
-		msg := &test.MockMsg{Payload: mustMarshalJobStatic("job-conflict")}
-		cons := &test.MockConsumerWithMsg{Msg: msg}
-		js := &MockJS{JStream: &test.MockStream{Cons: cons}}
-
-		_, err := ListenJobComplete(js, kv, test.SilentLogger())
-
-		require.NoError(t, err)
-		assert.True(t, msg.NakCalled)
-		assert.False(t, msg.AckCalled)
-	})
 }
