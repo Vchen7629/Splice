@@ -156,8 +156,8 @@ func TestClaimChunk(t *testing.T) {
 
 // For job milestone kv related tests
 
-func TestAdvanceMilestoneWritePolicy(t *testing.T) {
-	tests := []struct {
+func TestAdvanceMilestone(t *testing.T) {
+	writePolicyTests := []struct {
 		name      string
 		current   *test.MockKV
 		newStatus JobStatus
@@ -201,7 +201,7 @@ func TestAdvanceMilestoneWritePolicy(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range writePolicyTests {
 		t.Run(tc.name, func(t *testing.T) {
 			err := AdvanceMilestone(tc.current, "job-1", tc.newStatus)
 
@@ -210,12 +210,22 @@ func TestAdvanceMilestoneWritePolicy(t *testing.T) {
 			assert.Equal(t, tc.wantWrite, wrote)
 		})
 	}
-}
 
-func TestAdvanceMilestoneErrors(t *testing.T) {
+	// it shouldnt be mistaken for missing key
+	t.Run("existing entry that decodes to an empty state must be updated at its revision", func(t *testing.T) {
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 3, GetValue: []byte(`{}`)}
+
+		err := AdvanceMilestone(mockKV, "job-1", JobStatus{State: "PROCESSING", Stage: "transcoder"})
+
+		require.NoError(t, err)
+		assert.Empty(t, mockKV.CreateKey)
+		assert.Equal(t, "job-1", mockKV.UpdateKey)
+		assert.Equal(t, uint64(3), mockKV.UpdateRevision)
+	})
+
 	transcoderValue := []byte(`{"state":"PROCESSING","stage":"transcoder"}`)
 
-	tests := []struct {
+	errorTests := []struct {
 		name   string
 		mockKV *test.MockKV
 	}{
@@ -224,7 +234,7 @@ func TestAdvanceMilestoneErrors(t *testing.T) {
 		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range errorTests {
 		t.Run(tc.name, func(t *testing.T) {
 			newStatus := JobStatus{State: "PROCESSING", Stage: "video-recombiner"}
 
