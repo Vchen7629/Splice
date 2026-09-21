@@ -1,16 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"splice.com/go_services/internal/recombiner"
-	shandler "splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/service"
 
@@ -32,7 +29,7 @@ var osExit = os.Exit
 
 type Config struct {
 	service.BaseConfig
-	HTTPPort       string `envconfig:"HTTP_PORT" default:"9090"`
+	HTTPPort string `envconfig:"HTTP_PORT" default:"9090"`
 }
 
 func main() {
@@ -54,39 +51,10 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runCombiner(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, logger, cfg.BaseStorageURL, cfg.HTTPPort, quit)
+	err = service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
+		return recombiner.RecombineVideo(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, cfg.BaseStorageURL)
+	}, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
-}
-
-type ncDrainer interface {
-	Drain() error
-	shandler.Publisher
-}
-
-func runCombiner(
-	js jetstream.JetStream,
-	nc ncDrainer,
-	msgRecievedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
-	logger *slog.Logger,
-	baseStorageURL, httpPort string,
-	quit <-chan os.Signal,
-) error {
-	logger.Debug("starting service...")
-
-	server := shandler.StartHealthHttpServer(logger, httpPort)
-
-	consCtx, err := recombiner.RecombineVideo(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, baseStorageURL)
-	if err != nil {
-		shandler.ShutdownHttpServer(server, logger)
-		return fmt.Errorf("failed to start subscriber/publisher: %w", err)
-	}
-
-	<-quit
-
-	shandler.ShutdownHttpServer(server, logger)
-
-	consCtx.Stop()
-	return nc.Drain()
 }

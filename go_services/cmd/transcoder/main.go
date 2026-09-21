@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,7 +9,6 @@ import (
 
 	"splice.com/go_services/internal/shared/service"
 
-	shandler "splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/transcoder"
 
@@ -33,7 +30,7 @@ var osExit = os.Exit
 
 type Config struct {
 	service.BaseConfig
-	HTTPPort       string `envconfig:"HTTP_PORT" default:"9095"`
+	HTTPPort string `envconfig:"HTTP_PORT" default:"9095"`
 }
 
 func main() {
@@ -55,41 +52,10 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobMilestoneKV, claimKV, js, nc, chunkAckWait, logger, quit)
+	err = service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
+		return transcoder.ConsumeVideoChunk(cfg.BaseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
+	}, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
-}
-
-type ncDrainer interface {
-	Drain() error
-	shandler.Publisher
-}
-
-// run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
-func runProcessing(
-	baseStorageURL, httpPort string,
-	processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
-	js jetstream.JetStream,
-	nc ncDrainer,
-	chunkAckWait time.Duration,
-	logger *slog.Logger,
-	quit <-chan os.Signal,
-) error {
-	logger.Debug("starting service")
-
-	server := shandler.StartHealthHttpServer(logger, httpPort)
-
-	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
-	if err != nil {
-		shandler.ShutdownHttpServer(server, logger)
-		return fmt.Errorf("failed to start consumer: %w", err)
-	}
-
-	<-quit
-
-	shandler.ShutdownHttpServer(server, logger)
-
-	consCtx.Stop() // stop recieving new msgs from jetstream
-	return nc.Drain()
 }

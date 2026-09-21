@@ -1,10 +1,13 @@
 package service
 
 import (
+	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/storage"
 )
@@ -40,4 +43,31 @@ func Connect(serviceName string, cfg BaseConfig) (*nats.Conn, jetstream.JetStrea
 	}
 
 	return nc, js, logger, nil
+}
+
+type ncDrainer interface {
+	Drain() error
+	handler.Publisher
+}
+
+type StartConsumer func() (jetstream.ConsumeContext, error)
+
+// starts the service health http server, starts the processing loop
+// and handles cleanup when quit is reached
+func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, quit <-chan os.Signal) error {
+	logger.Debug("starting service")
+
+	server := handler.StartHealthHttpServer(logger, httpPort)
+
+	consCtx, err := start()
+	if err != nil {
+		handler.ShutdownHttpServer(server, logger)
+		return fmt.Errorf("failed to start consumer: %w", err)
+	}
+
+	<-quit
+
+	handler.ShutdownHttpServer(server, logger)
+	consCtx.Stop() // stop recieving new msgs from jetstream
+	return nc.Drain()
 }
