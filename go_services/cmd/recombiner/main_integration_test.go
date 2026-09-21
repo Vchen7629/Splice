@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"splice.com/go_services/internal/recombiner"
 	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/test"
 	"syscall"
 	"testing"
@@ -33,30 +35,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestRunCombinerI(t *testing.T) {
-	t.Run("quit signal exits cleanly", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
-		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-		jobStatusKV := test.SetupJobMilestoneKV(t, js)
-		claimKV := test.SetupKV(t, js, "recombine-chunk-claims")
-		quit := make(chan os.Signal, 1)
-		done := make(chan error, 1)
-
-		go func() {
-			done <- runCombiner(js, nc, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL, "0", quit)
-		}()
-
-		time.Sleep(200 * time.Millisecond)
-		quit <- syscall.SIGTERM
-
-		select {
-		case err := <-done:
-			assert.NoError(t, err)
-		case <-time.After(5 * time.Second):
-			t.Fatal("runCombiner did not exit after quit signal")
-		}
-	})
-
+func TestRecombinerServiceI(t *testing.T) {
 	t.Run("no stream returns error", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 
@@ -64,7 +43,9 @@ func TestRunCombinerI(t *testing.T) {
 		require.NoError(t, err)
 
 		quit := make(chan os.Signal, 1)
-		err = runCombiner(js, nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, test.SilentLogger(), sharedFilerURL, "0", quit)
+		err = service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
+			return recombiner.RecombineVideo(js, nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, chunkAckWait, test.SilentLogger(), sharedFilerURL)
+		}, quit)
 
 		assert.Error(t, err)
 	})
@@ -103,7 +84,9 @@ func TestRunCombinerI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- runCombiner(js, nc, kv, jobStatusKV, claimKV, test.SilentLogger(), sharedFilerURL, "0", quit)
+			done <- service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
+				return recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, chunkAckWait, test.SilentLogger(), sharedFilerURL)
+			}, quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -137,44 +120,13 @@ func TestRunCombinerI(t *testing.T) {
 		case err := <-done:
 			assert.NoError(t, err)
 		case <-time.After(5 * time.Second):
-			t.Fatal("runCombiner did not exit after quit signal")
+			t.Fatal("service.Run did not exit after quit signal")
 		}
 	})
 }
 
-func TestKVSetup(t *testing.T) {
-	t.Run("CreateOrUpdateKeyValue fails when JetStream is not enabled", func(t *testing.T) {
-		nc := test.SetupNatsNoJetStream(t)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-
-		_, err = js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{Bucket: "recombine-chunk-recieved"})
-
-		assert.Error(t, err)
-	})
-}
-
 func TestMainI(t *testing.T) {
-	t.Run("storage unreachable exits with code 1", func(t *testing.T) {
-		code := test.PatchExit(t, &osExit)
-		test.WriteEnvFile(t, "BASE_STORAGE_URL=http://localhost:1\nNATS_URL=nats://localhost:4222\n")
-
-		main()
-
-		assert.Equal(t, 1, *code)
-	})
-
-	t.Run("nats unreachable exits with code 1", func(t *testing.T) {
-		code := test.PatchExit(t, &osExit)
-		test.WriteEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\n", sharedFilerURL))
-
-		main()
-
-		assert.Equal(t, 1, *code)
-	})
-
-	t.Run("reaches runCombiner and logs error on no stream", func(t *testing.T) {
+	t.Run("reaches service.Run and logs error on no stream", func(t *testing.T) {
 		ctx := context.Background()
 		container, err := natstc.Run(ctx, "nats:2.10-alpine")
 		require.NoError(t, err)

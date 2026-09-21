@@ -1,23 +1,17 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
-	shandler "splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/transcoder"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -35,10 +29,8 @@ const (
 var osExit = os.Exit
 
 type Config struct {
-	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
-	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
-	HTTPPort       string `envconfig:"HTTP_PORT" default:"9095"`
+	service.BaseConfig
+	HTTPPort string `envconfig:"HTTP_PORT" default:"9095"`
 }
 
 func main() {
@@ -47,25 +39,8 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "transcoder-worker")
-
-	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
+	nc, js, logger, err := service.Connect("transcoder-worker", cfg.BaseConfig)
 	if err != nil {
-		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
-		osExit(1)
-		return
-	}
-
-	nc, err := nats.Connect(cfg.NatsURL)
-	if err != nil {
-		logger.Error("unable to connect to nats", "err", err)
-		osExit(1)
-		return
-	}
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		logger.Error("unable to connect to jetstream", "err", err)
 		osExit(1)
 		return
 	}
@@ -77,41 +52,10 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = runProcessing(cfg.BaseStorageURL, cfg.HTTPPort, processedKV, jobMilestoneKV, claimKV, js, nc, chunkAckWait, logger, quit)
+	err = service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
+		return transcoder.ConsumeVideoChunk(cfg.BaseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
+	}, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
-}
-
-type ncDrainer interface {
-	Drain() error
-	shandler.Publisher
-}
-
-// run the subscriber and publisher and blocks so main doesnt exit after consumevideochunk retunrs
-func runProcessing(
-	baseStorageURL, httpPort string,
-	processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
-	js jetstream.JetStream,
-	nc ncDrainer,
-	chunkAckWait time.Duration,
-	logger *slog.Logger,
-	quit <-chan os.Signal,
-) error {
-	logger.Debug("starting service")
-
-	server := shandler.StartHealthHttpServer(logger, httpPort)
-
-	consCtx, err := transcoder.ConsumeVideoChunk(baseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
-	if err != nil {
-		shandler.ShutdownHttpServer(server, logger)
-		return fmt.Errorf("failed to start consumer: %w", err)
-	}
-
-	<-quit
-
-	shandler.ShutdownHttpServer(server, logger)
-
-	consCtx.Stop() // stop recieving new msgs from jetstream
-	return nc.Drain()
 }

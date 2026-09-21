@@ -10,9 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
+	"splice.com/go_services/internal/shared/service"
 	stest "splice.com/go_services/internal/shared/test"
 )
 
@@ -41,14 +44,20 @@ func TestRunGateway_MissingJobsStream(t *testing.T) {
 	natsURL, err := container.ConnectionString(ctx)
 	require.NoError(t, err)
 
+	nc, err := nats.Connect(natsURL)
+	require.NoError(t, err)
+	t.Cleanup(nc.Close)
+
+	js, err := jetstream.New(nc)
+	require.NoError(t, err)
+
 	cfg := &Config{
-		StorageURL: sharedStorageURL,
-		NatsURL:    natsURL,
+		BaseConfig: service.BaseConfig{BaseStorageURL: sharedStorageURL, NatsURL: natsURL},
 		HTTPPort:   stest.FreePort(t),
 	}
 
 	quit := make(chan os.Signal)
-	err = runGateway(cfg, stest.SilentLogger(), quit)
+	err = runGateway(cfg, nc, js, stest.SilentLogger(), quit)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "job complete stream")
@@ -61,8 +70,7 @@ func TestRunGateway_Lifecycle(t *testing.T) {
 	js, nc := stest.SetupNats(t)
 
 	cfg := &Config{
-		StorageURL: sharedStorageURL,
-		NatsURL:    nc.ConnectedUrl(),
+		BaseConfig: service.BaseConfig{BaseStorageURL: sharedStorageURL, NatsURL: nc.ConnectedUrl()},
 		HTTPPort:   stest.FreePort(t),
 	}
 	baseURL := "http://localhost:" + cfg.HTTPPort
@@ -70,7 +78,7 @@ func TestRunGateway_Lifecycle(t *testing.T) {
 	quit := make(chan os.Signal)
 	done := make(chan error, 1)
 	go func() {
-		done <- runGateway(cfg, stest.SilentLogger(), quit)
+		done <- runGateway(cfg, nc, js, stest.SilentLogger(), quit)
 	}()
 
 	require.Eventually(t, func() bool {

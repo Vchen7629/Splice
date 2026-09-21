@@ -123,9 +123,9 @@ func SetupPipeline(t *testing.T, numTranscoderWorkers int, filerURL string) (str
 	// them starts before the bucket exists, they os.Exit(1) immediately.
 	gatewayPort := FreePort(t)
 	StartGoService(t, gatewayBin, filepath.Join(servicesDir, "gateway"), map[string]string{
-		"NATS_URL":    natsURL,
-		"STORAGE_URL": filerURL,
-		"HTTP_PORT":   fmt.Sprintf("%d", gatewayPort),
+		"NATS_URL":         natsURL,
+		"BASE_STORAGE_URL": filerURL,
+		"HTTP_PORT":        fmt.Sprintf("%d", gatewayPort),
 	})
 	gatewayURL := fmt.Sprintf("http://127.0.0.1:%d", gatewayPort)
 	WaitForHTTP(t, gatewayURL+"/jobs/probe/status", 10*time.Second)
