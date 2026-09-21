@@ -20,7 +20,6 @@ type BaseConfig struct {
 
 // loads the service config from .env file, checks storage health (connectivity)
 // before connecting to nats and jetstream
-// used by both transcoder and recombiner services
 func Connect(serviceName string, cfg BaseConfig) (*nats.Conn, jetstream.JetStream, *slog.Logger, error) {
 	logger := middleware.StructuredLogger(cfg.ProdMode, serviceName)
 
@@ -54,6 +53,7 @@ type StartConsumer func() (jetstream.ConsumeContext, error)
 
 // starts the service health http server, starts the processing loop
 // and handles cleanup when quit is reached
+// used by transcoder and recombiner
 func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, quit <-chan os.Signal) error {
 	logger.Debug("starting service")
 
