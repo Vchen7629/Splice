@@ -4,11 +4,14 @@ package service_test
 
 import (
 	"os"
+	"syscall"
 	"testing"
+	"time"
 
 	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,5 +50,30 @@ func TestConnectI(t *testing.T) {
 		assert.NotNil(t, js)
 		assert.NotNil(t, logger)
 		assert.True(t, nc.IsConnected())
+	})
+}
+
+func TestRunI(t *testing.T) {
+	t.Run("quit signal stops consumer, drains real nats and exits cleanly", func(t *testing.T) {
+		_, nc := test.SetupNats(t)
+		consCtx := &test.MockConsumeCtx{}
+		start := func() (jetstream.ConsumeContext, error) { return consCtx, nil }
+		quit := make(chan os.Signal, 1)
+		done := make(chan error, 1)
+
+		go func() {
+			done <- service.Run(test.SilentLogger(), "0", nc, start, quit)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+		quit <- syscall.SIGTERM
+
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+			assert.True(t, consCtx.Stopped)
+		case <-time.After(5 * time.Second):
+			t.Fatal("Run did not exit after quit signal")
+		}
 	})
 }

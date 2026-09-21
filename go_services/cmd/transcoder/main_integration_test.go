@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/test"
 	"splice.com/go_services/internal/transcoder"
 	"syscall"
@@ -34,30 +35,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestRunProcessingI(t *testing.T) {
-	t.Run("quit signal exits cleanly", func(t *testing.T) {
-		js, nc := test.SetupNats(t)
-		kv := test.SetupKV(t, js, "chunk-processed")
-		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
-		quit := make(chan os.Signal, 1)
-		done := make(chan error, 1)
-
-		go func() {
-			done <- runProcessing(sharedFilerURL, "0", kv, jobMilestoneKV, claimKV, js, nc, chunkAckWait, test.SilentLogger(), quit)
-		}()
-
-		time.Sleep(200 * time.Millisecond)
-		quit <- syscall.SIGTERM
-
-		select {
-		case err := <-done:
-			assert.NoError(t, err)
-		case <-time.After(5 * time.Second):
-			t.Fatal("runProcessing did not exit after quit signal")
-		}
-	})
-
+func TestTranscoderServiceI(t *testing.T) {
 	t.Run("full flow receives transcode message and publishes downstream", func(t *testing.T) {
 		if _, err := exec.LookPath("ffmpeg"); err != nil {
 			t.Skip("ffmpeg not available")
@@ -89,7 +67,9 @@ func TestRunProcessingI(t *testing.T) {
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 		go func() {
-			done <- runProcessing(sharedFilerURL, "0", kv, jobMilestoneKV, claimKV, js, nc, chunkAckWait, test.SilentLogger(), quit)
+			done <- service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
+				return transcoder.ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, chunkAckWait, test.SilentLogger())
+			}, quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -123,7 +103,7 @@ func TestRunProcessingI(t *testing.T) {
 		case err := <-done:
 			assert.NoError(t, err)
 		case <-time.After(5 * time.Second):
-			t.Fatal("runProcessing did not exit after quit signal")
+			t.Fatal("service.Run did not exit after quit signal")
 		}
 	})
 
@@ -147,14 +127,16 @@ func TestRunProcessingI(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		err = runProcessing(sharedFilerURL, "0", &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, js, nc, chunkAckWait, test.SilentLogger(), quit)
+		err = service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
+			return transcoder.ConsumeVideoChunk(sharedFilerURL, nc, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, chunkAckWait, test.SilentLogger())
+		}, quit)
 
 		assert.Error(t, err)
 	})
 }
 
 func TestMainI(t *testing.T) {
-	t.Run("reaches runProcessing and logs error on no stream", func(t *testing.T) {
+	t.Run("reaches service.Run and logs error on no stream", func(t *testing.T) {
 		ctx := context.Background()
 		container, err := natstc.Run(ctx, "nats:2.10-alpine")
 		require.NoError(t, err)
