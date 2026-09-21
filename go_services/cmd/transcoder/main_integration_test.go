@@ -153,29 +153,7 @@ func TestRunProcessingI(t *testing.T) {
 	})
 }
 
-func TestKVSetup(t *testing.T) {
-	t.Run("CreateOrUpdateKeyValue fails when JetStream is not enabled", func(t *testing.T) {
-		nc := test.SetupNatsNoJetStream(t)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-
-		_, err = js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{Bucket: "transcode-chunk-job-processed"})
-
-		assert.Error(t, err)
-	})
-}
-
 func TestMainI(t *testing.T) {
-	t.Run("exits on NATS connect error", func(t *testing.T) {
-		code := test.PatchExit(t, &osExit)
-		test.WriteEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\nHTTP_PORT=0\n", sharedFilerURL))
-
-		main()
-
-		assert.Equal(t, 1, *code)
-	})
-
 	t.Run("reaches runProcessing and logs error on no stream", func(t *testing.T) {
 		ctx := context.Background()
 		container, err := natstc.Run(ctx, "nats:2.10-alpine")

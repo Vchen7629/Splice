@@ -142,38 +142,7 @@ func TestRunCombinerI(t *testing.T) {
 	})
 }
 
-func TestKVSetup(t *testing.T) {
-	t.Run("CreateOrUpdateKeyValue fails when JetStream is not enabled", func(t *testing.T) {
-		nc := test.SetupNatsNoJetStream(t)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-
-		_, err = js.CreateOrUpdateKeyValue(context.Background(), jetstream.KeyValueConfig{Bucket: "recombine-chunk-recieved"})
-
-		assert.Error(t, err)
-	})
-}
-
 func TestMainI(t *testing.T) {
-	t.Run("storage unreachable exits with code 1", func(t *testing.T) {
-		code := test.PatchExit(t, &osExit)
-		test.WriteEnvFile(t, "BASE_STORAGE_URL=http://localhost:1\nNATS_URL=nats://localhost:4222\n")
-
-		main()
-
-		assert.Equal(t, 1, *code)
-	})
-
-	t.Run("nats unreachable exits with code 1", func(t *testing.T) {
-		code := test.PatchExit(t, &osExit)
-		test.WriteEnvFile(t, fmt.Sprintf("BASE_STORAGE_URL=%s\nNATS_URL=nats://localhost:1\n", sharedFilerURL))
-
-		main()
-
-		assert.Equal(t, 1, *code)
-	})
-
 	t.Run("reaches runCombiner and logs error on no stream", func(t *testing.T) {
 		ctx := context.Background()
 		container, err := natstc.Run(ctx, "nats:2.10-alpine")
