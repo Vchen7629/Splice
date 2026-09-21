@@ -12,11 +12,8 @@ import (
 	"splice.com/go_services/internal/recombiner"
 	shandler "splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
-	"splice.com/go_services/internal/shared/storage"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -34,10 +31,8 @@ const (
 var osExit = os.Exit
 
 type Config struct {
+	service.BaseConfig
 	HTTPPort       string `envconfig:"HTTP_PORT" default:"9090"`
-	NatsURL        string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	ProdMode       bool   `envconfig:"PROD_MODE" default:"false"`
-	BaseStorageURL string `envconfig:"BASE_STORAGE_URL" default:"http://localhost:8888"`
 }
 
 func main() {
@@ -46,25 +41,8 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "video-recombiner")
-
-	err = storage.CheckHealth(cfg.BaseStorageURL, logger)
+	nc, js, logger, err := service.Connect("video-recombiner", cfg.BaseConfig)
 	if err != nil {
-		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
-		osExit(1)
-		return
-	}
-
-	nc, err := nats.Connect(cfg.NatsURL)
-	if err != nil {
-		logger.Error("unable to connect to nats", "err", err)
-		osExit(1)
-		return
-	}
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		logger.Error("unable to connect to jetstream", "err", err)
 		osExit(1)
 		return
 	}
