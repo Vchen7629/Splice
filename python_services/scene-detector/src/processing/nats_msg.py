@@ -4,7 +4,7 @@ from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
-from shared_core import get_logger, settings as shared_settings
+from shared_core import get_logger
 from shared_handler import (
     JobCancelledError,
     ProcessJobMessage,
@@ -53,7 +53,7 @@ async def process_msg(
         loop = asyncio.get_event_loop()
         reporter = ProgressReporter(nc, job_id, loop, service_name)
 
-        poll_interval = shared_settings.ACK_WAIT_S / 3
+        poll_interval = settings.ACK_WAIT_S / 3
         async with (
             keep_alive(msg, poll_interval, logger),
             check_cancel_event(job_milestone_kv, job_id, logger) as cancel_event,

@@ -11,7 +11,7 @@ from shared_handler import nats_connect
 async def test_connect_returns_connected_clients(
     nats_url: str, monkeypatch: Any
 ) -> None:
-    monkeypatch.setattr("shared_handler.connection.settings.NATS_URL", nats_url)
+    monkeypatch.setattr("shared_handler.connection.sharedsettings.NATS_URL", nats_url)
 
     nc, js = await nats_connect(service_name="scene-detector")
 

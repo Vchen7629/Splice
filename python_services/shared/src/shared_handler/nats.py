@@ -13,7 +13,7 @@ from nats.js.errors import APIError
 from nats.js.kv import KeyValue
 from structlog.stdlib import BoundLogger
 
-from shared_core import get_logger, settings
+from shared_core import get_logger, sharedsettings
 from shared_handler import UpscaleCompleteMsg, is_job_cancelled
 
 from .messages import VideoChunkMessage
@@ -97,7 +97,8 @@ async def consumer(
         durable=durable_name,
         queue=queue_name,
         config=ConsumerConfig(
-            max_deliver=settings.MAX_DELIVER_ATTEMPTS, ack_wait=settings.ACK_WAIT_S
+            max_deliver=sharedsettings.MAX_DELIVER_ATTEMPTS,
+            ack_wait=sharedsettings.ACK_WAIT_S,
         ),
     )
 

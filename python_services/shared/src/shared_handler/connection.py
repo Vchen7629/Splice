@@ -2,7 +2,7 @@ import nats.js.errors as js_errors
 from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
 
-from shared_core import get_logger, settings
+from shared_core import get_logger, sharedsettings
 
 
 async def check_js_stream_exists(js: JetStreamContext, subject_name: str) -> None:
@@ -25,7 +25,7 @@ async def check_js_stream_exists(js: JetStreamContext, subject_name: str) -> Non
 
 async def nats_connect(service_name: str) -> tuple[NATSClient, JetStreamContext]:
     """nats connection and jetstream context required for pub/sub"""
-    nats_url = settings.NATS_URL
+    nats_url = sharedsettings.NATS_URL
     logger = get_logger(service_name)
 
     async def _on_reconnect() -> None:
@@ -40,8 +40,8 @@ async def nats_connect(service_name: str) -> tuple[NATSClient, JetStreamContext]
     nats_client = NATSClient()
     await nats_client.connect(
         nats_url,
-        max_reconnect_attempts=settings.MAX_RECONNECT_ATTEMPT,
-        reconnect_time_wait=settings.RECONNECT_TIME_WAIT_S,
+        max_reconnect_attempts=sharedsettings.MAX_RECONNECT_ATTEMPT,
+        reconnect_time_wait=sharedsettings.RECONNECT_TIME_WAIT_S,
         reconnected_cb=_on_reconnect,
         disconnected_cb=_on_disconnect,
         error_cb=_on_error,

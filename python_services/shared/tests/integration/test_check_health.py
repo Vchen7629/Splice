@@ -11,7 +11,7 @@ def test_check_health_succeeds(
 ) -> None:
     """Passes without raising when SeaweedFS master and filer are reachable"""
     monkeypatch.setattr(
-        "shared_storage.check_health.settings.BASE_STORAGE_URL", seaweedfs_url
+        "shared_storage.check_health.sharedsettings.BASE_STORAGE_URL", seaweedfs_url
     )
     check_storage_health(service_name="scene-detector")
 
@@ -28,7 +28,7 @@ def test_check_health_raises_on_connection_error(
 ) -> None:
     """Raises ConnectionError when SeaweedFS is unreachable"""
     monkeypatch.setattr(
-        "shared_storage.check_health.settings.BASE_STORAGE_URL", bad_url
+        "shared_storage.check_health.sharedsettings.BASE_STORAGE_URL", bad_url
     )
     with pytest.raises(requests.ConnectionError):
         check_storage_health(service_name="scene-detector")
