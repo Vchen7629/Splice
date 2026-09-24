@@ -17,12 +17,13 @@ from .messages import (
 )
 from .nats import (
     check_cancel_event,
+    check_js_stream_exists,
     consumer,
     keep_alive,
     nats_connect,
     publisher,
-    check_js_stream_exists,
 )
+from .service import ServiceSettings, run_service
 
 __all__ = [
     "nats_connect",
@@ -47,4 +48,6 @@ __all__ = [
     "consumer",
     "publisher",
     "check_js_stream_exists",
+    "run_service",
+    "ServiceSettings",
 ]

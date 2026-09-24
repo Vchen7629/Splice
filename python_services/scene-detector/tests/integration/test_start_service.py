@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from nats.js import JetStreamContext
-from shared_handler import VideoChunkMessage
+from shared_handler import VideoChunkMessage, run_service
 
 from src.core.settings import settings
-from src.service import start_service
+from src.processing.nats_msg import process_msg
 
 
 @pytest.mark.asyncio
@@ -48,7 +48,9 @@ async def test_full_flow_publishes_chunks_downstream(
         return fake_chunks
 
     with patch("src.processing.nats_msg.process_job", side_effect=fake_process_job):
-        task = asyncio.create_task(start_service())
+        task = asyncio.create_task(
+            run_service(settings, "scene-split-processed", process_msg)
+        )
         await nc.publish(
             settings.SUB_SUBJECT,
             json.dumps(
@@ -97,7 +99,7 @@ async def test_raises_runtime_error_when_video_chunks_stream_not_found(
     with pytest.raises(
         RuntimeError, match="No stream found for `nonexistent.subject.xyz`"
     ):
-        await start_service()
+        await run_service(settings, "scene-split-processed", process_msg)
 
 
 @pytest.mark.asyncio
@@ -113,10 +115,10 @@ async def test_drain_called_in_finally_when_raw_videos_raises(
         raise RuntimeError("subscriber failed unexpectedly")
 
     with (
-        patch("src.service.consumer", side_effect=failing_consumer),
+        patch("shared_handler.service.consumer", side_effect=failing_consumer),
         pytest.raises(RuntimeError, match="subscriber failed unexpectedly"),
     ):
-        await start_service()
+        await run_service(settings, "scene-split-processed", process_msg)
 
     assert called
 
@@ -133,8 +135,10 @@ async def test_drain_called_in_finally_on_cancellation(
     async def hanging_consumer(*_args: Any, **_kwargs: Any) -> None:
         await asyncio.Event().wait()
 
-    with patch("src.service.consumer", side_effect=hanging_consumer):
-        task = asyncio.create_task(start_service())
+    with patch("shared_handler.service.consumer", side_effect=hanging_consumer):
+        task = asyncio.create_task(
+            run_service(settings, "scene-split-processed", process_msg)
+        )
         await asyncio.sleep(0.05)
         task.cancel()
         try:
@@ -166,7 +170,9 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
         await asyncio.Event().wait()
 
     with patch("src.processing.nats_msg.process_job", side_effect=slow_process_job):
-        task = asyncio.create_task(start_service())
+        task = asyncio.create_task(
+            run_service(settings, "scene-split-processed", process_msg)
+        )
         payload = json.dumps(
             {
                 "job_id": str(uuid.uuid4()),
@@ -193,13 +199,14 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 async def test_raises_before_nats_when_storage_unreachable(monkeypatch: Any) -> None:
     """Service raises and never connects to NATS when SeaweedFS is unreachable"""
     monkeypatch.setattr(
-        "shared_storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
+        "shared_storage.check_health.sharedsettings.BASE_STORAGE_URL",
+        "http://localhost:1",
     )
 
     with (
-        patch("src.service.nats_connect") as mock_nats_connect,
+        patch("shared_handler.service.nats_connect") as mock_nats_connect,
         pytest.raises(Exception),
     ):
-        await start_service()
+        await run_service(settings, "scene-split-processed", process_msg)
 
     mock_nats_connect.assert_not_called()

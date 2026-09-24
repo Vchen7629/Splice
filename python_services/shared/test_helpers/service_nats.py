@@ -8,7 +8,6 @@ from nats.js import JetStreamContext
 from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
-from src.core.settings import settings
 
 from test_helpers.nats import milestone_entry
 
@@ -17,6 +16,11 @@ from test_helpers.nats import milestone_entry
 async def js_context(
     nats_url: str,
 ) -> AsyncGenerator[tuple[Any, JetStreamContext], None]:
+    """Only used by scene-detector's and video-upscaling's own test suites
+    (registered via their conftest pytest_plugins), never by shared's own
+    tests — both have a src.core.settings module on their pythonpath."""
+    from src.core.settings import settings # type: ignore
+
     nc = await nats.connect(nats_url)
     js = nc.jetstream()
     try:
@@ -50,25 +54,13 @@ async def patched_start_service(
     mock_job_milestone_kv.update = AsyncMock()
 
     with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.start_health_server"),
-        patch("src.service.nats_connect", return_value=(nc, js)),
-        patch("src.service.connect_kv", return_value=mock_job_milestone_kv),
-        patch("src.service.create_kv", return_value=mock_kv),
+        patch("shared_handler.service.check_storage_health"),
+        patch("shared_handler.service.start_health_server"),
+        patch("shared_handler.service.nats_connect", return_value=(nc, js)),
+        patch("shared_handler.service.connect_kv", return_value=mock_job_milestone_kv),
+        patch("shared_handler.service.create_kv", return_value=mock_kv),
     ):
         yield nc, js
-
-
-@pytest.fixture
-def service_patches(mock_nats: tuple[MagicMock, MagicMock]) -> Any:
-    """Patches check_storage_health, start_health_server, and nats_connect with mocked nats"""
-    mock_nc, mock_js = mock_nats
-    with (
-        patch("src.service.check_storage_health"),
-        patch("src.service.start_health_server"),
-        patch("src.service.nats_connect", return_value=(mock_nc, mock_js)),
-    ):
-        yield mock_nc, mock_js
 
 
 @pytest.fixture
