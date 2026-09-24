@@ -1,4 +1,3 @@
-from .connection import check_js_stream_exists, nats_connect
 from .exceptions import JobCancelledError
 from .http import HealthEnpointHandler, start_health_server
 from .kv import (
@@ -16,9 +15,17 @@ from .messages import (
     UpscaleCompleteMsg,
     VideoChunkMessage,
 )
-from .nats import check_cancel_event, consumer, keep_alive, publisher
+from .nats import (
+    check_cancel_event,
+    consumer,
+    keep_alive,
+    nats_connect,
+    publisher,
+    check_js_stream_exists,
+)
 
 __all__ = [
+    "nats_connect",
     "check_js_stream_exists",
     "nats_connect",
     "JobCancelledError",
@@ -39,4 +46,5 @@ __all__ = [
     "check_cancel_event",
     "consumer",
     "publisher",
+    "check_js_stream_exists",
 ]

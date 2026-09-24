@@ -216,7 +216,8 @@ async def test_drain_called_on_cancellation(
 @pytest.mark.asyncio
 async def test_raises_before_nats_when_storage_unreachable(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "shared_storage.check_health.sharedsettings.BASE_STORAGE_URL", "http://localhost:1"
+        "shared_storage.check_health.sharedsettings.BASE_STORAGE_URL",
+        "http://localhost:1",
     )
 
     with (

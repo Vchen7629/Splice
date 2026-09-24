@@ -1,12 +1,13 @@
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+from shared_core.settings import SharedSettings
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 
 
-class Settings(BaseSettings):
+class Settings(SharedSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE)
 
     # general config
@@ -15,14 +16,9 @@ class Settings(BaseSettings):
     SERVICE_NAME: str = "video-upscaling"
 
     # Nats config
-    NATS_URL: str = "nats://localhost:4222"
     SUB_SUBJECT: str = "jobs.video.upscale"
     SUB_QUEUE_NAME: str = "video-upscaling-workers"
     PUB_SUBJECT: str = "jobs.complete"
-    MAX_DELIVER_ATTEMPTS: int = 3
-    ACK_WAIT_S: int = 30
-
-    BASE_STORAGE_URL: str = "http://localhost:8888"
 
 
 settings = Settings()

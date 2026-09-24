@@ -1,16 +1,17 @@
 import asyncio
 from typing import Any, AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
+from nats.errors import AuthorizationError, NoServersError, TimeoutError
 from nats.js.client import JetStreamContext
 from nats.js.errors import APIError, KeyNotFoundError
 from nats.js.kv import KeyValue
 from structlog.stdlib import BoundLogger
 
-from shared_handler import check_cancel_event, consumer
+from shared_handler import check_cancel_event, consumer, nats_connect
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_KV = AsyncMock(spec=KeyValue)
@@ -37,6 +38,34 @@ def make_mock_msg(job_id: str = "job-1") -> AsyncMock:
     msg.data = json.dumps({"job_id": job_id}).encode()
 
     return msg
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    argnames="exc", argvalues=[NoServersError(), AuthorizationError(), TimeoutError()]
+)
+async def test_nats_connect_raises_on_nats_failure(exc: Any) -> None:
+    """It should raise the error when caught"""
+    with patch("shared_handler.nats.NATSClient") as mock_client_class:
+        mock_instance = MagicMock(spec=NATSClient)
+        mock_instance.connect = AsyncMock(side_effect=exc)
+        mock_client_class.return_value = mock_instance
+        with pytest.raises(type(exc)):
+            await nats_connect(service_name="scene-detector")
+
+
+@pytest.mark.asyncio
+async def test_nats_connect_returns_nats_and_jetstream() -> None:
+    mock_js = MagicMock(spec=JetStreamContext)
+    mock_ns = MagicMock(spec=NATSClient)
+    mock_ns.connect = AsyncMock()
+    mock_ns.jetstream.return_value = mock_js
+
+    with patch("shared_handler.nats.NATSClient", return_value=mock_ns):
+        nc, js = await nats_connect(service_name="scene-detector")
+
+    assert nc is mock_ns
+    assert js is mock_js
 
 
 @pytest.mark.asyncio
