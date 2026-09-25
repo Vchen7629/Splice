@@ -2,10 +2,11 @@ from typing import Awaitable, Callable, Protocol
 
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
+from nats.js.api import ConsumerConfig
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
 
-from shared_core import get_logger
+from shared_core import get_logger, sharedsettings
 from shared_handler import (
     check_js_stream_exists,
     connect_kv,
@@ -55,15 +56,23 @@ async def run_service(
         job_milestone_kv = await connect_kv(js, "job-milestones")
         msg_processed_kv = await create_kv(js, processed_kv_name)
 
+        sub = await js.subscribe(
+            subject=settings.SUB_SUBJECT,
+            durable=settings.SUB_QUEUE_NAME,
+            queue=settings.SUB_QUEUE_NAME,
+            config=ConsumerConfig(
+                max_deliver=sharedsettings.MAX_DELIVER_ATTEMPTS,
+                ack_wait=sharedsettings.ACK_WAIT_S,
+            ),
+        )
+
         await consumer(
             logger,
             nc,
             js,
             msg_processed_kv,
             job_milestone_kv,
-            settings.SUB_SUBJECT,
-            settings.SUB_QUEUE_NAME,
-            settings.SUB_QUEUE_NAME,
+            sub,
             process_msg=process_msg_handler,
         )
     finally:

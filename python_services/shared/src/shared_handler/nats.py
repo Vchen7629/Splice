@@ -7,7 +7,6 @@ from typing import Any, AsyncGenerator, Awaitable, Callable
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 from nats.errors import TimeoutError
-from nats.js.api import ConsumerConfig
 from nats.js.client import JetStreamContext
 from nats.js.errors import APIError, NotFoundError
 from nats.js.kv import KeyValue
@@ -110,24 +109,12 @@ async def consumer(
     js: JetStreamContext,
     msg_processed_kv: KeyValue,
     job_milestone_kv: KeyValue,
-    sub_subject: str,
-    durable_name: str,
-    queue_name: str,
+    sub: JetStreamContext.PushSubscription,
     process_msg: Callable[
         [NATSClient, JetStreamContext, KeyValue, KeyValue, Msg], Awaitable[None]
     ],
 ) -> None:
-    """Nats jetstream consumer that subscribes to subject to process videos"""
-    sub = await js.subscribe(
-        subject=sub_subject,
-        durable=durable_name,
-        queue=queue_name,
-        config=ConsumerConfig(
-            max_deliver=sharedsettings.MAX_DELIVER_ATTEMPTS,
-            ack_wait=sharedsettings.ACK_WAIT_S,
-        ),
-    )
-
+    """Nats jetstream consumer that processes videos in the subscribed nats js"""
     async for msg in sub.messages:
         try:
             job_id = json.loads(msg.data)["job_id"]

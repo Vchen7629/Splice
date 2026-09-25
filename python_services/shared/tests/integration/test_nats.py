@@ -48,6 +48,12 @@ async def test_consumer_calls_process_msg_for_published_message(
 
     process_msg = AsyncMock(side_effect=_process_msg)
 
+    sub = await js.subscribe(
+        subject="jobs.video.scene-split",
+        durable="test-consumer",
+        queue="test-consumer",
+    )
+
     task = asyncio.create_task(
         consumer(
             MOCK_LOGGER,
@@ -55,9 +61,7 @@ async def test_consumer_calls_process_msg_for_published_message(
             js,
             kv,
             job_status_kv,
-            "jobs.video.scene-split",
-            "test-consumer",
-            "test-consumer",
+            sub,
             process_msg,
         )
     )
