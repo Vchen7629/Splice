@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from src.processing.video import (
-    extract_video_info,
+    _run_ffprobe,
     recombine_video_audio,
     video_decoder,
     video_downscale,
@@ -31,11 +31,11 @@ def _fake_recombine_proc() -> MagicMock:
 
 
 @pytest.mark.parametrize("bad_path", ["", None])
-def test_extract_video_info_raises_type_error_for_missing_path(
+def test_run_ffprobe_raises_type_error_for_missing_path(
     bad_path: str | None,
 ) -> None:
     with pytest.raises(TypeError, match="Missing video_path input"):
-        extract_video_info(bad_path)  # type: ignore[arg-type]
+        _run_ffprobe(bad_path)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("fps", [0, -1, -30.0])

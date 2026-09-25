@@ -28,18 +28,9 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     Raises:
         TypeError if the video_path is not provided
     """
-    if not video_path:
-        raise TypeError("Missing video_path input")
+    ffprobe = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,nb_frames")
 
-    probe = subprocess.run([
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height,r_frame_rate,nb_frames",
-        "-of", "csv=p=0",
-        video_path
-    ], capture_output=True, text=True, check=True)
-
-    w, h, fps_frac, nb_frames = probe.stdout.strip().split(",")
+    w, h, fps_frac, nb_frames = ffprobe.split(",")
 
     fps_num, fps_den = fps_frac.split("/")
     fps = float(fps_num) / float(fps_den)
@@ -47,15 +38,7 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     if nb_frames == "N/A":
         # some containers (e.g. webm from MediaRecorder) don't store a frame
         # count or duration in the header, so it has to be counted by decoding
-        count_probe = subprocess.run([
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-count_frames",
-            "-show_entries", "stream=nb_read_frames",
-            "-of", "csv=p=0",
-            video_path
-        ], capture_output=True, text=True, check=True)
-        nb_frames = count_probe.stdout.strip()
+        nb_frames = _run_ffprobe(video_path, "-select_streams", "v:0", "-count_frames", "-show_entries", "stream=nb_read_frames")
 
     return int(w), int(h), fps, int(nb_frames)
 
@@ -113,14 +96,7 @@ def recombine_video_audio(
 def _probe_duration_s(video_path: str) -> float:
     """Use ffprobe to get a video's duration in seconds, falling back to frame-count/fps for 
     containers (e.g. webm from MediaRecorder) that don't store a duration in their header"""
-    probe = subprocess.run([
-        "ffprobe", "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "csv=p=0",
-        video_path
-    ], capture_output=True, text=True, check=True)
-
-    duration = probe.stdout.strip()
+    duration = _run_ffprobe(video_path, "-show_entries", "format=duration")
     if duration != "N/A":
         return float(duration)
 
@@ -135,6 +111,18 @@ def _parse_out_time_s(line: str) -> Optional[float]:
         return None
     h, m, s = value.split(":")
     return int(h) * 3600 + int(m) * 60 + float(s)
+
+
+# maps ffprobe codec_name to matching NVDEC (cuvid) decoder
+_CUVID_DECODERS = {
+    "h264": "h264_cuvid",
+    "hevc": "hevc_cuvid",
+    "vp8": "vp8_cuvid",
+    "vp9": "vp9_cuvid",
+    "mpeg2video": "mpeg2_cuvid",
+    "mpeg4": "mpeg4_cuvid",
+    "av1": "av1_cuvid"
+}
 
 
 def video_decoder(video_path: str) -> Popen[bytes]:
@@ -154,7 +142,7 @@ def video_decoder(video_path: str) -> Popen[bytes]:
     """
     hwaccel_args: list[str] = []
     if torch.cuda.is_available():
-        codec = _probe_video_codec(video_path)
+        codec = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=codec_name")
         cuvid_decoder = _CUVID_DECODERS.get(codec)
         if cuvid_decoder is not None:
             hwaccel_args = ["-hwaccel", "cuda", "-c:v", cuvid_decoder]
@@ -165,28 +153,6 @@ def video_decoder(video_path: str) -> Popen[bytes]:
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
-# maps ffprobe codec_name to matching NVDEC (cuvid) decoder
-_CUVID_DECODERS = {
-    "h264": "h264_cuvid",
-    "hevc": "hevc_cuvid",
-    "vp8": "vp8_cuvid",
-    "vp9": "vp9_cuvid",
-    "mpeg2video": "mpeg2_cuvid",
-    "mpeg4": "mpeg4_cuvid",
-    "av1": "av1_cuvid"
-}
-
-def _probe_video_codec(video_path: str) -> str:
-    """Use ffprobe to get the video stream's codec name"""
-    probe = subprocess.run([
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name",
-        "-of", "csv=p=0",
-        video_path
-    ], capture_output=True, text=True, check=True)
-
-    return probe.stdout.strip()
 
 def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[bytes]:
     """
@@ -370,6 +336,22 @@ def video_upscale(
     t_enc = time.perf_counter() - t_enc_start
 
     log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
+
+
+def _run_ffprobe(video_path: str, *extra_args: str) -> str:
+    """helper to run ffprobe to extract video info like duration, codec etc"""
+    if not video_path:
+        raise TypeError("Missing video_path input")
+
+    probe = subprocess.run([
+        "ffprobe", "-v", "error",
+        *extra_args,
+        "-of", "csv=p=0",
+        video_path
+    ], capture_output=True, text=True, check=True)
+
+    return probe.stdout.strip()
+
 
 def _cleanup_upscale_resources(
     decoder: Popen[bytes], 
