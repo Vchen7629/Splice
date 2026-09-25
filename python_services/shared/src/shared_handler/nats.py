@@ -65,10 +65,7 @@ async def keep_alive(
     try:
         yield task
     finally:
-        try:
-            task.cancel()
-        except Exception as e:  # keep-alive is best-effort
-            logger.warning("failed to extend ack deadline", err=str(e))
+        task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
 

@@ -19,7 +19,7 @@ async def js_context(
     """Only used by scene-detector's and video-upscaling's own test suites
     (registered via their conftest pytest_plugins), never by shared's own
     tests — both have a src.core.settings module on their pythonpath."""
-    from src.core.settings import settings # type: ignore
+    from src.core.settings import settings  # type: ignore
 
     nc = await nats.connect(nats_url)
     js = nc.jetstream()
