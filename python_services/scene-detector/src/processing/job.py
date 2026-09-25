@@ -57,8 +57,6 @@ async def process_job(
                 chunks_dir,
                 on_progress,
             )
-        except JobCancelledError:
-            raise
         except VideoOpenFailure as e:
             logger.error("could not open video", job_id=metadata.job_id, err=str(e))
             raise
