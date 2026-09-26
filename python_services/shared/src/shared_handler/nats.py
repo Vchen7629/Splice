@@ -103,7 +103,8 @@ async def check_cancel_event(
         try:
             await task
         except asyncio.CancelledError:
-            if asyncio.current_task().cancelling():
+            current_task = asyncio.current_task()
+            if current_task is not None and current_task.cancelling():
                 raise
 
 
