@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import json
+from dataclasses import dataclass
 from threading import Event
 from typing import Any, AsyncGenerator, Awaitable, Callable
 
@@ -13,8 +14,10 @@ from nats.js.kv import KeyValue
 from structlog.stdlib import BoundLogger
 
 from shared_core import get_logger, sharedsettings
-from shared_handler import UpscaleCompleteMsg, is_job_cancelled
+from shared_handler import ProcessJobMessage, UpscaleCompleteMsg, is_job_cancelled
 
+from .exceptions import JobCancelledError
+from .kv import check_already_processed, update_job_failed, update_job_stage
 from .messages import VideoChunkMessage
 
 
@@ -48,9 +51,7 @@ async def nats_connect(service_name: str) -> tuple[NATSClient, JetStreamContext]
 
 
 @contextlib.asynccontextmanager
-async def keep_alive(
-    msg: Msg, interval: float, logger: BoundLogger
-) -> AsyncGenerator[Any, None]:
+async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[Any, None]:
     """Periodically calls msg.in_progress() to extend the Jetstream ack deadline,
     and subscribes to cancel.{job_id} for the duration of the work, setting
     cancel_event when a cancel broadcast arrives so long-running loops can check it."""
@@ -99,35 +100,111 @@ async def check_cancel_event(
         yield cancel_event
     finally:
         task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        try:
             await task
+        except asyncio.CancelledError:
+            if asyncio.current_task().cancelling():
+                raise
+
+
+@dataclass
+class BaseNatsJSContext:
+    nc: NATSClient
+    js: JetStreamContext
+    msg_processed_kv: KeyValue
+    job_milestone_kv: KeyValue
+
+
+@dataclass
+class ProcessJobMsgContext(BaseNatsJSContext):
+    metadata: ProcessJobMessage
+
+
+@dataclass
+class JobMsgContext(BaseNatsJSContext):
+    service_name: str
+    logger: BoundLogger
 
 
 async def consumer(
-    logger: BoundLogger,
-    nc: NATSClient,
-    js: JetStreamContext,
-    msg_processed_kv: KeyValue,
-    job_milestone_kv: KeyValue,
+    ctx: JobMsgContext,
     sub: JetStreamContext.PushSubscription,
-    process_msg: Callable[
-        [NATSClient, JetStreamContext, KeyValue, KeyValue, Msg], Awaitable[None]
-    ],
+    process_job_msg: Callable[[ProcessJobMsgContext, Event], Awaitable[None]],
+    cleanup_job: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """Nats jetstream consumer that processes videos in the subscribed nats js"""
     async for msg in sub.messages:
         try:
             job_id = json.loads(msg.data)["job_id"]
         except Exception as e:
-            logger.error("malformed nats msg, terminating", err=str(e))
+            ctx.logger.error("malformed nats msg, terminating", err=str(e))
             await msg.term()
             continue
 
-        if job_id and await is_job_cancelled(job_milestone_kv, job_id):
+        if job_id and await is_job_cancelled(ctx.job_milestone_kv, job_id):
             await msg.term()
             continue
 
-        await process_msg(nc, js, msg_processed_kv, job_milestone_kv, msg)
+        await _handle_consumer_message(ctx, msg, process_job_msg, cleanup_job)
+
+
+async def _handle_consumer_message(
+    ctx: JobMsgContext,
+    msg: Msg,
+    process_job_msg: Callable[[ProcessJobMsgContext, Event], Awaitable[None]],
+    cleanup_job: Callable[[str], Awaitable[None]] | None = None,
+) -> None:
+    """TODO: docstring"""
+    metadata: ProcessJobMessage | None = None
+    needs_nak = False
+
+    try:
+        metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
+        job_id = metadata.job_id
+
+        if await check_already_processed(ctx.msg_processed_kv, job_id):
+            ctx.logger.debug("job already processed, skipping", job_id=job_id)
+            await msg.ack()
+            return
+
+        await update_job_stage(
+            ctx.job_milestone_kv, job_id, ctx.service_name, ctx.service_name
+        )
+
+        poll_interval = sharedsettings.ACK_WAIT_S / 3
+        async with (
+            keep_alive(msg, poll_interval),
+            check_cancel_event(
+                ctx.job_milestone_kv, job_id, ctx.logger
+            ) as cancel_event,
+        ):
+            processJobMsgCtx = ProcessJobMsgContext(
+                ctx.nc, ctx.js, ctx.msg_processed_kv, ctx.job_milestone_kv, metadata
+            )
+
+            await process_job_msg(processJobMsgCtx, cancel_event)
+
+        await ctx.msg_processed_kv.put(job_id, b"done")
+        await msg.ack()
+    except JobCancelledError as e:
+        ctx.logger.debug("job cancelled during processing", err=str(e))
+        await msg.ack()
+    except Exception as e:
+        ctx.logger.error("unexpected error processing job", err=str(e))
+        if metadata is not None:
+            try:
+                await update_job_failed(
+                    ctx.job_milestone_kv, metadata.job_id, str(e), ctx.service_name
+                )
+            except Exception:
+                needs_nak = True
+        if not needs_nak:
+            await msg.ack()
+    finally:
+        if cleanup_job is not None and metadata is not None:
+            await cleanup_job(metadata.job_id)
+        if needs_nak:
+            await msg.nak()
 
 
 async def publisher(

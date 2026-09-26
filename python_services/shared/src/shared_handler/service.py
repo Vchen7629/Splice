@@ -1,13 +1,12 @@
+from threading import Event
 from typing import Awaitable, Callable, Protocol
 
-from nats.aio.client import Client as NATSClient
-from nats.aio.msg import Msg
 from nats.js.api import ConsumerConfig
-from nats.js.client import JetStreamContext
-from nats.js.kv import KeyValue
 
 from shared_core import get_logger, sharedsettings
 from shared_handler import (
+    JobMsgContext,
+    ProcessJobMsgContext,
     check_js_stream_exists,
     connect_kv,
     consumer,
@@ -29,9 +28,8 @@ class ServiceSettings(Protocol):
 async def run_service(
     settings: ServiceSettings,
     processed_kv_name: str,
-    process_msg_handler: Callable[
-        [NATSClient, JetStreamContext, KeyValue, KeyValue, Msg], Awaitable[None]
-    ],
+    process_job_msg: Callable[[ProcessJobMsgContext, Event], Awaitable[None]],
+    cleanup_job: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """Handles starting the service (transcoder and video-upscaling)
     It starts the health server, connects to nats jetstream, connects to job-milestones kv and creates
@@ -66,15 +64,11 @@ async def run_service(
             ),
         )
 
-        await consumer(
-            logger,
-            nc,
-            js,
-            msg_processed_kv,
-            job_milestone_kv,
-            sub,
-            process_msg=process_msg_handler,
+        ctx = JobMsgContext(
+            nc, js, msg_processed_kv, job_milestone_kv, settings.SERVICE_NAME, logger
         )
+
+        await consumer(ctx, sub, process_job_msg, cleanup_job)
     finally:
         health_server.shutdown()
         if not nc.is_closed:

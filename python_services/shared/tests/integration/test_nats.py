@@ -9,7 +9,7 @@ from nats.js.api import KeyValueConfig
 from nats.js.client import JetStreamContext
 from structlog.stdlib import BoundLogger
 
-from shared_handler import check_cancel_event, consumer, nats_connect
+from shared_handler import JobMsgContext, check_cancel_event, consumer, nats_connect
 
 MOCK_LOGGER = MagicMock(spec=BoundLogger)
 
@@ -29,10 +29,10 @@ async def test_nats_connect_returns_connected_clients(
 
 
 @pytest.mark.asyncio
-async def test_consumer_calls_process_msg_for_published_message(
+async def test_consumer_calls_process_job_msg_for_published_message(
     js_context: tuple[Any, JetStreamContext],
 ) -> None:
-    """Verifies consumer receives a message and calls process_msg"""
+    """Verifies consumer receives a message and calls process_job_msg"""
     nc, js = js_context
 
     kv = await js.create_key_value(
@@ -41,12 +41,15 @@ async def test_consumer_calls_process_msg_for_published_message(
     job_status_kv = await js.create_key_value(
         config=KeyValueConfig(bucket="test-consumer-job-status-1")
     )
+    await job_status_kv.put(
+        "job-1", json.dumps({"state": "PROCESSING", "stage": "upload"}).encode()
+    )
     processed = asyncio.Event()
 
-    async def _process_msg(*args: Any, **kwargs: Any) -> None:
+    async def _process_job_msg(*args: Any, **kwargs: Any) -> None:
         processed.set()
 
-    process_msg = AsyncMock(side_effect=_process_msg)
+    process_job_msg = AsyncMock(side_effect=_process_job_msg)
 
     sub = await js.subscribe(
         subject="jobs.video.scene-split",
@@ -54,20 +57,19 @@ async def test_consumer_calls_process_msg_for_published_message(
         queue="test-consumer",
     )
 
-    task = asyncio.create_task(
-        consumer(
-            MOCK_LOGGER,
-            nc,
-            js,
-            kv,
-            job_status_kv,
-            sub,
-            process_msg,
-        )
-    )
+    ctx = JobMsgContext(nc, js, kv, job_status_kv, "test-service", MOCK_LOGGER)
+    task = asyncio.create_task(consumer(ctx, sub, process_job_msg))
     try:
         await nc.publish(
-            "jobs.video.scene-split", json.dumps({"job_id": "job-1"}).encode()
+            "jobs.video.scene-split",
+            json.dumps(
+                {
+                    "job_id": "job-1",
+                    "storage_url": "/fake/video.mp4",
+                    "source_resolution": "1080p",
+                    "target_resolution": "480p",
+                }
+            ).encode(),
         )
         await asyncio.wait_for(processed.wait(), timeout=5)
     finally:
@@ -77,7 +79,7 @@ async def test_consumer_calls_process_msg_for_published_message(
         except asyncio.CancelledError:
             pass
 
-    assert process_msg.call_count == 1
+    assert process_job_msg.call_count == 1
 
 
 @pytest.mark.asyncio

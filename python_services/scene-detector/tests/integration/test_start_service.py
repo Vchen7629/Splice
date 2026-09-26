@@ -10,7 +10,7 @@ from nats.js import JetStreamContext
 from shared_handler import VideoChunkMessage, run_service
 
 from src.core.settings import settings
-from src.processing.nats_msg import process_msg
+from src.processing.nats_msg import process_job_msg
 
 
 @pytest.mark.asyncio
@@ -49,7 +49,7 @@ async def test_full_flow_publishes_chunks_downstream(
 
     with patch("src.processing.nats_msg.process_job", side_effect=fake_process_job):
         task = asyncio.create_task(
-            run_service(settings, "scene-split-processed", process_msg)
+            run_service(settings, "scene-split-processed", process_job_msg)
         )
         await nc.publish(
             settings.SUB_SUBJECT,
@@ -99,7 +99,7 @@ async def test_raises_runtime_error_when_video_chunks_stream_not_found(
     with pytest.raises(
         RuntimeError, match="No stream found for `nonexistent.subject.xyz`"
     ):
-        await run_service(settings, "scene-split-processed", process_msg)
+        await run_service(settings, "scene-split-processed", process_job_msg)
 
 
 @pytest.mark.asyncio
@@ -118,7 +118,7 @@ async def test_drain_called_in_finally_when_raw_videos_raises(
         patch("shared_handler.service.consumer", side_effect=failing_consumer),
         pytest.raises(RuntimeError, match="subscriber failed unexpectedly"),
     ):
-        await run_service(settings, "scene-split-processed", process_msg)
+        await run_service(settings, "scene-split-processed", process_job_msg)
 
     assert called
 
@@ -137,7 +137,7 @@ async def test_drain_called_in_finally_on_cancellation(
 
     with patch("shared_handler.service.consumer", side_effect=hanging_consumer):
         task = asyncio.create_task(
-            run_service(settings, "scene-split-processed", process_msg)
+            run_service(settings, "scene-split-processed", process_job_msg)
         )
         await asyncio.sleep(0.05)
         task.cancel()
@@ -171,7 +171,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
 
     with patch("src.processing.nats_msg.process_job", side_effect=slow_process_job):
         task = asyncio.create_task(
-            run_service(settings, "scene-split-processed", process_msg)
+            run_service(settings, "scene-split-processed", process_job_msg)
         )
         payload = json.dumps(
             {
@@ -207,6 +207,6 @@ async def test_raises_before_nats_when_storage_unreachable(monkeypatch: Any) -> 
         patch("shared_handler.service.nats_connect") as mock_nats_connect,
         pytest.raises(Exception),
     ):
-        await run_service(settings, "scene-split-processed", process_msg)
+        await run_service(settings, "scene-split-processed", process_job_msg)
 
     mock_nats_connect.assert_not_called()

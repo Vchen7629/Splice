@@ -16,6 +16,8 @@ from .messages import (
     VideoChunkMessage,
 )
 from .nats import (
+    JobMsgContext,
+    ProcessJobMsgContext,
     check_cancel_event,
     check_js_stream_exists,
     consumer,
@@ -45,6 +47,8 @@ __all__ = [
     "ProgressMessage",
     "keep_alive",
     "check_cancel_event",
+    "ProcessJobMsgContext",
+    "JobMsgContext",
     "consumer",
     "publisher",
     "check_js_stream_exists",
