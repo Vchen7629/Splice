@@ -152,7 +152,9 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
         await cleanup_temp_file(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
-    upload_video(storage_url, job_id, temp_file_loc, SERVICE_NAME)
+    await asyncio.to_thread(
+        upload_video, storage_url, job_id, temp_file_loc, SERVICE_NAME
+    )
 
     await publisher(
         ctx.js,
@@ -188,7 +190,9 @@ async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
     await downscale_reporter.flush()
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
-    upload_video(storage_url, job_id, ctx.temp_file_loc, SERVICE_NAME)
+    await asyncio.to_thread(
+        upload_video, storage_url, job_id, ctx.temp_file_loc, SERVICE_NAME
+    )
 
     await publisher(
         ctx.js,
