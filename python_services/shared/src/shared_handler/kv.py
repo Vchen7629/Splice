@@ -6,7 +6,7 @@ from nats.js.api import KeyValueConfig
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
-from shared_core import get_logger, settings
+from shared_core import get_logger, sharedsettings
 
 
 async def connect_kv(js: JetStreamContext, kv_name: str) -> KeyValue:
@@ -49,7 +49,9 @@ async def create_kv(js: JetStreamContext, bucket_name: str) -> KeyValue:
     """
     try:
         msg_processed_kv = await js.create_key_value(
-            config=KeyValueConfig(bucket=bucket_name, ttl=settings.KV_BUCKET_TTL_S)
+            config=KeyValueConfig(
+                bucket=bucket_name, ttl=sharedsettings.KV_BUCKET_TTL_S
+            )
         )
 
         return msg_processed_kv

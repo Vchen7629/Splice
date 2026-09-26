@@ -6,43 +6,32 @@ import pytest
 from nats.aio.client import Client as NATSClient
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
-from shared_handler import UpscaleCompleteMsg
+from shared_handler import ProcessJobMessage, ProcessJobMsgContext, UpscaleCompleteMsg
 from shared_util import ProgressReporter
-from test_helpers.nats import make_msg
 
 from src.core.settings import settings
-from src.processing.nats_msg import _finalize_job, process_msg
+from src.processing.nats_msg import cleanup_job, process_job_msg
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)
 MOCK_KV = AsyncMock(spec=KeyValue)
 
 
-@pytest.mark.asyncio
-async def test_already_processed_acks_and_returns(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    nats_msg_patches["check"].return_value = True
-    msg = make_msg()
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    msg.ack.assert_called_once()
-    nats_msg_patches["upscale"].assert_not_called()
-    nats_msg_patches["downscale"].assert_not_called()
-    nats_msg_patches["upload"].assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_already_processed_skips_status_update(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    nats_msg_patches["check"].return_value = True
-    msg = make_msg()
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    nats_msg_patches["update_stage"].assert_not_called()
+def make_ctx(**overrides: Any) -> ProcessJobMsgContext:
+    metadata = overrides.pop(
+        "metadata",
+        ProcessJobMessage(
+            job_id="job-123",
+            storage_url="http://storage/video.mp4",
+            source_resolution="480p",
+            target_resolution="1080p",
+        ),
+    )
+    defaults: dict[str, Any] = dict(
+        nc=MOCK_NC, js=MOCK_JS, msg_processed_kv=MOCK_KV, job_milestone_kv=MOCK_KV
+    )
+    defaults.update(overrides)
+    return ProcessJobMsgContext(metadata=metadata, **defaults)
 
 
 @pytest.mark.asyncio
@@ -51,9 +40,9 @@ async def test_upscale_path_calls_video_upscale(
 ) -> None:
     model_path = Path("/weights/model.pth")
     nats_msg_patches["select"].return_value = (model_path, 2)
-    msg = make_msg(source_resolution="480p", target_resolution="1080p")
+    ctx = make_ctx()
 
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+    await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["upscale"].assert_called_once()
     nats_msg_patches["downscale"].assert_not_called()
@@ -64,9 +53,16 @@ async def test_upscale_removes_noaudio_temp_file(
     nats_msg_patches: dict[str, Any],
 ) -> None:
     nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
-    msg = make_msg(job_id="abc", source_resolution="480p", target_resolution="1080p")
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="abc",
+            storage_url="http://storage/video.mp4",
+            source_resolution="480p",
+            target_resolution="1080p",
+        )
+    )
 
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+    await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
         "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
@@ -78,9 +74,16 @@ async def test_downscale_path_calls_video_downscale(
     nats_msg_patches: dict[str, Any],
 ) -> None:
     nats_msg_patches["select"].return_value = None
-    msg = make_msg(source_resolution="1080p", target_resolution="480p")
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="job-123",
+            storage_url="http://storage/video.mp4",
+            source_resolution="1080p",
+            target_resolution="480p",
+        )
+    )
 
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+    await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["downscale"].assert_called_once()
     nats_msg_patches["upscale"].assert_not_called()
@@ -91,9 +94,16 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
     model_path = Path("/weights/model.pth")
     nats_msg_patches["select"].return_value = (model_path, 4)
     nats_msg_patches["fetch"].return_value = "/tmp/video.mp4"
-    msg = make_msg(job_id="abc", source_resolution="480p", target_resolution="1080p")
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="abc",
+            storage_url="http://storage/video.mp4",
+            source_resolution="480p",
+            target_resolution="1080p",
+        )
+    )
 
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+    await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["upscale"].assert_called_once_with(
         ANY,
@@ -109,9 +119,16 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
 async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> None:
     nats_msg_patches["select"].return_value = None
     nats_msg_patches["fetch"].return_value = "/tmp/video.mp4"
-    msg = make_msg(job_id="abc", source_resolution="1080p", target_resolution="480p")
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="abc",
+            storage_url="http://storage/video.mp4",
+            source_resolution="1080p",
+            target_resolution="480p",
+        )
+    )
 
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+    await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["downscale"].assert_called_once_with(
         ANY,
@@ -120,59 +137,6 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
         "../temp_output/abc/video.mp4",
         ANY,
     )
-
-
-@pytest.mark.asyncio
-async def test_invalid_json_acks_without_updating_kv(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    msg = AsyncMock()
-    msg.data = b"not valid json"
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
-    nats_msg_patches["update_failed"].assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_fetch_video_raises_updates_kv_and_acks(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    nats_msg_patches["fetch"].side_effect = RuntimeError("storage down")
-    msg = make_msg()
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    nats_msg_patches["update_failed"].assert_called_once_with(
-        ANY, "job-123", "storage down", settings.SERVICE_NAME
-    )
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_video_upscale_raises_updates_kv_and_acks(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
-    nats_msg_patches["upscale"].side_effect = RuntimeError("gpu oom")
-    msg = make_msg()
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    nats_msg_patches["update_failed"].assert_called_once_with(
-        ANY, "job-123", "gpu oom", settings.SERVICE_NAME
-    )
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
-
-
-FLUSH_FAILURE_SIDE_EFFECTS = {
-    "upscale_flush": [RuntimeError("boom"), None],
-    "recombine_flush": [None, RuntimeError("boom")],
-}
 
 
 @pytest.mark.asyncio
@@ -196,134 +160,59 @@ async def test_upscale_failure_still_cleans_up_noaudio_file(
     if failure_point == "video_upscale":
         nats_msg_patches["upscale"].side_effect = RuntimeError("boom")
     elif failure_point == "update_job_stage":
-        nats_msg_patches["update_stage"].side_effect = [None, RuntimeError("boom")]
+        nats_msg_patches["update_stage"].side_effect = RuntimeError("boom")
     elif failure_point == "recombine_video_audio":
         nats_msg_patches["recombine"].side_effect = RuntimeError("boom")
 
-    msg = make_msg(job_id="abc")
+    flush_side_effect = {
+        "upscale_flush": RuntimeError("boom"),
+        "recombine_flush": [None, RuntimeError("boom")],
+    }.get(failure_point, None)
+
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="abc",
+            storage_url="http://storage/video.mp4",
+            source_resolution="480p",
+            target_resolution="1080p",
+        )
+    )
 
     with patch(
         "src.processing.nats_msg.ProgressReporter.flush",
         new_callable=AsyncMock,
-        side_effect=FLUSH_FAILURE_SIDE_EFFECTS.get(failure_point, [None, None]),
+        side_effect=flush_side_effect,
     ):
-        await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+        with pytest.raises(RuntimeError):
+            await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
         "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
     )
-    nats_msg_patches["update_failed"].assert_called_once()
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_video_downscale_raises_updates_kv_and_acks(
-    nats_msg_patches: dict[str, Any],
-) -> None:
+async def test_video_downscale_raises(nats_msg_patches: dict[str, Any]) -> None:
     nats_msg_patches["select"].return_value = None
     nats_msg_patches["downscale"].side_effect = RuntimeError("ffmpeg failed")
-    msg = make_msg(source_resolution="1080p", target_resolution="480p")
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    nats_msg_patches["update_failed"].assert_called_once_with(
-        ANY, "job-123", "ffmpeg failed", settings.SERVICE_NAME
-    )
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_finalize_uploads_to_correct_storage_url(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    await _finalize_job(
-        MOCK_JS, MOCK_KV, AsyncMock(), "job-abc", "/tmp/job-abc/output.mp4"
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="job-123",
+            storage_url="http://storage/video.mp4",
+            source_resolution="1080p",
+            target_resolution="480p",
+        )
     )
 
-    expected_url = f"{settings.BASE_STORAGE_URL}/job-abc/output.mp4/processed"
-    nats_msg_patches["upload"].assert_called_once_with(
-        expected_url, "job-abc", "/tmp/job-abc/output.mp4", settings.SERVICE_NAME
-    )
-
-
-@pytest.mark.asyncio
-async def test_finalize_publishes_upscale_complete_msg(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    await _finalize_job(MOCK_JS, MOCK_KV, AsyncMock(), "job-abc", "/tmp/out.mp4")
-
-    nats_msg_patches["pub"].assert_called_once_with(
-        MOCK_JS,
-        UpscaleCompleteMsg(job_id="job-abc"),
-        settings.PUB_SUBJECT,
-        settings.SERVICE_NAME,
-    )
-
-
-@pytest.mark.asyncio
-async def test_finalize_marks_job_processed_in_kv(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    mock_kv = AsyncMock()
-    await _finalize_job(MOCK_JS, mock_kv, AsyncMock(), "job-abc", "/tmp/out.mp4")
-
-    mock_kv.put.assert_called_once_with("job-abc", b"done")
-
-
-@pytest.mark.asyncio
-async def test_finalize_acks_message(nats_msg_patches: dict[str, Any]) -> None:
-    msg = AsyncMock()
-    await _finalize_job(MOCK_JS, MOCK_KV, msg, "job-abc", "/tmp/out.mp4")
-
-    msg.ack.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_process_msg_removes_temp_dirs_on_success(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
-    msg = make_msg(job_id="job-abc")
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
-    removed_paths = [str(c.args[0]) for c in cleanup_calls]
-    assert any("job-abc" in p for p in removed_paths)
-
-
-@pytest.mark.asyncio
-async def test_downscale_path_removes_temp_dirs_on_success(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    nats_msg_patches["select"].return_value = None
-    nats_msg_patches["fetch"].return_value = "/tmp/video.mp4"
-    msg = make_msg(
-        job_id="job-abc", source_resolution="1080p", target_resolution="480p"
-    )
-
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
-
-    nats_msg_patches["downscale"].assert_called_once_with(
-        ANY,
-        "/tmp/video.mp4",
-        "480p",
-        "../temp_output/job-abc/video.mp4",
-        ANY,
-    )
-
-    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
-    removed_paths = [str(c.args[0]) for c in cleanup_calls]
-    assert any("job-abc" in p for p in removed_paths)
+    with pytest.raises(RuntimeError, match="ffmpeg failed"):
+        await process_job_msg(ctx, AsyncMock())
 
 
 @pytest.mark.asyncio
 async def test_recombiner_stage_transition_waits_for_progress_flush(
     nats_msg_patches: dict[str, Any],
 ) -> None:
-    """process_msg must not advance to the video-recombiner stage until all
+    """process_job_msg must not advance to the video-recombiner stage until all
     queued progress updates from video_upscale have been flushed"""
     nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
     call_order: list[str] = []
@@ -336,31 +225,61 @@ async def test_recombiner_stage_transition_waits_for_progress_flush(
             call_order.append("update_stage:video-recombiner")
 
     nats_msg_patches["update_stage"].side_effect = fake_update_stage
-    msg = make_msg()
+    ctx = make_ctx()
 
     with patch("src.processing.nats_msg.ProgressReporter.flush", new=fake_flush):
-        await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+        await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["recombine"].assert_called_once()
     assert call_order == ["flush", "update_stage:video-recombiner", "flush"]
 
 
 @pytest.mark.asyncio
-async def test_ack_and_does_not_record_failure_when_job_cancelled(
-    nats_msg_patches: dict[str, Any],
-) -> None:
-    """When video_upscale raises JobCancelledError, the msg should be acked and
-    not recorded as failure in job_milestone_kv"""
-    from shared_handler.exceptions import JobCancelledError
-
+async def test_uploads_to_correct_storage_url(nats_msg_patches: dict[str, Any]) -> None:
     nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
-    nats_msg_patches["upscale"].side_effect = JobCancelledError(
-        "video_upscale cancelled for job job-1"
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="job-abc",
+            storage_url="http://storage/video.mp4",
+            source_resolution="480p",
+            target_resolution="1080p",
+        )
     )
-    msg = make_msg()
 
-    await process_msg(MOCK_NC, MOCK_JS, MOCK_KV, MOCK_KV, msg)
+    await process_job_msg(ctx, AsyncMock())
 
-    msg.ack.assert_called_once()
-    msg.nak.assert_not_called()
-    nats_msg_patches["update_failed"].assert_not_called()
+    expected_url = f"{settings.BASE_STORAGE_URL}/job-abc/output.mp4/processed"
+    nats_msg_patches["upload"].assert_called_once_with(
+        expected_url, "job-abc", ANY, settings.SERVICE_NAME
+    )
+
+
+@pytest.mark.asyncio
+async def test_publishes_upscale_complete_msg(nats_msg_patches: dict[str, Any]) -> None:
+    nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
+    ctx = make_ctx(
+        metadata=ProcessJobMessage(
+            job_id="job-abc",
+            storage_url="http://storage/video.mp4",
+            source_resolution="480p",
+            target_resolution="1080p",
+        )
+    )
+
+    await process_job_msg(ctx, AsyncMock())
+
+    nats_msg_patches["pub"].assert_called_once_with(
+        MOCK_JS,
+        UpscaleCompleteMsg(job_id="job-abc"),
+        settings.PUB_SUBJECT,
+        settings.SERVICE_NAME,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cleanup_job_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> None:
+    await cleanup_job("job-abc")
+
+    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
+    removed_paths = [str(c.args[0]) for c in cleanup_calls]
+    assert any("job-abc" in p for p in removed_paths)

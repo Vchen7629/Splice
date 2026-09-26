@@ -6,7 +6,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 
 
-class Settings(BaseSettings):
+class SharedSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE)
 
     # general config
@@ -26,4 +26,4 @@ class Settings(BaseSettings):
     STORAGE_READ_TIMEOUT_S: float = 30
 
 
-settings = Settings()
+sharedsettings = SharedSettings()

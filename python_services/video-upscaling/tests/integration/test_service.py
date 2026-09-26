@@ -6,9 +6,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from nats.js import JetStreamContext
+from shared_handler import run_service
 
 from src.core.settings import settings
-from src.service import start_service
+from src.processing.nats_msg import cleanup_job, process_job_msg
 
 
 def _make_payload(
@@ -36,7 +37,9 @@ async def _run_service_until_processed(
 ) -> None:
     with patch("src.service.settings.SUB_QUEUE_NAME", queue_name):
         nc.drain = AsyncMock()
-        task = asyncio.create_task(start_service())
+        task = asyncio.create_task(
+            run_service(settings, "upscale-processed", process_job_msg, cleanup_job)
+        )
         await nc.publish(settings.SUB_SUBJECT, payload)
         if done is not None:
             await asyncio.wait_for(done.wait(), timeout=timeout)
@@ -149,7 +152,7 @@ async def test_raises_when_pub_stream_not_found(
     nc.drain = AsyncMock()
 
     with pytest.raises(RuntimeError, match="No stream found"):
-        await start_service()
+        await run_service(settings, "upscale-processed", process_job_msg, cleanup_job)
 
 
 @pytest.mark.asyncio
@@ -162,7 +165,7 @@ async def test_raises_when_sub_stream_not_found(
     nc.drain = AsyncMock()
 
     with pytest.raises(RuntimeError, match="No stream found"):
-        await start_service()
+        await run_service(settings, "upscale-processed", process_job_msg, cleanup_job)
 
 
 # ---------------------------------------------------------------------------
@@ -178,10 +181,10 @@ async def test_drain_called_on_consumer_failure(
     _, called = spy_drain
 
     with (
-        patch("src.service.consumer", side_effect=RuntimeError("boom")),
+        patch("shared_handler.service.consumer", side_effect=RuntimeError("boom")),
         pytest.raises(RuntimeError),
     ):
-        await start_service()
+        await run_service(settings, "upscale-processed", process_job_msg, cleanup_job)
 
     assert called
 
@@ -196,8 +199,10 @@ async def test_drain_called_on_cancellation(
     async def _hang(*_: Any, **__: Any) -> None:
         await asyncio.Event().wait()
 
-    with patch("src.service.consumer", side_effect=_hang):
-        task = asyncio.create_task(start_service())
+    with patch("shared_handler.service.consumer", side_effect=_hang):
+        task = asyncio.create_task(
+            run_service(settings, "upscale-processed", process_job_msg, cleanup_job)
+        )
         await asyncio.sleep(0.05)
         task.cancel()
         try:
@@ -216,13 +221,14 @@ async def test_drain_called_on_cancellation(
 @pytest.mark.asyncio
 async def test_raises_before_nats_when_storage_unreachable(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "shared_storage.check_health.settings.BASE_STORAGE_URL", "http://localhost:1"
+        "shared_storage.check_health.sharedsettings.BASE_STORAGE_URL",
+        "http://localhost:1",
     )
 
     with (
-        patch("src.service.nats_connect") as mock_nats_connect,
+        patch("shared_handler.service.nats_connect") as mock_nats_connect,
         pytest.raises(Exception),
     ):
-        await start_service()
+        await run_service(settings, "upscale-processed", process_job_msg, cleanup_job)
 
     mock_nats_connect.assert_not_called()

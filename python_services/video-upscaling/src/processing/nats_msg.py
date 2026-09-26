@@ -1,22 +1,14 @@
 import asyncio
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
-from nats.aio.client import Client as NATSClient
-from nats.aio.msg import Msg
-from nats.js import JetStreamContext
-from nats.js.kv import KeyValue
 from shared_core import get_logger
 from shared_handler import (
-    JobCancelledError,
-    ProcessJobMessage,
+    ProcessJobMsgContext,
     UpscaleCompleteMsg,
-    check_already_processed,
-    check_cancel_event,
-    keep_alive,
     publisher,
-    update_job_failed,
     update_job_stage,
 )
 from shared_storage import fetch_video, upload_video
@@ -31,152 +23,87 @@ logger = get_logger(settings.SERVICE_NAME)
 SERVICE_NAME = settings.SERVICE_NAME
 
 
-async def process_msg(
-    nc: NATSClient,
-    js: JetStreamContext,
-    msg_processed_kv: KeyValue,
-    job_milestone_kv: KeyValue,
-    msg: Msg,
-) -> None:
-    """Processes a single video upscale nats message"""
-    metadata: ProcessJobMessage | None = None
-    needs_nak = False
-
-    try:
-        metadata = ProcessJobMessage.model_validate_json(msg.data.decode())
-        job_id = metadata.job_id
-
-        if await check_already_processed(msg_processed_kv, job_id):
-            logger.debug("job already processed, skipping", job_id=job_id)
-            await msg.ack()
-            return
-
-        await update_job_stage(job_milestone_kv, job_id, SERVICE_NAME, SERVICE_NAME)
-
-        interval = settings.ACK_WAIT_S / 3
-        async with (
-            keep_alive(msg, interval, logger),
-            check_cancel_event(job_milestone_kv, job_id, logger) as cancel_event,
-        ):
-            local_video_path = await asyncio.to_thread(
-                fetch_video, metadata.storage_url, SERVICE_NAME
-            )
-
-            logger.debug(
-                "fetched unprocessed video",
-                job_id=job_id,
-                saved_to=local_video_path,
-            )
-
-            res = select_model(metadata.source_resolution, metadata.target_resolution)
-            if res is None:
-                filename = os.path.basename(local_video_path)
-                temp_file_loc = f"../temp_output/{job_id}/{filename}"
-                os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
-
-                await _downscale_job(
-                    cancel_event,
-                    nc,
-                    js,
-                    msg,
-                    msg_processed_kv,
-                    metadata,
-                    local_video_path,
-                    temp_file_loc,
-                )
-                return
-
-            await _upscale_job(
-                cancel_event,
-                nc,
-                js,
-                msg_processed_kv,
-                job_milestone_kv,
-                msg,
-                metadata,
-                local_video_path,
-                res,
-            )
-            return
-    except JobCancelledError:
-        logger.debug(
-            "job cancelled during processing",
-            job_id=metadata.job_id if metadata else None,
-        )
-        await msg.ack()
-        return
-    except Exception as e:
-        logger.error("unexpected error processing job", err=str(e))
-        if metadata is not None:
-            job_id = metadata.job_id
-
-            try:
-                await update_job_failed(job_milestone_kv, job_id, str(e), SERVICE_NAME)
-            except Exception as e:
-                needs_nak = True
-                return
-        await msg.ack()
-    finally:
-        if metadata is not None:
-            job_id = metadata.job_id
-
-            await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
-            await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
-            logger.debug("removed temp dirs", job_id=job_id)
-
-        if needs_nak:
-            await msg.nak()
+@dataclass
+class UpscaleJobContext(ProcessJobMsgContext):
+    local_video_path: str
+    res: tuple[Path, int]
 
 
-async def _finalize_job(
-    js: JetStreamContext,
-    msg_processed_kv: KeyValue,
-    msg: Msg,
-    job_id: str,
-    temp_file_loc: str,
-) -> None:
-    """shared logic for uploading video file to storage, publish complete msg, updating KV and acking msg"""
-    storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
-    upload_video(storage_url, job_id, temp_file_loc, SERVICE_NAME)
+@dataclass
+class DownscaleJobContext(ProcessJobMsgContext):
+    local_video_path: str
+    temp_file_loc: str
 
-    await publisher(
-        js,
-        UpscaleCompleteMsg(job_id=job_id),
-        settings.PUB_SUBJECT,
-        SERVICE_NAME,
+
+async def process_job_msg(ctx: ProcessJobMsgContext, cancel_event: Event) -> None:
+    """TODO: docstring"""
+    job_id = ctx.metadata.job_id
+
+    local_video_path = await asyncio.to_thread(
+        fetch_video, ctx.metadata.storage_url, SERVICE_NAME
     )
 
-    await msg_processed_kv.put(job_id, b"done")
-    await msg.ack()
+    logger.debug(
+        "fetched unprocessed video",
+        job_id=job_id,
+        saved_to=local_video_path,
+    )
 
-    logger.debug("job finallized", job_id=job_id)
+    res = select_model(ctx.metadata.source_resolution, ctx.metadata.target_resolution)
+    if res is None:
+        filename = os.path.basename(local_video_path)
+        temp_file_loc = f"../temp_output/{job_id}/{filename}"
+        os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
+
+        downscaleJobCtx = DownscaleJobContext(
+            ctx.nc,
+            ctx.js,
+            ctx.msg_processed_kv,
+            ctx.job_milestone_kv,
+            ctx.metadata,
+            local_video_path,
+            temp_file_loc,
+        )
+
+        await _downscale_job(downscaleJobCtx, cancel_event)
+        return
+
+    upscaleJobContext = UpscaleJobContext(
+        ctx.nc,
+        ctx.js,
+        ctx.msg_processed_kv,
+        ctx.job_milestone_kv,
+        ctx.metadata,
+        local_video_path,
+        res,
+    )
+
+    await _upscale_job(upscaleJobContext, cancel_event)
 
 
-async def _upscale_job(
-    cancel_event: Event,
-    nc: NATSClient,
-    js: JetStreamContext,
-    msg_processed_kv: KeyValue,
-    job_stage_kv: KeyValue,
-    msg: Msg,
-    metadata: ProcessJobMessage,
-    local_video_path: str,
-    res: tuple[Path, int],
-) -> None:
+async def cleanup_job(job_id: str) -> None:
+    """TODO: docstring"""
+    await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
+    await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
+
+    logger.debug("removed temp dirs", job_id=job_id)
+
+
+async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
     """upscale video path logic"""
-    job_id = metadata.job_id
+    job_id = ctx.metadata.job_id
 
     logger.debug(
         "upscaling video",
         job_id=job_id,
-        source_res=metadata.source_resolution,
-        target_res=metadata.target_resolution,
+        source_res=ctx.metadata.source_resolution,
+        target_res=ctx.metadata.target_resolution,
     )
 
-    model_path, resolution_scale = res
+    model_path, resolution_scale = ctx.res
     logger.debug(
         "upscaling with model and resolution",
-        jobid=metadata,
+        jobid=ctx.metadata.job_id,
         scale=resolution_scale,
         model=model_path,
     )
@@ -185,19 +112,19 @@ async def _upscale_job(
     # container, so the output must be saved with an .mp4 extension
     # reusing the source filename's extension (e.g. .webm) produces a
     # container/codec mismatch when recombine_video_audio muxes with -c copy
-    stem = os.path.splitext(os.path.basename(local_video_path))[0]
+    stem = os.path.splitext(os.path.basename(ctx.local_video_path))[0]
     temp_file_loc = f"../temp_output/{job_id}/{stem}.mp4"
     os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
     loop = asyncio.get_event_loop()
-    upscale_reporter = ProgressReporter(nc, job_id, loop, SERVICE_NAME)
+    upscale_reporter = ProgressReporter(ctx.nc, job_id, loop, SERVICE_NAME)
 
     try:
         await asyncio.to_thread(
             video_upscale,
             cancel_event,
             job_id,
-            local_video_path,
+            ctx.local_video_path,
             model_path,
             resolution_scale,
             upscale_reporter,
@@ -205,14 +132,16 @@ async def _upscale_job(
         logger.debug("upscaled video", job_id=job_id)
         await upscale_reporter.flush()
 
-        await update_job_stage(job_stage_kv, job_id, "video-recombiner", SERVICE_NAME)
-        recombine_reporter = ProgressReporter(nc, job_id, loop, "video-recombiner")
+        await update_job_stage(
+            ctx.job_milestone_kv, job_id, "video-recombiner", SERVICE_NAME
+        )
+        recombine_reporter = ProgressReporter(ctx.nc, job_id, loop, "video-recombiner")
         await asyncio.to_thread(
             recombine_video_audio,
             job_id,
-            local_video_path,
+            ctx.local_video_path,
             temp_file_loc,
-            metadata.target_resolution,
+            ctx.metadata.target_resolution,
             recombine_reporter,
         )
         logger.debug("recombined video with audio", job_id=job_id)
@@ -222,39 +151,52 @@ async def _upscale_job(
         logger.debug("cleaning up no audio upscale mp4 file", job_id=job_id)
         await cleanup_temp_file(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
 
-    await _finalize_job(js, msg_processed_kv, msg, job_id, temp_file_loc)
+    storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
+    await asyncio.to_thread(
+        upload_video, storage_url, job_id, temp_file_loc, SERVICE_NAME
+    )
+
+    await publisher(
+        ctx.js,
+        UpscaleCompleteMsg(job_id=job_id),
+        settings.PUB_SUBJECT,
+        SERVICE_NAME,
+    )
 
 
-async def _downscale_job(
-    cancel_event: Event,
-    nc: NATSClient,
-    js: JetStreamContext,
-    msg: Msg,
-    msg_processed_kv: KeyValue,
-    metadata: ProcessJobMessage,
-    local_video_path: str,
-    temp_file_loc: str,
-) -> None:
+async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
     """downscale video path logic"""
+    job_id = ctx.metadata.job_id
+
     logger.debug(
         "downscaling video",
-        job_id=metadata.job_id,
-        source_res=metadata.source_resolution,
-        target_res=metadata.target_resolution,
+        job_id=job_id,
+        source_res=ctx.metadata.source_resolution,
+        target_res=ctx.metadata.target_resolution,
     )
 
     loop = asyncio.get_event_loop()
-    downscale_reporter = ProgressReporter(nc, metadata.job_id, loop, SERVICE_NAME)
+    downscale_reporter = ProgressReporter(ctx.nc, job_id, loop, SERVICE_NAME)
 
     await asyncio.to_thread(
         video_downscale,
         cancel_event,
-        local_video_path,
-        metadata.target_resolution,
-        temp_file_loc,
+        ctx.local_video_path,
+        ctx.metadata.target_resolution,
+        ctx.temp_file_loc,
         downscale_reporter,
     )
-    logger.debug("downscaled video", job_id=metadata.job_id)
+    logger.debug("downscaled video", job_id=job_id)
     await downscale_reporter.flush()
 
-    await _finalize_job(js, msg_processed_kv, msg, metadata.job_id, temp_file_loc)
+    storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
+    await asyncio.to_thread(
+        upload_video, storage_url, job_id, ctx.temp_file_loc, SERVICE_NAME
+    )
+
+    await publisher(
+        ctx.js,
+        UpscaleCompleteMsg(job_id=job_id),
+        settings.PUB_SUBJECT,
+        SERVICE_NAME,
+    )

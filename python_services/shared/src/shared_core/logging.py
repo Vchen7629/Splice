@@ -3,12 +3,12 @@ import sys
 
 import structlog
 
-from .settings import settings
+from .settings import sharedsettings
 
 
 def configure_logging() -> None:
     """Initialize structlog, call once at service startup"""
-    level = logging.DEBUG if settings.LOG_LEVEL == "DEBUG" else logging.INFO
+    level = logging.DEBUG if sharedsettings.LOG_LEVEL == "DEBUG" else logging.INFO
     logging.basicConfig(stream=sys.stdout, level=level)
 
     processors: list[structlog.types.Processor] = [
@@ -16,7 +16,7 @@ def configure_logging() -> None:
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
-    if settings.LOG_FORMAT == "json":
+    if sharedsettings.LOG_FORMAT == "json":
         processors.append(structlog.processors.JSONRenderer())
     else:
         processors.append(structlog.dev.ConsoleRenderer())

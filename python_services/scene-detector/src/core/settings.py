@@ -1,12 +1,13 @@
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+from shared_core.settings import SharedSettings
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 
 
-class Settings(BaseSettings):
+class Settings(SharedSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE)
 
     # general config
@@ -17,8 +18,6 @@ class Settings(BaseSettings):
     SUB_QUEUE_NAME: str = "scene-detector-workers"
     SUB_SUBJECT: str = "jobs.video.scene-split"
     PUB_SUBJECT: str = "jobs.video.chunks"
-
-    BASE_STORAGE_URL: str = "http://localhost:8888"
 
 
 settings = Settings()
