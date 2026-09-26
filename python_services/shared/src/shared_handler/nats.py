@@ -51,7 +51,9 @@ async def nats_connect(service_name: str) -> tuple[NATSClient, JetStreamContext]
 
 
 @contextlib.asynccontextmanager
-async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[Any, None]:
+async def keep_alive(
+    msg: Msg, interval: float, logger: BoundLogger
+) -> AsyncGenerator[Any, None]:
     """Periodically calls msg.in_progress() to extend the Jetstream ack deadline,
     and subscribes to cancel.{job_id} for the duration of the work, setting
     cancel_event when a cancel broadcast arrives so long-running loops can check it."""
@@ -66,8 +68,12 @@ async def keep_alive(msg: Msg, interval: float) -> AsyncGenerator[Any, None]:
         yield task
     finally:
         task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        try:
             await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning("keep_alive heartbeat failed", err=str(e))
 
 
 @contextlib.asynccontextmanager
@@ -174,7 +180,7 @@ async def _handle_consumer_message(
 
         poll_interval = sharedsettings.ACK_WAIT_S / 3
         async with (
-            keep_alive(msg, poll_interval),
+            keep_alive(msg, poll_interval, ctx.logger),
             check_cancel_event(
                 ctx.job_milestone_kv, job_id, ctx.logger
             ) as cancel_event,
