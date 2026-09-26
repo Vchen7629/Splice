@@ -65,11 +65,7 @@ func publishJetstreamProcessedMsg(
 		handler.NewProgressReporter(nc, payload.JobID, "transcoder", logger)(pct)
 	}
 
-	err = msg.Ack()
-	if err != nil {
-		logger.Error("error acking msg", "err", err)
-		return true
-	}
+	sJetstream.AckWithErrHandling(logger, msg)
 
 	return true
 }
