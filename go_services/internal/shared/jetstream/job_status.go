@@ -11,10 +11,9 @@ const (
 )
 
 type JobStatus struct {
-	State    JobState `json:"state"`
-	Stage    string   `json:"stage"`
-	Progress *int     `json:"progress,omitempty"`
-	Error    string   `json:"error,omitempty"`
+	State JobState `json:"state"`
+	Stage string   `json:"stage"`
+	Error string   `json:"error,omitempty"`
 }
 
 func (m JobStatus) IsTerminal() bool {
