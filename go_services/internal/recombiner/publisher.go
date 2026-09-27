@@ -21,7 +21,6 @@ func uploadVideoChunk(
 	_, err := storage.UploadVideoChunk(url, outputPath)
 	if err != nil {
 		logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
-		CleanUpTempFolders(payload.JobID, logger)
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
@@ -36,7 +35,6 @@ func publishJetstreamCompleteMsg(
 	err := sJetstream.PublishJetstreamMsg(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
-		CleanUpTempFolders(payload.JobID, logger)
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
@@ -44,13 +42,11 @@ func publishJetstreamCompleteMsg(
 	err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as recieved", "err", err)
-		CleanUpTempFolders(payload.JobID, logger)
 		sJetstream.NakWithErrHandling(logger, msg)
 		return false
 	}
 
 	sJetstream.AckWithErrHandling(logger, msg)
-	CleanUpTempFolders(payload.JobID, logger)
 
 	logger.Debug("job complete", "job_id", payload.JobID)
 

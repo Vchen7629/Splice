@@ -168,6 +168,12 @@ func TestRecombineVideoI(t *testing.T) {
 		case <-time.After(30 * time.Second):
 			t.Fatal("jobs.complete not published after all chunks received")
 		}
+
+		assert.Eventually(t, func() bool {
+			_, chunkErr := os.Stat("/tmp/processed_chunk-job-combine")
+			_, jobErr := os.Stat("/tmp/jobs/job-combine")
+			return os.IsNotExist(chunkErr) && os.IsNotExist(jobErr)
+		}, 5*time.Second, 100*time.Millisecond, "temp folders were not cleaned up after job completed")
 	})
 
 	t.Run("publishes progress properly", func(t *testing.T) {

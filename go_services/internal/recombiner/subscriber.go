@@ -62,6 +62,7 @@ func RecombineVideo(
 			if outputPath == "" {
 				return true
 			}
+			defer CleanUpTempFolders(payload.JobID, logger)
 
 			uploadedVideoChunk := uploadVideoChunk(outputPath, baseStorageURL, msg, payload, logger)
 			if !uploadedVideoChunk {
@@ -70,7 +71,6 @@ func RecombineVideo(
 
 			shouldCancel, stopJob = sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
 			if stopJob {
-				CleanUpTempFolders(payload.JobID, logger)
 				return shouldCancel
 			}
 

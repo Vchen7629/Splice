@@ -18,9 +18,7 @@ import (
 )
 
 func TestUploadVideoChunk(t *testing.T) {
-	t.Cleanup(func() { removeAll = os.RemoveAll })
-
-	t.Run("successful upload returns true and does not nak or clean up", func(t *testing.T) {
+	t.Run("successful upload returns true and does not nak", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -29,9 +27,6 @@ func TestUploadVideoChunk(t *testing.T) {
 		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
 		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
 
-		var removed []string
-		removeAll = func(path string) error { removed = append(removed, path); return nil }
-
 		msg := &test.MockMsg{}
 		payload := handler.ChunkCompleteMessage{JobID: "job-1"}
 
@@ -39,10 +34,9 @@ func TestUploadVideoChunk(t *testing.T) {
 
 		assert.True(t, ok)
 		assert.False(t, msg.NakCalled)
-		assert.Empty(t, removed, "cleanup should be left to the caller on success")
 	})
 
-	t.Run("upload failure naks msg and cleans up temp folders", func(t *testing.T) {
+	t.Run("upload failure naks msg", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
@@ -51,9 +45,6 @@ func TestUploadVideoChunk(t *testing.T) {
 		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
 		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
 
-		var removed []string
-		removeAll = func(path string) error { removed = append(removed, path); return nil }
-
 		msg := &test.MockMsg{}
 		payload := handler.ChunkCompleteMessage{JobID: "job-1"}
 
@@ -61,14 +52,9 @@ func TestUploadVideoChunk(t *testing.T) {
 
 		assert.False(t, ok)
 		assert.True(t, msg.NakCalled)
-		assert.Contains(t, removed, "/tmp/processed_chunk-job-1")
-		assert.Contains(t, removed, "/tmp/jobs/job-1")
 	})
 
-	t.Run("missing output file naks msg and cleans up", func(t *testing.T) {
-		var removed []string
-		removeAll = func(path string) error { removed = append(removed, path); return nil }
-
+	t.Run("missing output file naks msg", func(t *testing.T) {
 		msg := &test.MockMsg{}
 		payload := handler.ChunkCompleteMessage{JobID: "job-2"}
 
@@ -76,13 +62,10 @@ func TestUploadVideoChunk(t *testing.T) {
 
 		assert.False(t, ok)
 		assert.True(t, msg.NakCalled)
-		assert.NotEmpty(t, removed)
 	})
 }
 
 func TestPublishJetstreamCompleteMsg(t *testing.T) {
-	t.Cleanup(func() { removeAll = os.RemoveAll })
-
 	payload := handler.ChunkCompleteMessage{JobID: "job-1", ChunkIndex: 0}
 
 	t.Run("publish failure naks msg and does not write kv or ack", func(t *testing.T) {
@@ -110,13 +93,10 @@ func TestPublishJetstreamCompleteMsg(t *testing.T) {
 		assert.False(t, msg.AckCalled)
 	})
 
-	t.Run("success acks msg, writes kv, and cleans up temp folders", func(t *testing.T) {
+	t.Run("success acks msg and writes kv", func(t *testing.T) {
 		js := &test.MockJS{}
 		msg := &test.MockMsg{}
 		kv := &test.MockKV{}
-
-		var removed []string
-		removeAll = func(path string) error { removed = append(removed, path); return nil }
 
 		ok := publishJetstreamCompleteMsg(js, kv, msg, payload, test.SilentLogger())
 
@@ -124,7 +104,5 @@ func TestPublishJetstreamCompleteMsg(t *testing.T) {
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
 		assert.Equal(t, "job-1.0", kv.PutKey)
-		assert.Contains(t, removed, "/tmp/processed_chunk-job-1")
-		assert.Contains(t, removed, "/tmp/jobs/job-1")
 	})
 }
