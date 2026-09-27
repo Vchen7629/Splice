@@ -12,6 +12,7 @@ import (
 
 	"splice.com/go_services/internal/recombiner"
 	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
@@ -170,7 +171,7 @@ func TestRecombineVideoI(t *testing.T) {
 		}
 
 		assert.Eventually(t, func() bool {
-			_, chunkErr := os.Stat("/tmp/processed_chunk-job-combine")
+			_, chunkErr := os.Stat(storage.TempUnprocessedDir("processed_chunk-job-combine"))
 			_, jobErr := os.Stat("/tmp/jobs/job-combine")
 			return os.IsNotExist(chunkErr) && os.IsNotExist(jobErr)
 		}, 5*time.Second, 100*time.Millisecond, "temp folders were not cleaned up after job completed")

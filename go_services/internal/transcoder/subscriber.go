@@ -131,7 +131,7 @@ func processChunk(
 // cleanupTempFolders removes the unprocessed and processed temp dirs for a chunk.
 // Must run after the chunk's output file is no longer needed (i.e. after upload).
 func cleanupTempFolders(chunkName string, logger *slog.Logger) {
-	if err := removeAll("/tmp/temp-unprocessed-" + chunkName); err != nil {
+	if err := removeAll(storage.TempUnprocessedDir(chunkName)); err != nil {
 		logger.Warn("error removing the temp unprocessed folder", "chunk_name", chunkName, "err", err)
 	}
 	if err := removeAll("/tmp/temp-processed-" + chunkName); err != nil {

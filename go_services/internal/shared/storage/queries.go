@@ -65,6 +65,11 @@ func validatePathSegment(name string) error {
 
 var removeAll = os.RemoveAll
 
+// returns local directory GetVideoChunk downloads chunkName into
+func TempUnprocessedDir(chunkName string) string {
+	return filepath.Join("/tmp/temp-unprocessed-" + chunkName)
+}
+
 // fetch the video chunk seaweedfs storage
 func GetVideoChunk(storageURL, chunkName string) (string, error) {
 	err := validatePathSegment(chunkName)
@@ -101,7 +106,7 @@ func GetVideoChunk(storageURL, chunkName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jobDir := filepath.Join("/tmp/temp-unprocessed-" + chunkName)
+	jobDir := TempUnprocessedDir(chunkName)
 
 	err = os.MkdirAll(jobDir, 0755)
 	if err != nil {
