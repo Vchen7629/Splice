@@ -13,7 +13,7 @@ import (
 )
 
 // uploads the recombined video to seaweedfs storage and naks the msg on failure.
-func uploadVideoChunk(msg jetstream.Msg, outputPath, baseStorageURL, jobID string, logger *slog.Logger) (bool, string) {
+func uploadVideoChunk(outputPath, baseStorageURL, jobID string, logger *slog.Logger) (string, error) {
 	outFileName := filepath.Base(outputPath)
 	url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, jobID, outFileName)
 
@@ -25,18 +25,17 @@ func uploadVideoChunk(msg jetstream.Msg, outputPath, baseStorageURL, jobID strin
 			"file_path", outputPath,
 			"err", err,
 		)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false, ""
+		return "", err
 	}
 
-	return true, storageUrl
+	return storageUrl, nil
 }
 
 // publishes the "processed" jetstream msg, updates the KeyValue, and updates Job Progress KV
 func publishJetstreamProcessedMsg(
-	nc handler.Publisher, js jetstream.JetStream, processedKV jetstream.KeyValue, msg jetstream.Msg,
+	nc handler.Publisher, js jetstream.JetStream, processedKV jetstream.KeyValue,
 	payload VideoChunkMessage, storageUrl string, logger *slog.Logger,
-) bool {
+) error {
 	const pubSubject = "jobs.chunks.complete"
 
 	err := sJetstream.PublishJetstreamMsg(js, handler.ChunkCompleteMessage{
@@ -47,15 +46,13 @@ func publishJetstreamProcessedMsg(
 	}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false
+		return err
 	}
 
 	err = sJetstream.PutKeyKV(processedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as processed", "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false
+		return err
 	}
 
 	pct, err := jobProgressPct(context.Background(), processedKV, payload.JobID, payload.TotalChunks, logger)
@@ -65,7 +62,5 @@ func publishJetstreamProcessedMsg(
 		handler.NewProgressReporter(nc, payload.JobID, "transcoder", logger)(pct)
 	}
 
-	sJetstream.AckWithErrHandling(logger, msg)
-
-	return true
+	return nil
 }

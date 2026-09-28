@@ -62,13 +62,15 @@ func ConsumeVideoChunk(
 				return shouldCancel
 			}
 
-			chunkProcessed, outputPath := processChunk(jobMilestoneKV, msg, payload, logger)
-			if !chunkProcessed {
+			outputPath, err := processChunk(jobMilestoneKV, payload, logger)
+			if err != nil {
+				sJetstream.NakWithErrHandling(logger, msg)
 				return false
 			}
 
-			uploadedChunk, storageURL := uploadVideoChunk(msg, outputPath, baseStorageURL, payload.JobID, logger)
-			if !uploadedChunk {
+			storageURL, err := uploadVideoChunk(outputPath, baseStorageURL, payload.JobID, logger)
+			if err != nil {
+				sJetstream.NakWithErrHandling(logger, msg)
 				return false
 			}
 
@@ -77,7 +79,13 @@ func ConsumeVideoChunk(
 				return shouldCancel
 			}
 
-			return publishJetstreamProcessedMsg(nc, js, processedKV, msg, payload, storageURL, logger)
+			err = publishJetstreamProcessedMsg(nc, js, processedKV, payload, storageURL, logger)
+			if err != nil {
+				sJetstream.NakWithErrHandling(logger, msg)
+				return false
+			}
+			sJetstream.AckWithErrHandling(logger, msg)
+			return true
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
@@ -98,15 +106,12 @@ func ConsumeVideoChunk(
 }
 
 // process (transcode) a video chunk from nats msg. Includes Updating the job status to be transcoder stage -> fetching the chunk
-// -> transcoding it. returns a bool: false if any part fails and we want to stop or true if its done
-func processChunk(
-	jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, payload VideoChunkMessage, logger *slog.Logger,
-) (bool, string) {
+// -> transcoding it. returns the outputPath and the error
+func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, logger *slog.Logger) (string, error) {
 	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false, ""
+		return "", err
 	}
 
 	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
@@ -114,18 +119,16 @@ func processChunk(
 	filePath, err := storage.GetVideoChunk(payload.StorageURL, chunkName)
 	if err != nil {
 		logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false, ""
+		return "", err
 	}
 
 	outputPath, err := transcodeVideo(filePath, payload.TargetResolution, chunkName, logger)
 	if err != nil {
 		logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false, ""
+		return "", err
 	}
 
-	return true, outputPath
+	return outputPath, nil
 }
 
 // cleanupTempFolders removes the unprocessed and processed temp dirs for a chunk.
