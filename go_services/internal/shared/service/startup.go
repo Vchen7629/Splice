@@ -8,7 +8,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/storage"
 )
 
@@ -20,28 +19,26 @@ type BaseConfig struct {
 
 // loads the service config from .env file, checks storage health (connectivity)
 // before connecting to nats and jetstream
-func Connect(serviceName string, cfg BaseConfig) (*nats.Conn, jetstream.JetStream, *slog.Logger, error) {
-	logger := middleware.StructuredLogger(cfg.ProdMode, serviceName)
-
+func Connect(logger *slog.Logger, cfg BaseConfig) (*nats.Conn, jetstream.JetStream, error) {
 	err := storage.CheckHealth(cfg.BaseStorageURL, logger)
 	if err != nil {
 		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
-		return nil, nil, logger, err
+		return nil, nil, err
 	}
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
 		logger.Error("unable to connect to nats", "err", err)
-		return nil, nil, logger, err
+		return nil, nil, err
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Error("unable to connect to jetstream", "err", err)
-		return nil, nil, logger, err
+		return nil, nil, err
 	}
 
-	return nc, js, logger, nil
+	return nc, js, nil
 }
 
 type ncDrainer interface {

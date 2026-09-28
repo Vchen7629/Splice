@@ -29,10 +29,11 @@ func TestMain(m *testing.M) {
 }
 
 func TestConnectI(t *testing.T) {
+	logger := test.SilentLogger()
 	t.Run("nats unreachable returns error", func(t *testing.T) {
 		cfg := service.BaseConfig{BaseStorageURL: sharedFilerURL, NatsURL: "nats://localhost:1"}
 
-		nc, js, _, err := service.Connect("test-worker", cfg)
+		nc, js, err := service.Connect(logger, cfg)
 
 		require.Error(t, err)
 		assert.Nil(t, nc)
@@ -43,12 +44,11 @@ func TestConnectI(t *testing.T) {
 		_, natsConn := test.SetupNats(t)
 		cfg := service.BaseConfig{BaseStorageURL: sharedFilerURL, NatsURL: natsConn.ConnectedUrl()}
 
-		nc, js, logger, err := service.Connect("test-worker", cfg)
+		nc, js, err := service.Connect(logger, cfg)
 
 		require.NoError(t, err)
 		t.Cleanup(nc.Close)
 		assert.NotNil(t, js)
-		assert.NotNil(t, logger)
 		assert.True(t, nc.IsConnected())
 	})
 }

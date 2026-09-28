@@ -13,6 +13,7 @@ import (
 	"splice.com/go_services/internal/gateway"
 	shandler "splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 )
 
@@ -31,7 +32,9 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	nc, js, logger, err := service.Connect("gateway", cfg.BaseConfig)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "gateway")
+
+	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
 		os.Exit(1)
 		return
