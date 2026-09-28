@@ -11,44 +11,38 @@ import (
 	"splice.com/go_services/internal/shared/storage"
 )
 
-// uploads the recombined video to seaweedfs storage. Cleans up temp files and naks the msg on failure.
-func uploadVideoChunk(
-	outputPath, baseStorageURL string, msg jetstream.Msg, payload handler.ChunkCompleteMessage, logger *slog.Logger,
-) bool {
+// uploads the recombined video to seaweedfs storage.
+func uploadVideoChunk(outputPath, baseStorageURL string, payload handler.ChunkCompleteMessage, logger *slog.Logger) error {
 	fileName := filepath.Base(outputPath)
 	url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
 
 	_, err := storage.UploadVideoChunk(url, outputPath)
 	if err != nil {
 		logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false
+		return err
 	}
 
-	return true
+	return nil
 }
 
+// publishes a jetstream msg to mark the job as complete
 func publishJetstreamCompleteMsg(
-	js jetstream.JetStream, msgRecievedKV jetstream.KeyValue, msg jetstream.Msg, payload handler.ChunkCompleteMessage, logger *slog.Logger,
-) bool {
+	js jetstream.JetStream, msgRecievedKV jetstream.KeyValue, payload handler.ChunkCompleteMessage, logger *slog.Logger,
+) error {
 	const pubSubject = "jobs.complete"
 	err := sJetstream.PublishJetstreamMsg(js, handler.JobCompleteMessage{JobID: payload.JobID}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub msg for video processing complete", "job_id", payload.JobID, "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false
+		return err
 	}
 
 	err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as recieved", "err", err)
-		sJetstream.NakWithErrHandling(logger, msg)
-		return false
+		return err
 	}
-
-	sJetstream.AckWithErrHandling(logger, msg)
 
 	logger.Debug("job complete", "job_id", payload.JobID)
 
-	return true
+	return nil
 }

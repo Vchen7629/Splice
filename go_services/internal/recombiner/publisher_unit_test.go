@@ -18,7 +18,8 @@ import (
 )
 
 func TestUploadVideoChunk(t *testing.T) {
-	t.Run("successful upload returns true and does not nak", func(t *testing.T) {
+	logger := test.SilentLogger()
+	t.Run("successful upload returns nil error", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -27,16 +28,14 @@ func TestUploadVideoChunk(t *testing.T) {
 		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
 		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
 
-		msg := &test.MockMsg{}
 		payload := handler.ChunkCompleteMessage{JobID: "job-1"}
 
-		ok := uploadVideoChunk(outputPath, srv.URL, msg, payload, test.SilentLogger())
+		err := uploadVideoChunk(outputPath, srv.URL, payload, logger)
 
-		assert.True(t, ok)
-		assert.False(t, msg.NakCalled)
+		assert.Nil(t, err)
 	})
 
-	t.Run("upload failure naks msg", func(t *testing.T) {
+	t.Run("upload failure returns err", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
@@ -45,64 +44,50 @@ func TestUploadVideoChunk(t *testing.T) {
 		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
 		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
 
-		msg := &test.MockMsg{}
 		payload := handler.ChunkCompleteMessage{JobID: "job-1"}
 
-		ok := uploadVideoChunk(outputPath, srv.URL, msg, payload, test.SilentLogger())
+		err := uploadVideoChunk(outputPath, srv.URL, payload, logger)
 
-		assert.False(t, ok)
-		assert.True(t, msg.NakCalled)
+		assert.NotNil(t, err)
 	})
 
-	t.Run("missing output file naks msg", func(t *testing.T) {
-		msg := &test.MockMsg{}
+	t.Run("missing output file returns err", func(t *testing.T) {
 		payload := handler.ChunkCompleteMessage{JobID: "job-2"}
 
-		ok := uploadVideoChunk("/nonexistent/chunk.mp4", "http://unused", msg, payload, test.SilentLogger())
+		err := uploadVideoChunk("/nonexistent/chunk.mp4", "http://unused", payload, logger)
 
-		assert.False(t, ok)
-		assert.True(t, msg.NakCalled)
+		assert.NotNil(t, err)
 	})
 }
 
 func TestPublishJetstreamCompleteMsg(t *testing.T) {
 	payload := handler.ChunkCompleteMessage{JobID: "job-1", ChunkIndex: 0}
 
-	t.Run("publish failure naks msg and does not write kv or ack", func(t *testing.T) {
+	t.Run("publish failure returns the err", func(t *testing.T) {
 		js := &test.MockJS{PublishErr: errors.New("nats unavailable")}
-		msg := &test.MockMsg{}
 		kv := &test.MockKV{}
 
-		ok := publishJetstreamCompleteMsg(js, kv, msg, payload, test.SilentLogger())
+		err := publishJetstreamCompleteMsg(js, kv, payload, test.SilentLogger())
 
-		assert.False(t, ok)
-		assert.True(t, msg.NakCalled)
-		assert.False(t, msg.AckCalled)
-		assert.Empty(t, kv.PutKey)
+		assert.NotNil(t, err)
 	})
 
-	t.Run("kv write failure naks msg after publish succeeds", func(t *testing.T) {
+	t.Run("kv write failure returns err after publish succeeds", func(t *testing.T) {
 		js := &test.MockJS{}
-		msg := &test.MockMsg{}
 		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
 
-		ok := publishJetstreamCompleteMsg(js, kv, msg, payload, test.SilentLogger())
+		err := publishJetstreamCompleteMsg(js, kv, payload, test.SilentLogger())
 
-		assert.False(t, ok)
-		assert.True(t, msg.NakCalled)
-		assert.False(t, msg.AckCalled)
+		assert.NotNil(t, err)
 	})
 
-	t.Run("success acks msg and writes kv", func(t *testing.T) {
+	t.Run("success returns no error and writes kv", func(t *testing.T) {
 		js := &test.MockJS{}
-		msg := &test.MockMsg{}
 		kv := &test.MockKV{}
 
-		ok := publishJetstreamCompleteMsg(js, kv, msg, payload, test.SilentLogger())
+		err := publishJetstreamCompleteMsg(js, kv, payload, test.SilentLogger())
 
-		assert.True(t, ok)
-		assert.True(t, msg.AckCalled)
-		assert.False(t, msg.NakCalled)
+		assert.Nil(t, err)
 		assert.Equal(t, "job-1.0", kv.PutKey)
 	})
 }
