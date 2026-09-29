@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
@@ -68,8 +69,17 @@ func ConsumeVideoChunk(
 				return false
 			}
 
-			storageURL, err := uploadVideoChunk(outputPath, baseStorageURL, payload.JobID, logger)
+			outFileName := filepath.Base(outputPath)
+			url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, outFileName)
+
+			storageURL, err := storage.UploadVideoChunk(url, outputPath)
 			if err != nil {
+				logger.Error(
+					"error saving transcoded video chunk to seaweedfs storage",
+					"job_id", payload.JobID,
+					"file_path", outputPath,
+					"err", err,
+				)
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
 			}

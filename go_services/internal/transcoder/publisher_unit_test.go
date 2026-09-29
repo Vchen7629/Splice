@@ -4,16 +4,11 @@ package transcoder
 
 import (
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockPublisher stubs handler.Publisher for progress-reporting assertions.
@@ -25,45 +20,6 @@ type mockPublisher struct {
 func (m *mockPublisher) Publish(subj string, _ []byte) error {
 	m.published = append(m.published, subj)
 	return m.err
-}
-
-func TestUploadVideoChunk(t *testing.T) {
-	t.Run("successful upload returns storage url and no error", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(srv.Close)
-
-		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
-		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
-
-		storageUrl, err := uploadVideoChunk(outputPath, srv.URL, "job-1", test.SilentLogger())
-
-		assert.NotEmpty(t, storageUrl)
-		assert.Nil(t, err)
-	})
-
-	t.Run("upload failure returns empty storage url and error", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		t.Cleanup(srv.Close)
-
-		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
-		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
-
-		storageUrl, err := uploadVideoChunk(outputPath, srv.URL, "job-1", test.SilentLogger())
-
-		assert.Empty(t, storageUrl)
-		assert.NotNil(t, err)
-	})
-
-	t.Run("missing output file returns empty storage url and err", func(t *testing.T) {
-		storageUrl, err := uploadVideoChunk("/nonexistent/chunk.mp4", "http://unused", "job-2", test.SilentLogger())
-
-		assert.Empty(t, storageUrl)
-		assert.NotNil(t, err)
-	})
 }
 
 func TestPublishJetstreamProcessedMsg(t *testing.T) {

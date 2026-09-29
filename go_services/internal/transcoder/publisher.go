@@ -4,32 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/storage"
 )
-
-// uploads the recombined video to seaweedfs storage and naks the msg on failure.
-func uploadVideoChunk(outputPath, baseStorageURL, jobID string, logger *slog.Logger) (string, error) {
-	outFileName := filepath.Base(outputPath)
-	url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, jobID, outFileName)
-
-	storageUrl, err := storage.UploadVideoChunk(url, outputPath)
-	if err != nil {
-		logger.Error(
-			"error saving transcoded video chunk to seaweedfs storage",
-			"job_id", jobID,
-			"file_path", outputPath,
-			"err", err,
-		)
-		return "", err
-	}
-
-	return storageUrl, nil
-}
 
 // publishes the "processed" jetstream msg, updates the KeyValue, and updates Job Progress KV
 func publishJetstreamProcessedMsg(
