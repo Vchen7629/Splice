@@ -4,61 +4,13 @@ package recombiner
 
 import (
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestUploadVideoChunk(t *testing.T) {
-	logger := test.SilentLogger()
-	t.Run("successful upload returns nil error", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(srv.Close)
-
-		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
-		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
-
-		payload := handler.ChunkCompleteMessage{JobID: "job-1"}
-
-		err := uploadVideoChunk(outputPath, srv.URL, payload, logger)
-
-		assert.Nil(t, err)
-	})
-
-	t.Run("upload failure returns err", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		t.Cleanup(srv.Close)
-
-		outputPath := filepath.Join(t.TempDir(), "chunk.mp4")
-		require.NoError(t, os.WriteFile(outputPath, []byte("fake video"), 0644))
-
-		payload := handler.ChunkCompleteMessage{JobID: "job-1"}
-
-		err := uploadVideoChunk(outputPath, srv.URL, payload, logger)
-
-		assert.NotNil(t, err)
-	})
-
-	t.Run("missing output file returns err", func(t *testing.T) {
-		payload := handler.ChunkCompleteMessage{JobID: "job-2"}
-
-		err := uploadVideoChunk("/nonexistent/chunk.mp4", "http://unused", payload, logger)
-
-		assert.NotNil(t, err)
-	})
-}
 
 func TestPublishJetstreamCompleteMsg(t *testing.T) {
 	payload := handler.ChunkCompleteMessage{JobID: "job-1", ChunkIndex: 0}

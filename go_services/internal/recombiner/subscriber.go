@@ -3,6 +3,7 @@ package recombiner
 import (
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
@@ -71,8 +72,12 @@ func RecombineVideo(
 			}
 			defer CleanUpTempFolders(payload.JobID, logger)
 
-			err = uploadVideoChunk(outputPath, baseStorageURL, payload, logger)
+			fileName := filepath.Base(outputPath)
+			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
+
+			_, err = storage.UploadVideoChunk(url, outputPath)
 			if err != nil {
+				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
 			}

@@ -3,27 +3,11 @@ package recombiner
 import (
 	"fmt"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/storage"
 )
-
-// uploads the recombined video to seaweedfs storage.
-func uploadVideoChunk(outputPath, baseStorageURL string, payload handler.ChunkCompleteMessage, logger *slog.Logger) error {
-	fileName := filepath.Base(outputPath)
-	url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
-
-	_, err := storage.UploadVideoChunk(url, outputPath)
-	if err != nil {
-		logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
-		return err
-	}
-
-	return nil
-}
 
 // publishes a jetstream msg to mark the job as complete
 func publishJetstreamCompleteMsg(
