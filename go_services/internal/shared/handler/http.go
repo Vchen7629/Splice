@@ -34,8 +34,15 @@ func StartHealthHttpServer(logger *slog.Logger, httpPort string) *http.Server {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	StartHttpServer(server, logger)
+
+	return server
+}
+
+// starts the http server by running listenAndServe in gorouting, exiting process if it fails to listen
+func StartHttpServer(server *http.Server, logger *slog.Logger) {
 	go func() {
-		fmt.Printf("server running on http://localhost:%s\n", httpPort)
+		fmt.Printf("server running on http://localhost:%s\n", server.Addr)
 
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
@@ -43,8 +50,6 @@ func StartHealthHttpServer(logger *slog.Logger, httpPort string) *http.Server {
 			osExit(1)
 		}
 	}()
-
-	return server
 }
 
 // cleanup http server when shutting down go services

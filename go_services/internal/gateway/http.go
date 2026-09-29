@@ -62,14 +62,7 @@ func StartHttpApi(
 		WriteTimeout:      15 * time.Minute,
 	}
 
-	go func() {
-		fmt.Printf("server running on http://localhost:%s\n", cfg.HTTPPort)
-		err := server.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			logger.Error("http server error", "err", err)
-			osExit(1)
-		}
-	}()
+	handler.StartHttpServer(server, logger)
 
 	return server
 }
