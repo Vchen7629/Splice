@@ -1,7 +1,6 @@
 package recombiner
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -20,7 +19,7 @@ func publishJetstreamCompleteMsg(
 		return err
 	}
 
-	err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
+	err = sJetstream.PutKeyKV(msgRecievedKV, payload.ChunkKVKey(), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as recieved", "err", err)
 		return err

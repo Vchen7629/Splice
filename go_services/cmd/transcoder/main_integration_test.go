@@ -75,8 +75,7 @@ func TestTranscoderServiceI(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 
 		payload, err := json.Marshal(transcoder.VideoChunkMessage{
-			JobID:            jobID,
-			ChunkIndex:       0,
+			ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks:      1,
 			StorageURL:       storageURL,
 			TargetResolution: "240p",

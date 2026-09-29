@@ -22,8 +22,7 @@ const ackWaitU = 30 * time.Second
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
 	data, err := json.Marshal(shandler.ChunkCompleteMessage{
-		JobID:       jobID,
-		ChunkIndex:  0,
+		ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		TotalChunks: 2, // not ready — combine never runs
 		StorageURL:  "http://localhost:1/job-1/chunk.mp4",
 	})
@@ -91,8 +90,7 @@ func TestRecombineVideo(t *testing.T) {
 	t.Run("ack failure on a non-triggering chunk still persists kv", func(t *testing.T) {
 		// AddChunkKV runs before Ack for a non-triggering chunk, so it succeeds even if Ack later fails.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 2, // not ready — combine never runs
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -129,8 +127,7 @@ func TestRecombineVideo(t *testing.T) {
 
 	t.Run("triggering chunk advances the job milestone", func(t *testing.T) {
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})

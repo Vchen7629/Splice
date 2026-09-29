@@ -13,7 +13,7 @@ import (
 )
 
 func TestPublishJetstreamCompleteMsg(t *testing.T) {
-	payload := handler.ChunkCompleteMessage{JobID: "job-1", ChunkIndex: 0}
+	payload := handler.ChunkCompleteMessage{ChunkRef: handler.ChunkRef{JobID: "job-1", ChunkIndex: 0}}
 
 	t.Run("publish failure returns the err", func(t *testing.T) {
 		js := &test.MockJS{PublishErr: errors.New("nats unavailable")}

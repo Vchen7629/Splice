@@ -95,8 +95,7 @@ func TestRecombinerServiceI(t *testing.T) {
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerURL, jobID, fileName)
 			payload, err := json.Marshal(handler.ChunkCompleteMessage{
-				JobID:       jobID,
-				ChunkIndex:  i,
+				ChunkRef:    handler.ChunkRef{JobID: jobID, ChunkIndex: i},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})

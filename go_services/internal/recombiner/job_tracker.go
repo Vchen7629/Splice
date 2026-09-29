@@ -50,7 +50,7 @@ func listJobChunksKV(kv jetstream.KeyValue, jobID string, logger *slog.Logger) (
 	defer func() {
 		err := lister.Stop()
 		if err != nil {
-			logger.Warn("failed to stop lister at the end")
+			logger.Warn("failed to stop lister at the end", "err", err)
 		}
 	}()
 

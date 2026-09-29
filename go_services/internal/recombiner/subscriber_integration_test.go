@@ -109,8 +109,7 @@ func TestRecombineVideoI(t *testing.T) {
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-partial",
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: "job-partial", ChunkIndex: 0},
 			TotalChunks: 2,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -154,8 +153,7 @@ func TestRecombineVideoI(t *testing.T) {
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/job-combine/processed/%s", sharedFilerURL, fileName)
 			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-				JobID:       "job-combine",
-				ChunkIndex:  i,
+				ChunkRef:    shandler.ChunkRef{JobID: "job-combine", ChunkIndex: i},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})
@@ -209,8 +207,7 @@ func TestRecombineVideoI(t *testing.T) {
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerURL, jobID, fileName)
 			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-				JobID:       jobID,
-				ChunkIndex:  i,
+				ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: i},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})
@@ -252,8 +249,7 @@ func TestRecombineVideoI(t *testing.T) {
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       jobID,
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "http://storage/fake",
 		})
@@ -281,8 +277,7 @@ func TestRecombineVideoI(t *testing.T) {
 
 		// Partial chunk (TotalChunks:2) so combine never fires — KV write still happens after ack.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       jobID,
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks: 2,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -329,8 +324,7 @@ func TestRecombineVideoI(t *testing.T) {
 
 		publishChunk := func(idx int, storageURL string) {
 			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-				JobID:       jobID,
-				ChunkIndex:  idx,
+				ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: idx},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})

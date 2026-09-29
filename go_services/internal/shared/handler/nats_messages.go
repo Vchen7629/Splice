@@ -1,5 +1,17 @@
 package handler
 
+import "fmt"
+
+type ChunkRef struct {
+	JobID      string `json:"job_id"`
+	ChunkIndex int    `json:"chunk_index"`
+}
+
+// returns the key that identifies this chunk in the KV bucket, in form of <jobID>.<chunkIndex>
+func (m *ChunkRef) ChunkKVKey() string {
+	return fmt.Sprintf("%s.%d", m.JobID, m.ChunkIndex)
+}
+
 type VideoJobMessage struct {
 	JobID            string `json:"job_id"`
 	TargetResolution string `json:"target_resolution"`
@@ -8,8 +20,7 @@ type VideoJobMessage struct {
 }
 
 type ChunkCompleteMessage struct {
-	JobID       string `json:"job_id"`
-	ChunkIndex  int    `json:"chunk_index"`
+	ChunkRef
 	TotalChunks int    `json:"total_chunks"`
 	StorageURL  string `json:"storage_url"`
 }

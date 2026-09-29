@@ -33,7 +33,7 @@ func RecombineVideo(
 			return
 		}
 
-		recieved, err := sJetstream.CheckKeyExist(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex))
+		recieved, err := sJetstream.CheckKeyExist(msgRecievedKV, payload.ChunkKVKey())
 		if err != nil {
 			logger.Error("failed to check chunk recieved", "err", err)
 			return
@@ -121,7 +121,7 @@ func recordVideoChunkArrival(msgRecievedKV jetstream.KeyValue, payload handler.C
 		return false, nil, err
 	}
 	if !ready {
-		err = sJetstream.PutKeyKV(msgRecievedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
+		err = sJetstream.PutKeyKV(msgRecievedKV, payload.ChunkKVKey(), []byte("processed"))
 		if err != nil {
 			logger.Error("failed to mark job chunk as recieved", "err", err)
 			return false, nil, err

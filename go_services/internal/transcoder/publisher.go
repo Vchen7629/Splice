@@ -2,7 +2,6 @@ package transcoder
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -18,8 +17,7 @@ func publishJetstreamProcessedMsg(
 	const pubSubject = "jobs.chunks.complete"
 
 	err := sJetstream.PublishJetstreamMsg(js, handler.ChunkCompleteMessage{
-		JobID:       payload.JobID,
-		ChunkIndex:  payload.ChunkIndex,
+		ChunkRef:    payload.ChunkRef,
 		TotalChunks: payload.TotalChunks,
 		StorageURL:  storageUrl,
 	}, pubSubject)
@@ -28,7 +26,7 @@ func publishJetstreamProcessedMsg(
 		return err
 	}
 
-	err = sJetstream.PutKeyKV(processedKV, fmt.Sprintf("%s.%d", payload.JobID, payload.ChunkIndex), []byte("processed"))
+	err = sJetstream.PutKeyKV(processedKV, payload.ChunkKVKey(), []byte("processed"))
 	if err != nil {
 		logger.Error("failed to mark job chunk as processed", "err", err)
 		return err

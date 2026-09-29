@@ -29,8 +29,7 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 		msg := handler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  2,
+			ChunkRef:    handler.ChunkRef{JobID: "job-1", ChunkIndex: 2},
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-2.mp4",
 		}
@@ -71,8 +70,7 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		require.NoError(t, err)
 
 		err = PublishJetstreamMsg(js, handler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
+			ChunkRef:    handler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-0.mp4",
 		}, "jobs.chunks.complete")

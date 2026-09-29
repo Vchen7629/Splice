@@ -56,8 +56,7 @@ func TestPublishChunkComplete(t *testing.T) {
 		mock := &test.MockJS{PublishErr: publishErr}
 
 		err := sJetstream.PublishJetstreamMsg(mock, handler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
+			ChunkRef:    handler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 0,
 			StorageURL:  "/output/chunk-0.mp4",
 		}, "jobs.chunks.complete")
