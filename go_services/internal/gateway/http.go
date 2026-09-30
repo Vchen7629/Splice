@@ -13,8 +13,10 @@ import (
 	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/middleware"
+	"splice.com/go_services/internal/shared/storage"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -150,8 +152,10 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	v.logger.Debug("pubsubject called", "subject", pubSubject)
 
-	result, err := SaveUploadedVideo(file, v.storageURL, header.Filename)
-	if err != nil {
+	const uploadTimeout = 5 * time.Minute
+	jobID := uuid.New().String()
+	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, header.Filename)
+	if err := storage.Upload(url, file, uploadTimeout); err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
 		v.logger.Error("failed to save uploaded video", "err", err)
 		return
@@ -160,7 +164,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
 
 	kh := KVHandler{logger: v.logger, kv: v.kv}
-	err = kh.updateJobStatusKV(r.Context(), result.JobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
+	err = kh.updateJobStatusKV(r.Context(), jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
 	if err != nil {
 		http.Error(w, "failed to record job status", http.StatusInternalServerError)
 		return
@@ -168,12 +172,12 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	err = sJetstream.PublishJetstreamMsg(
 		v.js, handler.VideoJobMessage{
-			JobID: result.JobID, TargetResolution: targetRes, SourceResolution: sourceRes, StorageURL: result.StorageURL,
+			JobID: jobID, TargetResolution: targetRes, SourceResolution: sourceRes, StorageURL: url,
 		}, pubSubject,
 	)
 	if err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)
-		kvErr := kh.updateJobStatusKV(r.Context(), result.JobID, sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "upload"})
+		kvErr := kh.updateJobStatusKV(r.Context(), jobID, sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "upload"})
 		if kvErr != nil {
 			v.logger.Error("failed to mark job failed after publish error", "err", kvErr)
 		}
@@ -181,11 +185,11 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	v.logger.Info("video upload job submitted", "job_id", result.JobID, "file", header.Filename)
+	v.logger.Info("video upload job submitted", "job_id", jobID, "file", header.Filename)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	err = json.NewEncoder(w).Encode(uploadResponse{JobID: result.JobID})
+	err = json.NewEncoder(w).Encode(uploadResponse{JobID: jobID})
 	if err != nil {
 		http.Error(w, "error encoding http response", http.StatusInternalServerError)
 		v.logger.Error("error encoding success http response", "err", err)

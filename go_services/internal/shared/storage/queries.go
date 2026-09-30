@@ -13,6 +13,33 @@ import (
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
+// uploads (PUT) body to the storage url
+func Upload(url string, body io.Reader, timeout time.Duration) error {
+	client := &http.Client{Timeout: timeout} // 0 = no timeout
+	req, err := http.NewRequest(http.MethodPut, url, body)
+	if err != nil {
+		return fmt.Errorf("error creating upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error connecting to seaweedfs: %w", err)
+	}
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Printf("error closing the response body, %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("seaweedfs upload failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 // save the video chunk to seaweedfs storage
 func UploadVideoChunk(url, filePath string) (string, error) {
 	file, err := os.Open(filePath)
@@ -26,25 +53,8 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 		}
 	}()
 
-	req, err := http.NewRequest(http.MethodPut, url, file)
-	if err != nil {
-		return "", fmt.Errorf("error creating upload request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/octet-stream")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error connecting to seaweedfs: %w", err)
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Printf("error closing the response body, %v", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("seaweedfs upload failed with status: %d", resp.StatusCode)
+	if err := Upload(url, file, 30*time.Second); err != nil {
+		return "", err
 	}
 
 	return url, nil
