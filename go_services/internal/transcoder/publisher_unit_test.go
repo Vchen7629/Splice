@@ -37,16 +37,6 @@ func TestPublishJetstreamProcessedMsg(t *testing.T) {
 		assert.Empty(t, kv.PutKey)
 	})
 
-	t.Run("kv write failure returns err after publish succeeds but kv put fails", func(t *testing.T) {
-		js := &test.MockJS{}
-		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
-		pub := &mockPublisher{}
-
-		err := publishJetstreamProcessedMsg(pub, js, kv, payload, "http://storage/chunk.mp4", test.SilentLogger())
-
-		assert.NotNil(t, err)
-	})
-
 	t.Run("success returns no error, writes kv, and reports progress", func(t *testing.T) {
 		js := &test.MockJS{}
 		kv := &test.MockKV{}

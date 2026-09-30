@@ -121,9 +121,7 @@ func recordVideoChunkArrival(msgRecievedKV jetstream.KeyValue, payload handler.C
 		return false, nil, err
 	}
 	if !ready {
-		err = sJetstream.PutKeyKV(msgRecievedKV, payload.ChunkKVKey(), []byte("processed"))
-		if err != nil {
-			logger.Error("failed to mark job chunk as recieved", "err", err)
+		if err := sJetstream.MarkChunkProcessed(msgRecievedKV, payload.ChunkKVKey(), logger); err != nil {
 			return false, nil, err
 		}
 		return false, nil, nil

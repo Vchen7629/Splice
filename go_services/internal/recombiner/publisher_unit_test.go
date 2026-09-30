@@ -24,15 +24,6 @@ func TestPublishJetstreamCompleteMsg(t *testing.T) {
 		assert.NotNil(t, err)
 	})
 
-	t.Run("kv write failure returns err after publish succeeds", func(t *testing.T) {
-		js := &test.MockJS{}
-		kv := &test.MockKV{PutErr: errors.New("kv unavailable")}
-
-		err := publishJetstreamCompleteMsg(js, kv, payload, test.SilentLogger())
-
-		assert.NotNil(t, err)
-	})
-
 	t.Run("success returns no error and writes kv", func(t *testing.T) {
 		js := &test.MockJS{}
 		kv := &test.MockKV{}

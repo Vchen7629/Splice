@@ -19,9 +19,7 @@ func publishJetstreamCompleteMsg(
 		return err
 	}
 
-	err = sJetstream.PutKeyKV(msgRecievedKV, payload.ChunkKVKey(), []byte("processed"))
-	if err != nil {
-		logger.Error("failed to mark job chunk as recieved", "err", err)
+	if err := sJetstream.MarkChunkProcessed(msgRecievedKV, payload.ChunkKVKey(), logger); err != nil {
 		return err
 	}
 

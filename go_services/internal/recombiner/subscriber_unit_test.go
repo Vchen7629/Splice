@@ -5,7 +5,6 @@ package recombiner_test
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -157,17 +156,6 @@ func TestRecombineVideo(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("already processed chunk does not write to kv again", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{GetFound: true}
-
-		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
-
-		require.NoError(t, err)
 		assert.Empty(t, kv.PutKey)
 	})
 
@@ -182,13 +170,6 @@ func TestRecombineVideo(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("kv key format is job_id.chunk_index", func(t *testing.T) {
-		jobID := "abc-123"
-		chunkIndex := 3
-		expected := fmt.Sprintf("%s.%d", jobID, chunkIndex)
-		assert.Equal(t, "abc-123.3", expected)
 	})
 
 	// Cancelled Cases

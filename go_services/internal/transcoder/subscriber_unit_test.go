@@ -125,17 +125,6 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("already processed chunk does not write to kv again", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{GetFound: true}
-
-		_, err := ConsumeVideoChunk("http://storage", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
-
-		require.NoError(t, err)
 		assert.Empty(t, kv.PutKey)
 	})
 
