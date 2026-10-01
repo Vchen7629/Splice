@@ -42,7 +42,7 @@ func StartHealthHttpServer(logger *slog.Logger, httpPort string) *http.Server {
 // starts the http server by running listenAndServe in gorouting, calling exit(1) if it fails to listen
 func StartHttpServer(server *http.Server, logger *slog.Logger, exit func(int)) {
 	go func() {
-		fmt.Printf("server running on http://localhost:%s\n", server.Addr)
+		fmt.Printf("server running on http://localhost%s\n", server.Addr)
 
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
