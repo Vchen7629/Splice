@@ -60,10 +60,10 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 	return url, nil
 }
 
-// validatePathSegment rejects path segments that could escape the intended
+// ValidatePathSegment rejects path segments that could escape the intended
 // base directory (empty, ".", "..", or containing a path separator), while
 // allowing ordinary file/job names such as "my.video.mp4" or "clip (1).mov".
-func validatePathSegment(name string) error {
+func ValidatePathSegment(name string) error {
 	if name == "" || name == "." || name == ".." {
 		return fmt.Errorf("invalid path segment: %q", name)
 	}
@@ -82,7 +82,7 @@ func TempUnprocessedDir(chunkName string) string {
 
 // fetch the video chunk seaweedfs storage
 func GetVideoChunk(storageURL, chunkName string) (string, error) {
-	err := validatePathSegment(chunkName)
+	err := ValidatePathSegment(chunkName)
 	if err != nil {
 		return "", err
 	}
@@ -112,7 +112,7 @@ func GetVideoChunk(storageURL, chunkName string) (string, error) {
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
 	// validate filename so external malicious filenames doesnt get through
-	err = validatePathSegment(filename)
+	err = ValidatePathSegment(filename)
 	if err != nil {
 		return "", err
 	}

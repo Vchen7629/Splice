@@ -154,6 +154,10 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	const uploadTimeout = 5 * time.Minute
 	jobID := uuid.New().String()
+	if err := storage.ValidatePathSegment(header.Filename); err != nil {
+		http.Error(w, "invalid video filename", http.StatusBadRequest)
+		return
+	}
 	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, header.Filename)
 	if err := storage.Upload(url, file, uploadTimeout); err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
