@@ -20,7 +20,6 @@ interface StatusEventData {
     job_id: string
     state: 'PROCESSING' | 'COMPLETE' | 'FAILED' | 'CANCELLED'
     stage: string
-    progress?: number
     error?: string
 }
 
@@ -67,7 +66,7 @@ function openJobConnection(job: ActiveJob, connections: Map<string, EventSource>
                 toast.error(`${job.file.name} failed to ${job.processingType.toLowerCase()}`, { description: data.error })
                 break
             case 'PROCESSING':
-                updateVideoStatus(job.processingType, job.file.id, { status: 'processing', stage: data.stage, jobProgress: data.progress ?? undefined })
+                updateVideoStatus(job.processingType, job.file.id, { status: 'processing', stage: data.stage, jobProgress: undefined })
                 break
         }
     })

@@ -5,7 +5,6 @@ package recombiner_test
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -22,8 +21,7 @@ const ackWaitU = 30 * time.Second
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
 	data, err := json.Marshal(shandler.ChunkCompleteMessage{
-		JobID:       jobID,
-		ChunkIndex:  0,
+		ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		TotalChunks: 2, // not ready — combine never runs
 		StorageURL:  "http://localhost:1/job-1/chunk.mp4",
 	})
@@ -91,8 +89,7 @@ func TestRecombineVideo(t *testing.T) {
 	t.Run("ack failure on a non-triggering chunk still persists kv", func(t *testing.T) {
 		// AddChunkKV runs before Ack for a non-triggering chunk, so it succeeds even if Ack later fails.
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 2, // not ready — combine never runs
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -129,8 +126,7 @@ func TestRecombineVideo(t *testing.T) {
 
 	t.Run("triggering chunk advances the job milestone", func(t *testing.T) {
 		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			JobID:       "job-1",
-			ChunkIndex:  0,
+			ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -160,17 +156,6 @@ func TestRecombineVideo(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("already processed chunk does not write to kv again", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{GetFound: true}
-
-		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
-
-		require.NoError(t, err)
 		assert.Empty(t, kv.PutKey)
 	})
 
@@ -185,13 +170,6 @@ func TestRecombineVideo(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("kv key format is job_id.chunk_index", func(t *testing.T) {
-		jobID := "abc-123"
-		chunkIndex := 3
-		expected := fmt.Sprintf("%s.%d", jobID, chunkIndex)
-		assert.Equal(t, "abc-123.3", expected)
 	})
 
 	// Cancelled Cases

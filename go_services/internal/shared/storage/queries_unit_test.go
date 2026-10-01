@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,59 +51,124 @@ func TestUploadVideoChunkFileErrors(t *testing.T) {
 	}
 }
 
-func TestUploadVideoChunkHTTPErrors(t *testing.T) {
+func TestUploadVideoChunk(t *testing.T) {
 	validFile := filepath.Join(t.TempDir(), "chunk.mp4")
 	require.NoError(t, os.WriteFile(validFile, []byte("fake video"), 0644))
 
-	tests := []struct {
-		name        string
-		status      int
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:        "500 returns error",
-			status:      http.StatusInternalServerError,
-			wantErr:     true,
-			errContains: "seaweedfs upload failed",
-		},
-		{
-			name:        "403 returns error",
-			status:      http.StatusForbidden,
-			wantErr:     true,
-			errContains: "seaweedfs upload failed",
-		},
-		{
-			name:    "200 returns url and no error",
-			status:  http.StatusOK,
-			wantErr: false,
-		},
-		{
-			name:    "201 returns url and no error",
-			status:  http.StatusCreated,
-			wantErr: false,
-		},
-	}
+	t.Run("returns the upload url on success", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+		}))
+		t.Cleanup(srv.Close)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.status)
-			}))
-			t.Cleanup(srv.Close)
+		url, err := UploadVideoChunk(srv.URL, validFile)
 
-			url, err := UploadVideoChunk(srv.URL, validFile)
+		require.NoError(t, err)
+		assert.Equal(t, srv.URL, url)
+	})
 
-			if tc.wantErr {
-				require.Error(t, err)
-				assert.Empty(t, url)
-				assert.Contains(t, err.Error(), tc.errContains)
-			} else {
-				require.NoError(t, err)
-				assert.NotEmpty(t, url)
+	t.Run("returns empty url when the upload fails", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		url, err := UploadVideoChunk(srv.URL, validFile)
+
+		require.Error(t, err)
+		assert.Empty(t, url)
+	})
+}
+
+func TestUpload(t *testing.T) {
+	t.Run("status codes", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			status      int
+			wantErr     bool
+			errContains string
+		}{
+			{name: "500 returns error", status: http.StatusInternalServerError, wantErr: true, errContains: "seaweedfs upload failed"},
+			{name: "403 returns error", status: http.StatusForbidden, wantErr: true, errContains: "seaweedfs upload failed"},
+			{name: "400 returns error", status: http.StatusBadRequest, wantErr: true, errContains: "seaweedfs upload failed"},
+			{name: "200 returns no error", status: http.StatusOK},
+			{name: "201 returns no error", status: http.StatusCreated},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(tc.status)
+				}))
+				t.Cleanup(srv.Close)
+
+				err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), time.Second)
+
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Contains(t, err.Error(), tc.errContains)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
+	})
+
+	t.Run("unreachable storage returns error", func(t *testing.T) {
+		err := Upload(t.Context(), "http://localhost:1", strings.NewReader("fake video"), time.Second)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
+	})
+
+	t.Run("sends a PUT with the body, path and content type", func(t *testing.T) {
+		var method, path, contentType string
+		var body []byte
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			method, path, contentType = r.Method, r.URL.Path, r.Header.Get("Content-Type")
+			body, _ = io.ReadAll(r.Body)
+			w.WriteHeader(http.StatusCreated)
+		}))
+		t.Cleanup(srv.Close)
+
+		err := Upload(t.Context(), srv.URL+"/job-1/video.mp4", strings.NewReader("fake video"), time.Second)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.MethodPut, method)
+		assert.Equal(t, "/job-1/video.mp4", path)
+		assert.Equal(t, "application/octet-stream", contentType)
+		assert.Equal(t, "fake video", string(body))
+	})
+
+	t.Run("returns error when storage does not respond within the timeout", func(t *testing.T) {
+		release := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-release:
+			case <-r.Context().Done():
 			}
-		})
-	}
+		}))
+		t.Cleanup(srv.Close)
+		t.Cleanup(func() { close(release) })
+
+		err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), 50*time.Millisecond)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
+	})
+
+	t.Run("zero timeout does not time out a slow response", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(200 * time.Millisecond)
+			w.WriteHeader(http.StatusCreated)
+		}))
+		t.Cleanup(srv.Close)
+
+		err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), 0)
+
+		require.NoError(t, err)
+	})
 }
 
 func TestGetVideoChunkHTTPErrors(t *testing.T) {

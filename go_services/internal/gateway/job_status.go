@@ -109,11 +109,10 @@ func tryUpdateMilestone(ctx context.Context, milestoneKV jetstream.KeyValue, job
 }
 
 type jobStatusResponse struct {
-	JobID    string              `json:"job_id"`
-	State    sJetstream.JobState `json:"state"`
-	Stage    string              `json:"stage"`
-	Progress *int                `json:"progress,omitempty"`
-	Error    string              `json:"error,omitempty"`
+	JobID string              `json:"job_id"`
+	State sJetstream.JobState `json:"state"`
+	Stage string              `json:"stage"`
+	Error string              `json:"error,omitempty"`
 }
 
 type JobStatusHandler struct {
@@ -148,7 +147,7 @@ func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: status.State, Stage: status.Stage, Progress: status.Progress, Error: status.Error})
+	err = json.NewEncoder(w).Encode(jobStatusResponse{JobID: jobID, State: status.State, Stage: status.Stage, Error: status.Error})
 	if err != nil {
 		j.Logger.Error("error encoding job status response", "err", err)
 	}
@@ -275,7 +274,7 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			resp := jobStatusResponse{JobID: jobID, State: current.State, Stage: current.Stage, Progress: current.Progress, Error: current.Error}
+			resp := jobStatusResponse{JobID: jobID, State: current.State, Stage: current.Stage, Error: current.Error}
 			err = writeSSEEvent(w, "status", resp)
 			if err != nil {
 				return

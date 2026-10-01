@@ -64,6 +64,17 @@ func CheckKeyExist(kv jetstream.KeyValue, key string) (bool, error) {
 	return true, nil
 }
 
+// updates the KV with processed so chunk is marked and doesnt reprocess
+func MarkChunkProcessed(processedKV jetstream.KeyValue, chunkKVKey string, logger *slog.Logger) error {
+	err := PutKeyKV(processedKV, chunkKVKey, []byte("processed"))
+	if err != nil {
+		logger.Error("failed to mark job chunk as processed", "err", err)
+		return err
+	}
+
+	return nil
+}
+
 // puts a new key value pair into the jetstream kv. Note the context is hardc
 func PutKeyKV(kv jetstream.KeyValue, key string, value []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

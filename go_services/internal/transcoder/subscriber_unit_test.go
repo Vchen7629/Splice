@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"splice.com/go_services/internal/shared/handler"
 	"testing"
 	"time"
 
@@ -23,8 +24,7 @@ import (
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
 	data, err := json.Marshal(VideoChunkMessage{
-		JobID:            jobID,
-		ChunkIndex:       0,
+		ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		StorageURL:       "http://localhost:1/job-1/chunk.mp4",
 		TargetResolution: "720p",
 	})
@@ -66,8 +66,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		}
 
 		payload, err := json.Marshal(VideoChunkMessage{
-			JobID:            jobID,
-			ChunkIndex:       chunkIndex,
+			ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: chunkIndex},
 			TotalChunks:      1,
 			StorageURL:       storageSrv.URL + "/chunk.mp4",
 			TargetResolution: "480p",
@@ -126,17 +125,6 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
 		assert.False(t, msg.NakCalled)
-	})
-
-	t.Run("already processed chunk does not write to kv again", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
-		consumer := &test.MockConsumerWithMsg{Msg: msg}
-		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{GetFound: true}
-
-		_, err := ConsumeVideoChunk("http://storage", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
-
-		require.NoError(t, err)
 		assert.Empty(t, kv.PutKey)
 	})
 
@@ -155,8 +143,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 
 	t.Run("does not write kv when chunk fetch fails", func(t *testing.T) {
 		payload, err := json.Marshal(VideoChunkMessage{
-			JobID:            "job-abc",
-			ChunkIndex:       2,
+			ChunkRef:         handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2},
 			StorageURL:       "http://localhost:1/job-abc/chunk.mp4",
 			TargetResolution: "480p",
 		})

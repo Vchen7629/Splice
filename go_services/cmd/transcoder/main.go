@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
@@ -39,15 +40,17 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	nc, js, logger, err := service.Connect("transcoder-worker", cfg.BaseConfig)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "transcoder-worker")
+
+	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
 		osExit(1)
 		return
 	}
 
-	claimKV := sJetstream.CreateKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
 	processedKV := sJetstream.CreateKV("transcode-chunk-job-processed", js, 3*time.Hour, logger)
 	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
+	claimKV := sJetstream.CreateKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

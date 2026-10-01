@@ -62,6 +62,25 @@ func TestPutKeyKV(t *testing.T) {
 	})
 }
 
+func TestMarkChunkProcessed(t *testing.T) {
+	t.Run("writes under the given key", func(t *testing.T) {
+		mockKV := &test.MockKV{}
+
+		err := MarkChunkProcessed(mockKV, "job-abc.2", test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.Equal(t, "job-abc.2", mockKV.PutKey)
+	})
+
+	t.Run("returns error on kv failure", func(t *testing.T) {
+		mockKV := &test.MockKV{PutErr: errors.New("put failed")}
+
+		err := MarkChunkProcessed(mockKV, "job-abc.2", test.SilentLogger())
+
+		require.Error(t, err)
+	})
+}
+
 func TestGetMilestoneKV(t *testing.T) {
 
 	t.Run("key that doesnt exist returns revision 0 and zero-value status", func(t *testing.T) {

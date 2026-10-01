@@ -19,15 +19,15 @@ import (
 )
 
 func TestConnect(t *testing.T) {
+	logger := test.SilentLogger()
 	t.Run("storage unreachable returns error", func(t *testing.T) {
 		cfg := service.BaseConfig{BaseStorageURL: "http://localhost:1", NatsURL: "nats://localhost:1"}
 
-		nc, js, logger, err := service.Connect("test-worker", cfg)
+		nc, js, err := service.Connect(logger, cfg)
 
 		require.Error(t, err)
 		assert.Nil(t, nc)
 		assert.Nil(t, js)
-		assert.NotNil(t, logger, "logger is returned even on failure so callers can log")
 	})
 
 	t.Run("storage unhealthy status returns error", func(t *testing.T) {
@@ -36,7 +36,7 @@ func TestConnect(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		nc, _, _, err := service.Connect("test-worker", service.BaseConfig{BaseStorageURL: srv.URL, NatsURL: "nats://localhost:1"})
+		nc, _, err := service.Connect(logger, service.BaseConfig{BaseStorageURL: srv.URL, NatsURL: "nats://localhost:1"})
 
 		require.Error(t, err)
 		assert.Nil(t, nc)

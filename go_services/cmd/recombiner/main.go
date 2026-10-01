@@ -9,6 +9,7 @@ import (
 
 	"splice.com/go_services/internal/recombiner"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -38,7 +39,9 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	nc, js, logger, err := service.Connect("video-recombiner", cfg.BaseConfig)
+	logger := middleware.StructuredLogger(cfg.ProdMode, "video-recombiner")
+
+	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
 		osExit(1)
 		return

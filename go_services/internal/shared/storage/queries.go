@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,33 @@ import (
 )
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
+
+// uploads (PUT) body to the storage url
+func Upload(ctx context.Context, url string, body io.Reader, timeout time.Duration) error {
+	client := &http.Client{Timeout: timeout} // 0 = no timeout
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
+	if err != nil {
+		return fmt.Errorf("error creating upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error connecting to seaweedfs: %w", err)
+	}
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Printf("error closing the response body, %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("seaweedfs upload failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
 
 // save the video chunk to seaweedfs storage
 func UploadVideoChunk(url, filePath string) (string, error) {
@@ -26,34 +54,17 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 		}
 	}()
 
-	req, err := http.NewRequest(http.MethodPut, url, file)
-	if err != nil {
-		return "", fmt.Errorf("error creating upload request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/octet-stream")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error connecting to seaweedfs: %w", err)
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Printf("error closing the response body, %v", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("seaweedfs upload failed with status: %d", resp.StatusCode)
+	if err := Upload(context.Background(), url, file, 30*time.Second); err != nil {
+		return "", err
 	}
 
 	return url, nil
 }
 
-// validatePathSegment rejects path segments that could escape the intended
+// ValidatePathSegment rejects path segments that could escape the intended
 // base directory (empty, ".", "..", or containing a path separator), while
 // allowing ordinary file/job names such as "my.video.mp4" or "clip (1).mov".
-func validatePathSegment(name string) error {
+func ValidatePathSegment(name string) error {
 	if name == "" || name == "." || name == ".." {
 		return fmt.Errorf("invalid path segment: %q", name)
 	}
@@ -65,9 +76,14 @@ func validatePathSegment(name string) error {
 
 var removeAll = os.RemoveAll
 
+// returns local directory GetVideoChunk downloads chunkName into
+func TempUnprocessedDir(chunkName string) string {
+	return filepath.Join("/tmp/temp-unprocessed-" + chunkName)
+}
+
 // fetch the video chunk seaweedfs storage
 func GetVideoChunk(storageURL, chunkName string) (string, error) {
-	err := validatePathSegment(chunkName)
+	err := ValidatePathSegment(chunkName)
 	if err != nil {
 		return "", err
 	}
@@ -97,11 +113,11 @@ func GetVideoChunk(storageURL, chunkName string) (string, error) {
 
 	filename := storageURL[strings.LastIndex(storageURL, "/")+1:]
 	// validate filename so external malicious filenames doesnt get through
-	err = validatePathSegment(filename)
+	err = ValidatePathSegment(filename)
 	if err != nil {
 		return "", err
 	}
-	jobDir := filepath.Join("/tmp/temp-unprocessed-" + chunkName)
+	jobDir := TempUnprocessedDir(chunkName)
 
 	err = os.MkdirAll(jobDir, 0755)
 	if err != nil {

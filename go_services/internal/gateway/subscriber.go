@@ -115,11 +115,7 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 		}
 
 		logger.Debug("job marked as complete", "job_id", payload.JobID)
-		err = msg.Ack()
-		if err != nil {
-			logger.Error("failed to ack message after put kv", "err", err)
-			return
-		}
+		sJetstream.AckWithErrHandling(logger, msg)
 	})
 
 	return consCtx, err

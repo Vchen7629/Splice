@@ -24,7 +24,7 @@ func jobProgressPct(ctx context.Context, processedKV jetstream.KeyValue, jobID s
 	defer func() {
 		stopErr := lister.Stop()
 		if stopErr != nil {
-			logger.Warn("failed to stop lister at the end")
+			logger.Warn("failed to stop lister at the end", "err", stopErr)
 		}
 	}()
 

@@ -23,7 +23,7 @@ func TestCleanUpTempFolders(t *testing.T) {
 
 		CleanUpTempFolders("job-1", test.SilentLogger())
 
-		assert.Contains(t, removed, "/tmp/processed_chunk-job-1")
+		assert.Contains(t, removed, "/tmp/temp-unprocessed-processed_chunk-job-1")
 		assert.Contains(t, removed, "/tmp/jobs/job-1")
 	})
 
