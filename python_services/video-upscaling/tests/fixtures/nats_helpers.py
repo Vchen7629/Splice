@@ -20,8 +20,7 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
         patch("src.processing.nats_msg.recombine_video_audio") as mock_recombine,
         patch("src.processing.nats_msg.upload_video") as mock_upload,
         patch("src.processing.nats_msg.publisher", new_callable=AsyncMock) as mock_pub,
-        patch("src.processing.nats_msg.cleanup_temp_dir") as mock_cleanup_temp_dir,
-        patch("src.processing.nats_msg.cleanup_temp_file") as mock_cleanup_temp_file,
+        patch("src.processing.nats_msg.cleanup_temp") as mock_cleanup_temp,
         patch("src.processing.nats_msg.os.makedirs") as _,
         patch(
             "src.processing.nats_msg.asyncio.to_thread",
@@ -37,6 +36,5 @@ def nats_msg_patches() -> Generator[dict[str, Any], Any, None]:
             "recombine": mock_recombine,
             "upload": mock_upload,
             "pub": mock_pub,
-            "cleanup_temp_dir": mock_cleanup_temp_dir,
-            "cleanup_temp_file": mock_cleanup_temp_file,
+            "cleanup_temp": mock_cleanup_temp,
         }

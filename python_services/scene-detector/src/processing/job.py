@@ -7,7 +7,7 @@ from scenedetect import VideoOpenFailure
 from shared_core import get_logger
 from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
 from shared_storage import fetch_video, upload_video
-from shared_util import cleanup_temp_dir
+from shared_util import cleanup_temp
 
 from ..core.settings import settings
 from .video import split_into_chunks
@@ -95,7 +95,7 @@ async def process_job(
             raise JobCancelledError("job cancelled during chunk upload")
 
     finally:
-        await cleanup_temp_dir(temp_dir, metadata.job_id, logger)
+        await cleanup_temp(temp_dir, metadata.job_id, logger)
 
     return [
         VideoChunkMessage(

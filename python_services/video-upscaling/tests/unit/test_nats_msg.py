@@ -64,7 +64,7 @@ async def test_upscale_removes_noaudio_temp_file(
 
     await process_job_msg(ctx, AsyncMock())
 
-    nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
+    nats_msg_patches["cleanup_temp"].assert_called_once_with(
         "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
     )
 
@@ -153,7 +153,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
 async def test_upscale_failure_still_cleans_up_noaudio_file(
     failure_point: str, nats_msg_patches: dict[str, Any]
 ) -> None:
-    """cleanup_temp_file must run no matter which step of the upscale/recombine
+    """cleanup_temp must run no matter which step of the upscale/recombine
     sequence fails, since a partial noaudio file may already be on disk"""
     nats_msg_patches["select"].return_value = (Path("/weights/model.pth"), 2)
 
@@ -186,7 +186,7 @@ async def test_upscale_failure_still_cleans_up_noaudio_file(
         with pytest.raises(RuntimeError):
             await process_job_msg(ctx, AsyncMock())
 
-    nats_msg_patches["cleanup_temp_file"].assert_called_once_with(
+    nats_msg_patches["cleanup_temp"].assert_called_once_with(
         "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
     )
 
@@ -280,6 +280,6 @@ async def test_publishes_upscale_complete_msg(nats_msg_patches: dict[str, Any]) 
 async def test_cleanup_job_removes_temp_dirs(nats_msg_patches: dict[str, Any]) -> None:
     await cleanup_job("job-abc")
 
-    cleanup_calls = nats_msg_patches["cleanup_temp_dir"].call_args_list
+    cleanup_calls = nats_msg_patches["cleanup_temp"].call_args_list
     removed_paths = [str(c.args[0]) for c in cleanup_calls]
     assert any("job-abc" in p for p in removed_paths)

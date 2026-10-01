@@ -12,7 +12,7 @@ from shared_handler import (
     update_job_stage,
 )
 from shared_storage import fetch_video, upload_video
-from shared_util import ProgressReporter, cleanup_temp_dir, cleanup_temp_file
+from shared_util import ProgressReporter, cleanup_temp
 
 from utils import select_model
 
@@ -83,8 +83,8 @@ async def process_job_msg(ctx: ProcessJobMsgContext, cancel_event: Event) -> Non
 
 async def cleanup_job(job_id: str) -> None:
     """TODO: docstring"""
-    await cleanup_temp_dir(f"../temp_output/{job_id}", job_id, logger)
-    await cleanup_temp_dir(f"../temp/{job_id}", job_id, logger)
+    await cleanup_temp(f"../temp_output/{job_id}", job_id, logger)
+    await cleanup_temp(f"../temp/{job_id}", job_id, logger)
 
     logger.debug("removed temp dirs", job_id=job_id)
 
@@ -149,7 +149,7 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
 
     finally:
         logger.debug("cleaning up no audio upscale mp4 file", job_id=job_id)
-        await cleanup_temp_file(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
+        await cleanup_temp(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     await asyncio.to_thread(
