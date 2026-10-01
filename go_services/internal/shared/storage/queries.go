@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -14,9 +15,9 @@ import (
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // uploads (PUT) body to the storage url
-func Upload(url string, body io.Reader, timeout time.Duration) error {
+func Upload(ctx context.Context, url string, body io.Reader, timeout time.Duration) error {
 	client := &http.Client{Timeout: timeout} // 0 = no timeout
-	req, err := http.NewRequest(http.MethodPut, url, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
 	if err != nil {
 		return fmt.Errorf("error creating upload request: %w", err)
 	}
@@ -53,7 +54,7 @@ func UploadVideoChunk(url, filePath string) (string, error) {
 		}
 	}()
 
-	if err := Upload(url, file, 30*time.Second); err != nil {
+	if err := Upload(context.Background(), url, file, 30*time.Second); err != nil {
 		return "", err
 	}
 

@@ -102,7 +102,7 @@ func TestUpload(t *testing.T) {
 				}))
 				t.Cleanup(srv.Close)
 
-				err := Upload(srv.URL, strings.NewReader("fake video"), time.Second)
+				err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), time.Second)
 
 				if tc.wantErr {
 					require.Error(t, err)
@@ -115,7 +115,7 @@ func TestUpload(t *testing.T) {
 	})
 
 	t.Run("unreachable storage returns error", func(t *testing.T) {
-		err := Upload("http://localhost:1", strings.NewReader("fake video"), time.Second)
+		err := Upload(t.Context(), "http://localhost:1", strings.NewReader("fake video"), time.Second)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
@@ -132,7 +132,7 @@ func TestUpload(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		err := Upload(srv.URL+"/job-1/video.mp4", strings.NewReader("fake video"), time.Second)
+		err := Upload(t.Context(), srv.URL+"/job-1/video.mp4", strings.NewReader("fake video"), time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, http.MethodPut, method)
@@ -152,7 +152,7 @@ func TestUpload(t *testing.T) {
 		t.Cleanup(srv.Close)
 		t.Cleanup(func() { close(release) })
 
-		err := Upload(srv.URL, strings.NewReader("fake video"), 50*time.Millisecond)
+		err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), 50*time.Millisecond)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
@@ -165,7 +165,7 @@ func TestUpload(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		err := Upload(srv.URL, strings.NewReader("fake video"), 0)
+		err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), 0)
 
 		require.NoError(t, err)
 	})
