@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -158,7 +159,8 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid video filename", http.StatusBadRequest)
 		return
 	}
-	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, header.Filename)
+	
+	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, url.PathEscape(header.Filename))
 	if err := storage.Upload(r.Context(), url, file, uploadTimeout); err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
 		v.logger.Error("failed to save uploaded video", "err", err)
