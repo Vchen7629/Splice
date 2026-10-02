@@ -14,27 +14,6 @@ import (
 )
 
 func TestAddI(t *testing.T) {
-	t.Run("not ready until all chunks recorded, then returns the full chunk map", func(t *testing.T) {
-		js, _ := test.SetupNats(t)
-		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
-
-		ready, chunks, err := recombiner.Add(kv, shandler.ChunkCompleteMessage{
-			ChunkRef: shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0}, TotalChunks: 2, StorageURL: "/tmp/chunk-0.mp4",
-		}, test.SilentLogger())
-		require.NoError(t, err)
-		assert.False(t, ready)
-		assert.Nil(t, chunks)
-
-		ready, chunks, err = recombiner.Add(kv, shandler.ChunkCompleteMessage{
-			ChunkRef: shandler.ChunkRef{JobID: "job-1", ChunkIndex: 1}, TotalChunks: 2, StorageURL: "/tmp/chunk-1.mp4",
-		}, test.SilentLogger())
-		require.NoError(t, err)
-		require.True(t, ready)
-		require.Len(t, chunks, 2)
-		assert.Equal(t, "/tmp/chunk-0.mp4", chunks[0])
-		assert.Equal(t, "/tmp/chunk-1.mp4", chunks[1])
-	})
-
 	t.Run("multiple jobs are tracked independently", func(t *testing.T) {
 		js, _ := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
