@@ -19,29 +19,36 @@ const chunkKeyPrefix = "chunk."
 // chunks for the job has been recieved so the subscriber can trigger combiner.go and pass in the mapping to combine all.
 // chunk records are left in KV once read so retry of a triggering chunk after a failed combine can still see every chunk's
 // storage URL. cleanup is handled eventually by bucket TTL
-func Add(kv jetstream.KeyValue, payload handler.ChunkCompleteMessage, logger *slog.Logger) (ready bool, chunks map[int]string, err error) {
+func Add(kv jetstream.KeyValue, payload handler.ChunkCompleteMessage, logger *slog.Logger) (bool, map[int]string, error) {
 	key := fmt.Sprintf("%s%s.%d", chunkKeyPrefix, payload.JobID, payload.ChunkIndex)
-	err = sJetstream.PutKeyKV(kv, key, []byte(payload.StorageURL))
+	err := sJetstream.PutKeyKV(kv, key, []byte(payload.StorageURL))
 	if err != nil {
 		return false, nil, err
 	}
 
-	chunks, err = listJobChunksKV(kv, payload.JobID, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	keys, err := listJobChunkKeysKV(ctx, kv, payload.JobID, logger)
 	if err != nil {
 		return false, nil, err
 	}
-	if len(chunks) < payload.TotalChunks {
+	if len(keys) < payload.TotalChunks {
 		return false, nil, nil
+	}
+
+	// only fetch chunks once every chunk is in
+	var chunks map[int]string
+	chunks, err = fetchJobChunksKV(ctx, kv, payload.JobID, keys)
+	if err != nil {
+		return false, nil, err
 	}
 
 	return true, chunks, nil
 }
 
-// returns every chunk recorded so far for jobID as chunkIndex -> storageURL
-func listJobChunksKV(kv jetstream.KeyValue, jobID string, logger *slog.Logger) (map[int]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
+// returns every chunk recorded so far for the current job based on jobID
+func listJobChunkKeysKV(ctx context.Context, kv jetstream.KeyValue, jobID string, logger *slog.Logger) ([]string, error) {
 	filter := fmt.Sprintf("%s%s.*", chunkKeyPrefix, jobID)
 	lister, err := kv.ListKeysFiltered(ctx, filter)
 	if err != nil {
@@ -54,9 +61,19 @@ func listJobChunksKV(kv jetstream.KeyValue, jobID string, logger *slog.Logger) (
 		}
 	}()
 
+	var keys []string
+	for key := range lister.Keys() {
+		keys = append(keys, key)
+	}
+
+	return keys, nil
+}
+
+// fetches the storage URL for each chunk as chunkIndex -> storageURL
+func fetchJobChunksKV(ctx context.Context, kv jetstream.KeyValue, jobID string, keys []string) (map[int]string, error) {
 	keyPrefix := chunkKeyPrefix + jobID + "."
 	chunks := make(map[int]string)
-	for key := range lister.Keys() {
+	for _, key := range keys {
 		idx, err := strconv.Atoi(strings.TrimPrefix(key, keyPrefix))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse chunk index from key %q: %w", key, err)
