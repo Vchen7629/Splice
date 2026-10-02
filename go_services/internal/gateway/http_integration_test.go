@@ -40,7 +40,7 @@ func newTestServer(t *testing.T, urls ...ServiceURLs) *httptest.Server {
 		u = urls[0]
 	}
 	mux := http.NewServeMux()
-	jh := &JobStatusHandler{Logger: stest.SilentLogger(), NC: sharedNC, KV: sharedKV, URLs: u}
+	jh := &JobStatusHandler{Logger: stest.SilentLogger(), NC: sharedNC, KV: sharedKV, URLs: u, HealthClient: &http.Client{Timeout: 3 * time.Second}}
 	ch := &cancelHandler{logger: stest.SilentLogger(), kv: sharedKV}
 	mux.HandleFunc("GET /jobs/{id}/status", jh.PollJobStatus)
 	mux.HandleFunc("GET /jobs/{id}/events", jh.JobEvents)
@@ -159,7 +159,7 @@ func TestConnectionDrop(t *testing.T) {
 				seedStatus(t, tc.jobID, tc.status)
 			}
 
-			h := &JobStatusHandler{Logger: stest.SilentLogger(), KV: sharedKV}
+			h := &JobStatusHandler{Logger: stest.SilentLogger(), KV: sharedKV, HealthClient: &http.Client{Timeout: 3 * time.Second}}
 			req := httptest.NewRequest(http.MethodGet, "/jobs/"+tc.jobID+"/status", nil)
 			req.SetPathValue("id", tc.jobID)
 
