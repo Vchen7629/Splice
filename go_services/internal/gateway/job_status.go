@@ -116,10 +116,11 @@ type jobStatusResponse struct {
 }
 
 type JobStatusHandler struct {
-	Logger *slog.Logger
-	NC     *nats.Conn
-	KV     jetstream.KeyValue
-	URLs   ServiceURLs
+	Logger       *slog.Logger
+	NC           *nats.Conn
+	KV           jetstream.KeyValue
+	URLs         ServiceURLs
+	HealthClient *http.Client
 }
 
 func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +249,7 @@ func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			state := sJetstream.StateProcessing
 			errMsg := ""
-			if !isServiceHealthy(serviceURL, j.Logger) {
+			if !isServiceHealthy(j.HealthClient, serviceURL, j.Logger) {
 				state = sJetstream.StateDegraded
 				errMsg = fmt.Sprintf("service unavailable at stage: %s", stage)
 			}
