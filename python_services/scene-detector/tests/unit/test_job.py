@@ -49,7 +49,7 @@ async def test_process_job_uses_job_scoped_output_dir() -> None:
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=[]) as mock_split,
         patch("src.processing.job.upload_video", return_value=FAKE_STORAGE_URLS[0]),
-        patch("src.processing.job.cleanup_temp_dir"),
+        patch("src.processing.job.cleanup_temp"),
     ):
         await process_job(MOCK_CANCEL_EVENT, METADATA)
 
@@ -73,7 +73,7 @@ async def test_process_job_returns_chunk_messages_on_success() -> None:
             "src.processing.job.upload_video",
             side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
         ),
-        patch("src.processing.job.cleanup_temp_dir"),
+        patch("src.processing.job.cleanup_temp"),
     ):
         result = await process_job(MOCK_CANCEL_EVENT, METADATA)
 
@@ -100,11 +100,11 @@ async def test_process_job_cleans_up_temp_dir_after_upload() -> None:
             "src.processing.job.upload_video",
             side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
         ),
-        patch("src.processing.job.cleanup_temp_dir") as mock_cleanup_temp_dir,
+        patch("src.processing.job.cleanup_temp") as mock_cleanup_temp,
     ):
         await process_job(MOCK_CANCEL_EVENT, METADATA)
 
-    mock_cleanup_temp_dir.assert_called_once_with(
+    mock_cleanup_temp.assert_called_once_with(
         f"../temp/{METADATA.job_id}", METADATA.job_id, logger
     )
 
@@ -120,7 +120,7 @@ async def test_process_job_raises_when_cancelled_before_upload_starts() -> None:
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch("src.processing.job.upload_video") as mock_upload,
-        patch("src.processing.job.cleanup_temp_dir"),
+        patch("src.processing.job.cleanup_temp"),
     ):
         with pytest.raises(JobCancelledError):
             await process_job(cancel_event, METADATA)
@@ -146,7 +146,7 @@ async def test_process_job_raises_when_cancelled_during_upload() -> None:
         patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch("src.processing.job.upload_video", side_effect=blocking_upload),
-        patch("src.processing.job.cleanup_temp_dir"),
+        patch("src.processing.job.cleanup_temp"),
     ):
         task = asyncio.create_task(process_job(cancel_event, METADATA))
         await asyncio.to_thread(upload_started.wait, 2)
