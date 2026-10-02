@@ -48,6 +48,8 @@ func TestForStage(t *testing.T) {
 }
 
 func TestIsServiceHealthy(t *testing.T) {
+	testHttpClient := http.DefaultClient
+
 	tests := []struct {
 		name    string
 		handler http.HandlerFunc
@@ -74,11 +76,11 @@ func TestIsServiceHealthy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(tc.handler)
 			defer srv.Close()
-			assert.Equal(t, tc.want, isServiceHealthy(srv.URL, stest.SilentLogger()))
+			assert.Equal(t, tc.want, isServiceHealthy(testHttpClient, srv.URL, stest.SilentLogger()))
 		})
 	}
 
 	t.Run("connection refused returns false", func(t *testing.T) {
-		assert.False(t, isServiceHealthy("http://localhost:19999", stest.SilentLogger()))
+		assert.False(t, isServiceHealthy(testHttpClient, "http://localhost:19999", stest.SilentLogger()))
 	})
 }

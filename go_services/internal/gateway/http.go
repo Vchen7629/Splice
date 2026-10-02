@@ -38,7 +38,7 @@ func StartHttpApi(
 	router := http.NewServeMux()
 
 	vh := &videoHandler{logger: logger, js: js, kv: kv, storageURL: cfg.StorageURL}
-	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: cfg.URLs}
+	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: cfg.URLs, HealthClient: &http.Client{Timeout: 3 * time.Second}}
 	ch := &cancelHandler{logger: logger, kv: kv}
 
 	router.HandleFunc("POST /jobs/upload", vh.uploadVideoRoute)
@@ -159,7 +159,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid video filename", http.StatusBadRequest)
 		return
 	}
-	
+
 	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, url.PathEscape(header.Filename))
 	if err := storage.Upload(r.Context(), url, file, uploadTimeout); err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)

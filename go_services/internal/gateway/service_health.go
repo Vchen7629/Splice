@@ -3,7 +3,6 @@ package gateway
 import (
 	"log/slog"
 	"net/http"
-	"time"
 )
 
 type ServiceURLs struct {
@@ -28,10 +27,8 @@ func (s ServiceURLs) forStage(stage string) (string, bool) {
 	return url, true
 }
 
-func isServiceHealthy(baseURL string, logger *slog.Logger) bool {
-	c := http.Client{Timeout: 3 * time.Second}
-
-	resp, err := c.Get(baseURL + "/health")
+func isServiceHealthy(httpClient *http.Client, baseURL string, logger *slog.Logger) bool {
+	resp, err := httpClient.Get(baseURL + "/health")
 	if err != nil {
 		return false
 	}
