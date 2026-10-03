@@ -39,7 +39,9 @@ def fetch_video(storage_url: str, service_name: str) -> str:
         ) as response:
             response.raise_for_status()
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(dest_path), suffix=".part")
+            fd, tmp_path = tempfile.mkstemp(
+                dir=os.path.dirname(dest_path), suffix=".part"
+            )
             with os.fdopen(fd, "wb") as f:
                 shutil.copyfileobj(response.raw, f)
         os.replace(tmp_path, dest_path)
