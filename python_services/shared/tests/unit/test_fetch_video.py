@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,7 @@ from shared_storage import fetch_video, queries
 def test_fetch_video_raises_on_server_error(status_code: int) -> None:
     """Raises HTTPError when SeaweedFS returns a 5xx response"""
     mock_response = MagicMock()
+    mock_response.__enter__.return_value = mock_response
     mock_response.status_code = status_code
     mock_response.raise_for_status.side_effect = requests.HTTPError(
         response=mock_response
@@ -22,6 +24,63 @@ def test_fetch_video_raises_on_server_error(status_code: int) -> None:
     ):
         fetch_video("http://fake/job-id/video.mp4", service_name="scene-detector")
 
+    mock_response.__exit__.assert_called_once()
+
+
+def test_fetch_video_removes_partial_file_on_copy_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure mid-download leaves no partial file behind"""
+    mock_response = MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.raise_for_status.return_value = None
+    mock_response.raw.read.side_effect = [b"partial", requests.ConnectionError("cut")]
+
+    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    with (
+        patch("shared_storage.queries.requests.get", return_value=mock_response),
+        pytest.raises(requests.ConnectionError),
+    ):
+        fetch_video("http://fake/job-123/video.mp4", service_name="scene-detector")
+
+    assert not (tmp_path / "job-123" / "video.mp4").exists()
+    assert list((tmp_path / "job-123").iterdir()) == []
+
+
+@pytest.mark.parametrize("failure", ["http_error", "copy_error"])
+def test_fetch_video_keeps_existing_file_on_failure(
+    failure: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed fetch must not delete or corrupt an already-downloaded video"""
+    existing = tmp_path / "job-123" / "video.mp4"
+    existing.parent.mkdir()
+    existing.write_bytes(b"original bytes")
+
+    mock_response = MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    if failure == "http_error":
+        mock_response.raise_for_status.side_effect = requests.HTTPError(
+            response=mock_response
+        )
+        expected: type[Exception] = requests.HTTPError
+    else:
+        mock_response.raise_for_status.return_value = None
+        mock_response.raw.read.side_effect = [
+            b"partial",
+            requests.ConnectionError("cut"),
+        ]
+        expected = requests.ConnectionError
+
+    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    with (
+        patch("shared_storage.queries.requests.get", return_value=mock_response),
+        pytest.raises(expected),
+    ):
+        fetch_video("http://fake/job-123/video.mp4", service_name="scene-detector")
+
+    assert existing.read_bytes() == b"original bytes"
+    assert list(existing.parent.iterdir()) == [existing]
+
 
 def test_fetch_video_writes_correct_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -29,9 +88,10 @@ def test_fetch_video_writes_correct_content(
     """File written locally contains the exact bytes from the response"""
     fake_content = b"fake video bytes"
     mock_response = MagicMock()
+    mock_response.__enter__.return_value = mock_response
     mock_response.status_code = 200
     mock_response.raise_for_status.return_value = None
-    mock_response.content = fake_content
+    mock_response.raw = io.BytesIO(fake_content)
 
     monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
     with patch("shared_storage.queries.requests.get", return_value=mock_response):

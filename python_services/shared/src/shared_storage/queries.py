@@ -1,4 +1,7 @@
 import os
+import shutil
+import tempfile
+from contextlib import suppress
 
 import requests
 
@@ -25,11 +28,24 @@ def fetch_video(storage_url: str, service_name: str) -> str:
     """
     logger = get_logger(service_name)
 
+    parts = storage_url.rstrip("/").split("/")
+    dest_path: str = f"{TEMP_DIR}/{parts[-2]}/{parts[-1]}"
+
+    tmp_path: str | None = None
+    completed = False
     try:
-        response = requests.get(
-            storage_url, timeout=sharedsettings.STORAGE_READ_TIMEOUT_S
-        )
-        response.raise_for_status()
+        with requests.get(
+            storage_url, timeout=sharedsettings.STORAGE_READ_TIMEOUT_S, stream=True
+        ) as response:
+            response.raise_for_status()
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(
+                dir=os.path.dirname(dest_path), suffix=".part"
+            )
+            with os.fdopen(fd, "wb") as f:
+                shutil.copyfileobj(response.raw, f)
+        os.replace(tmp_path, dest_path)
+        completed = True
     except requests.ConnectionError as e:
         logger.error(
             "could not connect to seaweedfs", storage_url=storage_url, err=str(e)
@@ -43,12 +59,10 @@ def fetch_video(storage_url: str, service_name: str) -> str:
             err=str(e),
         )
         raise
-
-    parts = storage_url.rstrip("/").split("/")
-    dest_path: str = f"{TEMP_DIR}/{parts[-2]}/{parts[-1]}"
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-    with open(dest_path, "wb") as f:
-        f.write(response.content)
+    finally:
+        if not completed and tmp_path is not None:
+            with suppress(FileNotFoundError):
+                os.remove(tmp_path)
 
     return dest_path
 
