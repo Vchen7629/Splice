@@ -43,7 +43,7 @@ def recombined_video(one_frame_video: Path, tmp_path: Path) -> Path:
 
 
 def make_fake_decoder(frames: list[np.ndarray]) -> MagicMock:
-    """Build a mock decoder whose stdout yields the given raw bgr frames then EOF."""
+    """Build a mock decoder whose stdout yields the given raw rgb frames then EOF."""
     stdout = MagicMock()
     stdout.read.side_effect = [f.tobytes() for f in frames] + [b""]
     decoder = MagicMock()
