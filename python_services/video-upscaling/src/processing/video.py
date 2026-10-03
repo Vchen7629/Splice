@@ -268,7 +268,7 @@ def video_upscale(
     decoder = video_decoder(video_path)
     encoder = video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4")
 
-    encode_queue: Queue[Optional[bytes]] = Queue(maxsize=4)
+    encode_queue: Queue[Optional[np.ndarray]] = Queue(maxsize=4)
 
     encoder_fail_event = Event()
     encoder_thread = threading.Thread(
@@ -300,8 +300,8 @@ def video_upscale(
         if len(raw) < frame_bytes:
             break
 
-        bgr = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)[:, :, ::-1].copy()
-        pending.append(bgr)
+        rgb = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3).copy()
+        pending.append(rgb)
 
         if len(pending) == settings.BATCH_SIZE:
             dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
@@ -356,7 +356,7 @@ def _run_ffprobe(video_path: str, *extra_args: str) -> str:
 def _cleanup_upscale_resources(
     decoder: Popen[bytes], 
     encoder: Popen[bytes], 
-    encode_queue: Queue[Optional[bytes]], 
+    encode_queue: Queue[Optional[np.ndarray]], 
     encoder_thread: threading.Thread
 ) -> None:
     """used to kill/cleanup processing processes in upscaling"""
