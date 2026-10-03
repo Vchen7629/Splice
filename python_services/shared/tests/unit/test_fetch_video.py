@@ -44,6 +44,42 @@ def test_fetch_video_removes_partial_file_on_copy_failure(
         fetch_video("http://fake/job-123/video.mp4", service_name="scene-detector")
 
     assert not (tmp_path / "job-123" / "video.mp4").exists()
+    assert list((tmp_path / "job-123").iterdir()) == []
+
+
+@pytest.mark.parametrize("failure", ["http_error", "copy_error"])
+def test_fetch_video_keeps_existing_file_on_failure(
+    failure: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed fetch must not delete or corrupt an already-downloaded video"""
+    existing = tmp_path / "job-123" / "video.mp4"
+    existing.parent.mkdir()
+    existing.write_bytes(b"original bytes")
+
+    mock_response = MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    if failure == "http_error":
+        mock_response.raise_for_status.side_effect = requests.HTTPError(
+            response=mock_response
+        )
+        expected: type[Exception] = requests.HTTPError
+    else:
+        mock_response.raise_for_status.return_value = None
+        mock_response.raw.read.side_effect = [
+            b"partial",
+            requests.ConnectionError("cut"),
+        ]
+        expected = requests.ConnectionError
+
+    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    with (
+        patch("shared_storage.queries.requests.get", return_value=mock_response),
+        pytest.raises(expected),
+    ):
+        fetch_video("http://fake/job-123/video.mp4", service_name="scene-detector")
+
+    assert existing.read_bytes() == b"original bytes"
+    assert list(existing.parent.iterdir()) == [existing]
 
 
 def test_fetch_video_writes_correct_content(

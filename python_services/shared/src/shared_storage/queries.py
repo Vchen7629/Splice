@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 from contextlib import suppress
 
 import requests
@@ -30,6 +31,7 @@ def fetch_video(storage_url: str, service_name: str) -> str:
     parts = storage_url.rstrip("/").split("/")
     dest_path: str = f"{TEMP_DIR}/{parts[-2]}/{parts[-1]}"
 
+    tmp_path: str | None = None
     completed = False
     try:
         with requests.get(
@@ -37,8 +39,10 @@ def fetch_video(storage_url: str, service_name: str) -> str:
         ) as response:
             response.raise_for_status()
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            with open(dest_path, "wb") as f:
+            fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(dest_path), suffix=".part")
+            with os.fdopen(fd, "wb") as f:
                 shutil.copyfileobj(response.raw, f)
+        os.replace(tmp_path, dest_path)
         completed = True
     except requests.ConnectionError as e:
         logger.error(
@@ -54,9 +58,9 @@ def fetch_video(storage_url: str, service_name: str) -> str:
         )
         raise
     finally:
-        if not completed:
+        if not completed and tmp_path is not None:
             with suppress(FileNotFoundError):
-                os.remove(dest_path)
+                os.remove(tmp_path)
 
     return dest_path
 
