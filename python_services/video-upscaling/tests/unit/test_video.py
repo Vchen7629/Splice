@@ -321,3 +321,12 @@ def test_extract_video_info_counts_packets_when_header_has_no_frame_count(
 
     assert extract_video_info("v.webm") == (1280, 720, 30.0, 60, 2.0)
     assert "-count_packets" in calls[1]
+
+
+def test_extract_video_info_falls_back_to_format_duration(monkeypatch) -> None:
+    def fake_probe(*args: str) -> str:
+        return "60" if "-count_packets" in args else "1280,720,30/1,N/A,N/A\n2.5"
+
+    monkeypatch.setattr("src.processing.video._run_ffprobe", fake_probe)
+
+    assert extract_video_info("v.webm") == (1280, 720, 30.0, 60, 2.5)

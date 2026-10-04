@@ -28,9 +28,11 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int, float]:
     Raises:
         TypeError if the video_path is not provided
     """
-    ffprobe = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,nb_frames,duration")
+    ffprobe = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,nb_frames,duration:format=duration")
 
-    w, h, fps_frac, duration, nb_frames = ffprobe.split(",")
+    lines = ffprobe.splitlines()
+    w, h, fps_frac, stream_duration, nb_frames = lines[0].split(",")
+    format_duration = lines[1] if len(lines) > 1 else "N/A"
 
     fps_num, fps_den = fps_frac.split("/")
     fps = float(fps_num) / float(fps_den)
@@ -42,6 +44,7 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int, float]:
         nb_frames = _run_ffprobe(video_path, "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets")
 
     frames = int(nb_frames)
+    duration = stream_duration if stream_duration != "N/A" else format_duration
     duration_s = float(duration) if duration != "N/A" else frames / fps
 
     return int(w), int(h), fps, frames, duration_s
