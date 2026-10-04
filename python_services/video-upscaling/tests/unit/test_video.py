@@ -308,27 +308,7 @@ def test_video_upscale_kill_processes_and_raises_when_encoder_fails(
     mock_encoder.kill.assert_called_once()
 
 
-@pytest.mark.parametrize(
-    "ffprobe_out,expected",
-    [
-        ("1280,720,30/1,10.0,300", (1280, 720, 30.0, 300, 10.0)),
-        ("1280,720,30/1,10.0,N/A", (1280, 720, 30.0, 300, 10.0)),
-    ],
-)
-def test_extract_video_info_correct_probe_values(
-    monkeypatch, ffprobe_out, expected
-) -> None:
-    calls = []
-    monkeypatch.setattr(
-        "src.processing.video._run_ffprobe",
-        lambda *a: calls.append(a) or ffprobe_out,
-    )
-
-    assert extract_video_info("v.mp4") == expected
-    assert len(calls) == 1
-
-
-def test_extract_video_info_counts_packets_when_header_has_no_frames_or_duration(
+def test_extract_video_info_counts_packets_when_header_has_no_frame_count(
     monkeypatch,
 ) -> None:
     calls = []

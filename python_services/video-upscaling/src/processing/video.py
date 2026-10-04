@@ -35,12 +35,10 @@ def extract_video_info(video_path: str) -> tuple[int, int, float, int, float]:
     fps_num, fps_den = fps_frac.split("/")
     fps = float(fps_num) / float(fps_den)
 
-    if nb_frames == "N/A" and duration != "N/A":
-        nb_frames = str(round(float(duration) * fps)) # derive nb frames using duration and fps when we dont have it from ffprobe
-
     if nb_frames == "N/A":
-        # some containers (e.g. webm from MediaRecorder) don't store a frame
-        # count or duration in the header, so count packets (demux only, no decode)
+        # some containers (e.g. webm from MediaRecorder) don't store a frame count
+        # in the header. count packets (demux only, no decode) rather than estimating
+        # from duration * r_frame_rate, which is off for variable frame rate video
         nb_frames = _run_ffprobe(video_path, "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets")
 
     frames = int(nb_frames)
