@@ -270,7 +270,7 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
     )
 
     video_upscale_patches["encoder"].assert_called_once_with(
-        24.0, w * scale, h * scale, "/tmp/upscaled_noaudio-job_id1.mp4"
+        24.0, w * scale, h * scale, "/tmp/upscaled_noaudio-job_id1.mp4", None
     )
 
 
