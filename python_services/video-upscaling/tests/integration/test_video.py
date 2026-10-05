@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from src.processing.video import (
-    extract_video_info,
+    _extract_video_info,
     recombine_video_audio,
     video_decoder,
     video_downscale,
@@ -25,13 +25,12 @@ requires_cuda = pytest.mark.skipif(
 
 
 def test_extract_video_info_returns_correct_info() -> None:
-    w, h, fps, nb_frames, duration = extract_video_info(str(TEST_VIDEO))
+    w, h, fps, nb_frames = _extract_video_info(str(TEST_VIDEO))
 
     assert w == 1280
     assert h == 720
     assert abs(fps - 23.976) < 0.01
     assert nb_frames == 360
-    assert abs(duration - 360 / fps) < 0.1
 
 
 @pytest.mark.parametrize("target_res", ["480p", "360p"])
@@ -50,13 +49,13 @@ def test_video_downscale_output_has_correct_resolution(
     output = str(tmp_path / f"out_{target_res}.mp4")
     video_downscale(MOCK_CANCEL_EVENT, str(TEST_VIDEO), target_res, output)
 
-    _, h, _, _, _ = extract_video_info(output)
+    _, h, _, _ = _extract_video_info(output)
 
     assert h == expected_h
 
 
 def test_video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
-    w, h, _, _, _ = extract_video_info(str(one_frame_video))
+    w, h, _, _ = _extract_video_info(str(one_frame_video))
     frame_bytes = w * h * 3  # rgb24
 
     decoder = video_decoder(str(one_frame_video))
@@ -70,7 +69,7 @@ def test_video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
 
 
 def test_video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
-    w, h, _, _, _ = extract_video_info(str(one_frame_video))
+    w, h, _, _ = _extract_video_info(str(one_frame_video))
     frame_bytes = w * h * 3
 
     decoder = video_decoder(str(one_frame_video))
@@ -96,7 +95,7 @@ def test_recombine_video_audio_scales_to_target_resolution(
     source upscaled for a "4K" target only gets a 2x model, producing
     1440p). When a target_res is given, recombine_video_audio must scale the
     real output to that exact resolution."""
-    src_w, src_h, _, _, _ = extract_video_info(str(one_frame_video))
+    src_w, src_h, _, _ = _extract_video_info(str(one_frame_video))
     assert src_h != 1440, (
         "fixture height must differ from the target to prove scaling happened"
     )
@@ -115,7 +114,7 @@ def test_recombine_video_audio_scales_to_target_resolution(
     output = tmp_path / "recombined.mp4"
     recombine_video_audio("job_id1", str(TEST_VIDEO), str(output), target_res="1440p")
 
-    _, out_h, _, _, _ = extract_video_info(str(output))
+    _, out_h, _, _ = _extract_video_info(str(output))
     assert out_h == 1440
 
 
@@ -171,7 +170,7 @@ def test_video_upscale_produces_output_file(
 def test_video_upscale_output_has_correct_resolution(
     one_frame_video: Path, filename: str, scale: int
 ) -> None:
-    src_w, src_h, _, _, _ = extract_video_info(str(one_frame_video))
+    src_w, src_h, _, _ = _extract_video_info(str(one_frame_video))
     output = "/tmp/upscaled_noaudio-job_id1.mp4"
     Path(output).unlink(missing_ok=True)
 
@@ -183,6 +182,6 @@ def test_video_upscale_output_has_correct_resolution(
         scale,
     )
 
-    out_w, out_h, _, _, _ = extract_video_info(output)
+    out_w, out_h, _, _ = _extract_video_info(output)
     assert out_w == src_w * scale
     assert out_h == src_h * scale

@@ -10,8 +10,9 @@ import pytest
 from shared_handler.exceptions import JobCancelledError
 
 from src.processing.video import (
+    _extract_video_info,
+    _probe_duration_s,
     _run_ffprobe,
-    extract_video_info,
     recombine_video_audio,
     video_decoder,
     video_downscale,
@@ -31,8 +32,8 @@ def mock_pipeline(monkeypatch) -> tuple[MagicMock, MagicMock]:
     mock_encoder = MagicMock()
 
     monkeypatch.setattr(
-        "src.processing.video.extract_video_info",
-        lambda p: (100, 100, 30.0, 10, 10 / 30),
+        "src.processing.video._extract_video_info",
+        lambda p: (100, 100, 30.0, 10),
     )
     monkeypatch.setattr("src.processing.video.load_model", lambda *a: MagicMock())
     monkeypatch.setattr("src.processing.video.video_decoder", lambda p: mock_decoder)
@@ -60,7 +61,7 @@ def recombine_popen():
             "src.processing.video.subprocess.Popen", return_value=_fake_recombine_proc()
         ) as mock_popen,
     ):
-        mock_run.return_value.stdout = "1280,720,30/1,10.0,300"
+        mock_run.return_value.stdout = "10.0"
         yield mock_popen
 
 
@@ -131,10 +132,7 @@ def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     mock_proc = MagicMock()
     mock_proc.stdout = iter(["out_time=00:00:01.00\n"])
 
-    monkeypatch.setattr(
-        "src.processing.video.extract_video_info",
-        lambda p: (100, 100, 30.0, 300, 10.0),
-    )
+    monkeypatch.setattr("src.processing.video._probe_duration_s", lambda p: 10.0)
     monkeypatch.setattr(
         "src.processing.video.subprocess.Popen", lambda *a, **kw: mock_proc
     )
@@ -225,7 +223,7 @@ def test_video_upscale_flushes_all_frames(
     w, h = 64, 64
     frames = [np.zeros((h, w, 3), dtype=np.uint8) for _ in range(n_frames)]
     video_upscale_patches["decoder"].return_value = make_fake_decoder(frames)
-    video_upscale_patches["info"].return_value = (w, h, 24.0, 22, 22 / 24.0)
+    video_upscale_patches["info"].return_value = (w, h, 24.0, 22)
     video_upscale_patches["settings"].BATCH_SIZE = batch_size
 
     flushed: list[int] = []
@@ -260,7 +258,7 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
     video_upscale_patches: dict[str, Any],
 ) -> None:
     w, h, scale = 64, 64, 2
-    video_upscale_patches["info"].return_value = (w, h, 24.0, 22, 22 / 24.0)
+    video_upscale_patches["info"].return_value = (w, h, 24.0, 22)
     video_upscale_patches["decoder"].return_value = make_fake_decoder([])
 
     video_upscale(
@@ -311,22 +309,36 @@ def test_video_upscale_kill_processes_and_raises_when_encoder_fails(
 def test_extract_video_info_counts_packets_when_header_has_no_frame_count(
     monkeypatch,
 ) -> None:
-    calls = []
-
     def fake_probe(*args: str) -> str:
-        calls.append(args)
-        return "1280,720,30/1,N/A,N/A" if len(calls) == 1 else "60"
+        return "60" if "-count_packets" in args else "1280,720,30/1,N/A"
 
     monkeypatch.setattr("src.processing.video._run_ffprobe", fake_probe)
 
-    assert extract_video_info("v.webm") == (1280, 720, 30.0, 60, 2.0)
-    assert "-count_packets" in calls[1]
+    assert _extract_video_info("v.webm") == (1280, 720, 30.0, 60)
 
 
-def test_extract_video_info_falls_back_to_format_duration(monkeypatch) -> None:
-    def fake_probe(*args: str) -> str:
-        return "60" if "-count_packets" in args else "1280,720,30/1,N/A,N/A\n2.5"
+@pytest.mark.parametrize(
+    "stream_out,format_out,expected",
+    [
+        ("10.0", "99.0", 10.0),  # stream duration preferred
+        ("N/A", "2.5", 2.5),  # falls back to format duration
+    ],
+)
+def test_probe_duration_s_uses_header_duration(
+    monkeypatch, stream_out, format_out, expected
+) -> None:
+    def fake_probe(video_path: str, *args: str) -> str:
+        return format_out if "format=duration" in args else stream_out
 
     monkeypatch.setattr("src.processing.video._run_ffprobe", fake_probe)
 
-    assert extract_video_info("v.webm") == (1280, 720, 30.0, 60, 2.5)
+    assert _probe_duration_s("v.webm") == expected
+
+
+def test_probe_duration_s_falls_back_to_frames_over_fps(monkeypatch) -> None:
+    monkeypatch.setattr("src.processing.video._run_ffprobe", lambda *a: "N/A")
+    monkeypatch.setattr(
+        "src.processing.video._extract_video_info", lambda p: (1280, 720, 30.0, 60)
+    )
+
+    assert _probe_duration_s("v.webm") == 2.0
