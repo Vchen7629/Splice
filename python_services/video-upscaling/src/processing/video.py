@@ -15,33 +15,6 @@ import subprocess
 import numpy as np
 import torch
 
-def extract_video_info(video_path: str) -> tuple[int, int, float, int]:
-    """
-    use ffprobe to extract video information like w, h, and fps of a video
-
-    Args:
-        video_path: the path to the video we are trying to process
-
-    Returns:
-        a tuple containing the width, height, fps, and num frames of the video
-
-    Raises:
-        TypeError if the video_path is not provided
-    """
-    ffprobe = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,nb_frames")
-
-    w, h, fps_frac, nb_frames = ffprobe.split(",")
-
-    fps_num, fps_den = fps_frac.split("/")
-    fps = float(fps_num) / float(fps_den)
-
-    if nb_frames == "N/A":
-        # some containers (e.g. webm from MediaRecorder) don't store a frame
-        # count or duration in the header, so it has to be counted by decoding
-        nb_frames = _run_ffprobe(video_path, "-select_streams", "v:0", "-count_frames", "-show_entries", "stream=nb_read_frames")
-
-    return int(w), int(h), fps, int(nb_frames)
-
 
 def recombine_video_audio(
     job_id: str,
@@ -91,17 +64,6 @@ def recombine_video_audio(
 
     if proc.wait() != 0:
         raise subprocess.CalledProcessError(proc.returncode, cmd)
-
-
-def _probe_duration_s(video_path: str) -> float:
-    """Use ffprobe to get a video's duration in seconds, falling back to frame-count/fps for 
-    containers (e.g. webm from MediaRecorder) that don't store a duration in their header"""
-    duration = _run_ffprobe(video_path, "-show_entries", "format=duration")
-    if duration != "N/A":
-        return float(duration)
-
-    _, _, fps, total_frames = extract_video_info(video_path)
-    return total_frames / fps
 
 
 def _parse_out_time_s(line: str) -> Optional[float]:
@@ -259,7 +221,7 @@ def video_upscale(
     on_progress: Callable[[int], None] | None = None
 ) -> None:
     """Upscale a video using the model, writing audio-less result to /tmp/upscaled_noaudio.mp4"""
-    w, h, fps, total_frames = extract_video_info(video_path)
+    w, h, fps, total_frames = _extract_video_info(video_path)
 
     out_w, out_h = w * scale, h * scale
 
@@ -336,6 +298,38 @@ def video_upscale(
     t_enc = time.perf_counter() - t_enc_start
 
     log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
+
+
+def _probe_duration_s(video_path: str) -> float:
+    """use ffprobe to extract the video duration in seconds"""
+    stream_duration = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=duration")
+    if stream_duration != "N/A":
+        return float(stream_duration)
+
+    format_duration = _run_ffprobe(video_path, "-show_entries", "format=duration")
+    if format_duration != "N/A":
+        return float(format_duration)
+
+    _, _, fps, total_frames =  _extract_video_info(video_path)
+    return total_frames / fps
+
+
+def _extract_video_info(video_path: str) -> tuple[int, int, float, int]:
+    """use ffprobe to extract video information like w, h, and fps of a video"""
+    ffprobe = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,nb_frames")
+
+    w, h, fps_frac, nb_frames = ffprobe.split(",")
+
+    fps_num, fps_den = fps_frac.split("/")
+    fps = float(fps_num) / float(fps_den)
+
+    if nb_frames == "N/A":
+        # some containers (e.g. webm from MediaRecorder) don't store a frame count
+        # in the header. count packets (demux only, no decode) rather than estimating
+        # from duration * r_frame_rate, which is off for variable frame rate video
+        nb_frames = _run_ffprobe(video_path, "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets")
+
+    return int(w), int(h), fps, int(nb_frames)
 
 
 def _run_ffprobe(video_path: str, *extra_args: str) -> str:

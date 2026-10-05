@@ -7,8 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from shared_handler.exceptions import JobCancelledError
 
 from src.processing.video import (
+    _extract_video_info,
+    _probe_duration_s,
     _run_ffprobe,
     recombine_video_audio,
     video_decoder,
@@ -20,6 +23,46 @@ from tests.fixtures.processing_helpers import make_fake_decoder
 
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
 MOCK_CANCEL_EVENT.is_set.return_value = False
+
+
+@pytest.fixture
+def mock_pipeline(monkeypatch) -> tuple[MagicMock, MagicMock]:
+    mock_decoder = MagicMock()
+    mock_decoder.stdout = MagicMock()
+    mock_encoder = MagicMock()
+
+    monkeypatch.setattr(
+        "src.processing.video._extract_video_info",
+        lambda p: (100, 100, 30.0, 10),
+    )
+    monkeypatch.setattr("src.processing.video.load_model", lambda *a: MagicMock())
+    monkeypatch.setattr("src.processing.video.video_decoder", lambda p: mock_decoder)
+    monkeypatch.setattr("src.processing.video.video_encoder", lambda *a: mock_encoder)
+    monkeypatch.setattr(
+        "src.processing.video.threading.Thread", lambda *a, **kw: MagicMock()
+    )
+    return mock_decoder, mock_encoder
+
+
+@pytest.fixture
+def decoder_popen():
+    with (
+        patch("src.processing.video.torch.cuda.is_available", return_value=False),
+        patch("src.processing.video.subprocess.Popen", return_value=MagicMock()) as m,
+    ):
+        yield m
+
+
+@pytest.fixture
+def recombine_popen():
+    with (
+        patch("src.processing.video.subprocess.run") as mock_run,
+        patch(
+            "src.processing.video.subprocess.Popen", return_value=_fake_recombine_proc()
+        ) as mock_popen,
+    ):
+        mock_run.return_value.stdout = "10.0"
+        yield mock_popen
 
 
 def _fake_recombine_proc() -> MagicMock:
@@ -68,8 +111,6 @@ def test_video_downscale_raises_runtime_error_when_ffmpeg_fails() -> None:
 def test_video_downscale_raises_before_starting_ffmpeg_when_already_cancelled(
     monkeypatch,
 ) -> None:
-    from shared_handler.exceptions import JobCancelledError
-
     cancel_event = Event()
     cancel_event.set()
 
@@ -85,8 +126,6 @@ def test_video_downscale_raises_before_starting_ffmpeg_when_already_cancelled(
 def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     monkeypatch,
 ) -> None:
-    from shared_handler.exceptions import JobCancelledError
-
     cancel_event = MagicMock(spec=Event)
     cancel_event.is_set.side_effect = [False, True]
 
@@ -105,51 +144,28 @@ def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     mock_proc.wait.assert_called_once()
 
 
-def test_video_decoder_calls_popen_with_video_path() -> None:
-    with (
-        patch("src.processing.video.torch.cuda.is_available", return_value=False),
-        patch(
-            "src.processing.video.subprocess.Popen", return_value=MagicMock()
-        ) as mock_popen,
-    ):
-        video_decoder("/tmp/input.mp4")
+def test_video_decoder_calls_popen_with_video_path(decoder_popen) -> None:
+    video_decoder("/tmp/input.mp4")
 
-        args = mock_popen.call_args[0][0]
-        assert "/tmp/input.mp4" in args
+    args = decoder_popen.call_args[0][0]
+    assert "/tmp/input.mp4" in args
 
 
-def test_video_decoder_returns_popen_instance() -> None:
-    mock_proc = MagicMock()
-    with (
-        patch("src.processing.video.torch.cuda.is_available", return_value=False),
-        patch("src.processing.video.subprocess.Popen", return_value=mock_proc),
-    ):
-        assert video_decoder("/tmp/input.mp4") is mock_proc
+def test_video_decoder_returns_popen_instance(decoder_popen) -> None:
+    assert video_decoder("/tmp/input.mp4") is decoder_popen.return_value
 
 
-def test_video_decoder_opens_stdout_pipe() -> None:
-    with (
-        patch("src.processing.video.torch.cuda.is_available", return_value=False),
-        patch(
-            "src.processing.video.subprocess.Popen", return_value=MagicMock()
-        ) as mock_popen,
-    ):
-        video_decoder("/tmp/input.mp4")
+def test_video_decoder_opens_stdout_pipe(decoder_popen) -> None:
+    video_decoder("/tmp/input.mp4")
 
-        assert mock_popen.call_args[1]["stdout"] == subprocess.PIPE
+    assert decoder_popen.call_args[1]["stdout"] == subprocess.PIPE
 
 
-def test_video_decoder_outputs_rgb24() -> None:
-    with (
-        patch("src.processing.video.torch.cuda.is_available", return_value=False),
-        patch(
-            "src.processing.video.subprocess.Popen", return_value=MagicMock()
-        ) as mock_popen,
-    ):
-        video_decoder("/tmp/input.mp4")
+def test_video_decoder_outputs_rgb24(decoder_popen) -> None:
+    video_decoder("/tmp/input.mp4")
 
-        args = mock_popen.call_args[0][0]
-        assert "rgb24" in args
+    args = decoder_popen.call_args[0][0]
+    assert "rgb24" in args
 
 
 def test_video_upscale_encoder_uses_job_scoped_temp_path(
@@ -172,55 +188,25 @@ def test_video_upscale_encoder_uses_job_scoped_temp_path(
     assert out_path_b == "/tmp/upscaled_noaudio-job_id2.mp4"
 
 
-def test_recombine_video_audio_reads_job_scoped_temp_path() -> None:
-    with (
-        patch("src.processing.video.subprocess.run") as mock_run,
-        patch(
-            "src.processing.video.subprocess.Popen",
-            side_effect=lambda *a, **kw: _fake_recombine_proc(),
-        ) as mock_popen,
-    ):
-        mock_run.return_value.stdout = "10.0"
+def test_recombine_video_audio_reads_job_scoped_temp_path(recombine_popen) -> None:
+    recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
+    args_a = recombine_popen.call_args[0][0]
 
-        recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
-        input_a = mock_popen.call_args[0][0][mock_popen.call_args[0][0].index("-i") + 1]
+    recombine_video_audio("job_id2", "/tmp/original.mp4", "/tmp/final.mp4")
+    args_b = recombine_popen.call_args[0][0]
 
-        recombine_video_audio("job_id2", "/tmp/original.mp4", "/tmp/final.mp4")
-        input_b = mock_popen.call_args[0][0][mock_popen.call_args[0][0].index("-i") + 1]
-
-    assert input_a == "/tmp/upscaled_noaudio-job_id1.mp4"
-    assert input_b == "/tmp/upscaled_noaudio-job_id2.mp4"
+    assert args_a[args_a.index("-i") + 1] == "/tmp/upscaled_noaudio-job_id1.mp4"
+    assert args_b[args_b.index("-i") + 1] == "/tmp/upscaled_noaudio-job_id2.mp4"
 
 
-def test_recombine_video_audio_calls_subprocess_popen() -> None:
-    with (
-        patch("src.processing.video.subprocess.run") as mock_run,
-        patch(
-            "src.processing.video.subprocess.Popen", return_value=_fake_recombine_proc()
-        ) as mock_popen,
-    ):
-        mock_run.return_value.stdout = "10.0"
+def test_recombine_video_audio_passes_correct_paths(recombine_popen) -> None:
+    recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
 
-        recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
-
-        mock_popen.assert_called_once()
-
-
-def test_recombine_video_audio_passes_correct_paths() -> None:
-    with (
-        patch("src.processing.video.subprocess.run") as mock_run,
-        patch(
-            "src.processing.video.subprocess.Popen", return_value=_fake_recombine_proc()
-        ) as mock_popen,
-    ):
-        mock_run.return_value.stdout = "10.0"
-
-        recombine_video_audio("job_id1", "/tmp/original.mp4", "/tmp/final.mp4")
-
-        args = mock_popen.call_args[0][0]
-        assert "/tmp/upscaled_noaudio-job_id1.mp4" in args
-        assert "/tmp/original.mp4" in args
-        assert "/tmp/final.mp4" in args
+    recombine_popen.assert_called_once()
+    args = recombine_popen.call_args[0][0]
+    assert "/tmp/upscaled_noaudio-job_id1.mp4" in args
+    assert "/tmp/original.mp4" in args
+    assert "/tmp/final.mp4" in args
 
 
 @pytest.mark.parametrize(
@@ -288,25 +274,10 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
     )
 
 
-def test_video_upscale_kill_processes_and_raises_when_cancelled(monkeypatch) -> None:
-    from shared_handler.exceptions import JobCancelledError
-
+def test_video_upscale_kill_processes_and_raises_when_cancelled(mock_pipeline) -> None:
+    mock_decoder, mock_encoder = mock_pipeline
     cancel_event = Event()
     cancel_event.set()
-
-    mock_decoder = MagicMock()
-    mock_decoder.stdout = MagicMock()
-    mock_encoder = MagicMock()
-
-    monkeypatch.setattr(
-        "src.processing.video.extract_video_info", lambda p: (100, 100, 30.0, 10)
-    )
-    monkeypatch.setattr("src.processing.video.load_model", lambda *a: MagicMock())
-    monkeypatch.setattr("src.processing.video.video_decoder", lambda p: mock_decoder)
-    monkeypatch.setattr("src.processing.video.video_encoder", lambda *a: mock_encoder)
-    monkeypatch.setattr(
-        "src.processing.video.threading.Thread", lambda *a, **kw: MagicMock()
-    )
 
     with pytest.raises(JobCancelledError):
         video_upscale(cancel_event, "job-1", "video.mp4", Path("model.pth"), 2)
@@ -317,27 +288,15 @@ def test_video_upscale_kill_processes_and_raises_when_cancelled(monkeypatch) -> 
 
 
 def test_video_upscale_kill_processes_and_raises_when_encoder_fails(
-    monkeypatch,
+    mock_pipeline, monkeypatch
 ) -> None:
     cancel_event = Event()
 
-    mock_decoder = MagicMock()
-    mock_decoder.stdout = MagicMock()
-    mock_encoder = MagicMock()
+    mock_decoder, mock_encoder = mock_pipeline
 
-    mock_fail_event = MagicMock(spec=Event)
-    mock_fail_event.is_set.return_value = True
-
-    monkeypatch.setattr(
-        "src.processing.video.extract_video_info", lambda p: (100, 100, 30.0, 10)
-    )
-    monkeypatch.setattr("src.processing.video.load_model", lambda *a: MagicMock())
-    monkeypatch.setattr("src.processing.video.video_decoder", lambda p: mock_decoder)
-    monkeypatch.setattr("src.processing.video.video_encoder", lambda *a: mock_encoder)
-    monkeypatch.setattr(
-        "src.processing.video.threading.Thread", lambda *a, **kw: MagicMock()
-    )
-    monkeypatch.setattr("src.processing.video.Event", lambda: mock_fail_event)
+    fail_event = MagicMock(spec=Event)
+    fail_event.is_set.return_value = True
+    monkeypatch.setattr("src.processing.video.Event", lambda: fail_event)
 
     with pytest.raises(Exception, match="encoder failed"):
         video_upscale(cancel_event, "job-1", "video.mp4", Path("model.pth"), 2)
@@ -345,3 +304,41 @@ def test_video_upscale_kill_processes_and_raises_when_encoder_fails(
     mock_decoder.stdout.close.assert_called_once()
     mock_decoder.kill.assert_called_once()
     mock_encoder.kill.assert_called_once()
+
+
+def test_extract_video_info_counts_packets_when_header_has_no_frame_count(
+    monkeypatch,
+) -> None:
+    def fake_probe(*args: str) -> str:
+        return "60" if "-count_packets" in args else "1280,720,30/1,N/A"
+
+    monkeypatch.setattr("src.processing.video._run_ffprobe", fake_probe)
+
+    assert _extract_video_info("v.webm") == (1280, 720, 30.0, 60)
+
+
+@pytest.mark.parametrize(
+    "stream_out,format_out,expected",
+    [
+        ("10.0", "99.0", 10.0),  # stream duration preferred
+        ("N/A", "2.5", 2.5),  # falls back to format duration
+    ],
+)
+def test_probe_duration_s_uses_header_duration(
+    monkeypatch, stream_out, format_out, expected
+) -> None:
+    def fake_probe(video_path: str, *args: str) -> str:
+        return format_out if "format=duration" in args else stream_out
+
+    monkeypatch.setattr("src.processing.video._run_ffprobe", fake_probe)
+
+    assert _probe_duration_s("v.webm") == expected
+
+
+def test_probe_duration_s_falls_back_to_frames_over_fps(monkeypatch) -> None:
+    monkeypatch.setattr("src.processing.video._run_ffprobe", lambda *a: "N/A")
+    monkeypatch.setattr(
+        "src.processing.video._extract_video_info", lambda p: (1280, 720, 30.0, 60)
+    )
+
+    assert _probe_duration_s("v.webm") == 2.0
