@@ -128,6 +128,9 @@ def split_into_chunks(
         watcher.join()
         if proc.poll() is None:
             proc.kill()
+        proc.wait()
+        if proc.stdout is not None:
+            proc.stdout.close()
 
     output_paths = sorted(
         glob.glob(os.path.join(output_dir, f"{video_stem}-Scene-*.mp4"))

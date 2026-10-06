@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 from threading import Event
@@ -39,7 +40,7 @@ def fake_popen(progress_lines: tuple[str, ...] = ()) -> MagicMock:
     """a Popen replacement whose process streams `progress_lines` then exits 0"""
     popen = MagicMock()
     proc = popen.return_value
-    proc.stdout = iter(progress_lines)
+    proc.stdout = io.StringIO("".join(progress_lines))
     proc.wait.return_value = 0
     proc.poll.return_value = 0
     return popen
