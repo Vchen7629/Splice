@@ -20,7 +20,6 @@ def recombine_video_audio(
     job_id: str,
     video_path: str,
     output_path: str,
-    target_res: str | None = None,
     on_progress: Optional[Callable[[int], None]] = None,
 ) -> None:
     """
@@ -30,7 +29,6 @@ def recombine_video_audio(
         job_id: the id to identify the temp video with no audio to recombine audio on
         video_path: path to the original video with audio
         output_path: the path to save the combined video to
-        target_res: if given scales the video to exact resolution
         on_progress: callback invoked with 0-99 as ffmpeg reports progress
     """
     noaudio_path = f"/tmp/upscaled_noaudio-{job_id}.mp4"
@@ -39,15 +37,9 @@ def recombine_video_audio(
         "-i", noaudio_path,
         "-i", video_path,
         "-map", "0:v", "-map", "1:a?",
+        "-c", "copy",
+        "-progress", "pipe:1", "-nostats", output_path,
     ]
-
-    if target_res is not None:
-        tgt_res = Resolution.from_string(target_res)
-        cmd += ["-vf", f"scale=-2:{tgt_res}", "-c:v", "libx264", "-crf", "18", "-c:a", "copy"]
-    else:
-        cmd += ["-c", "copy"]
-
-    cmd += ["-progress", "pipe:1", "-nostats", output_path]
 
     duration_s = _probe_duration_s(noaudio_path)
     proc = subprocess.Popen(
@@ -116,7 +108,7 @@ def video_decoder(video_path: str) -> Popen[bytes]:
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 
-def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[bytes]:
+def video_encoder(fps: float, out_w: int, out_h: int, out_path: str, target_res: str | None = None) -> Popen[bytes]:
     """
     Long running encoder that takes in upscaled frames from encode_worker via stdin
     and encodes the frames to the correct resolution and framerate as a compressed 
@@ -138,17 +130,20 @@ def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[by
     if out_h is None or out_h <= 0:
         raise ValueError("out_h cant be negative or 0")
 
+    vf = ["-vf", f"scale=-2:{Resolution.from_string(target_res)}"] if target_res else []
     return subprocess.Popen([
         "ffmpeg", "-y",
         "-f", "rawvideo", "-pix_fmt", "yuv420p",
         "-s", f"{out_w}x{out_h}",
         "-r", str(fps),
         "-i", "pipe:0",
+        *vf,
         "-c:v", "libx264", "-crf", "18",
         "-preset", "ultrafast",
         "-pix_fmt", "yuv420p",
         out_path
     ], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
 
 def video_downscale(
     cancel_event: Event, 
@@ -217,7 +212,8 @@ def video_upscale(
     job_id: str,
     video_path: str, 
     model_path: Path, 
-    scale: int, 
+    scale: int,
+    target_res: str | None = None,
     on_progress: Callable[[int], None] | None = None
 ) -> None:
     """Upscale a video using the model, writing audio-less result to /tmp/upscaled_noaudio.mp4"""
@@ -228,7 +224,7 @@ def video_upscale(
     upsampler = load_model(model_path, scale)
 
     decoder = video_decoder(video_path)
-    encoder = video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4")
+    encoder = video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4", target_res)
 
     encode_queue: Queue[Optional[np.ndarray]] = Queue(maxsize=4)
 

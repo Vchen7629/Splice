@@ -11,6 +11,7 @@ from src.processing.video import (
     recombine_video_audio,
     video_decoder,
     video_downscale,
+    video_encoder,
     video_upscale,
 )
 from tests.fixtures.processing_helpers import TEST_VIDEO
@@ -22,6 +23,25 @@ WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
 requires_cuda = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="CUDA not available"
 )
+
+
+@pytest.fixture()
+def recombined_video(one_frame_video: Path, tmp_path: Path) -> Path:
+    """Place 1-frame clip at the job-scoped noaudio path, recombine with original audio."""
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(one_frame_video),
+            "/tmp/upscaled_noaudio-job_id1.mp4",
+        ],
+        check=True,
+        stderr=subprocess.DEVNULL,
+    )
+    output = tmp_path / "recombined.mp4"
+    recombine_video_audio("job_id1", str(TEST_VIDEO), str(output))
+    return output
 
 
 def test_extract_video_info_returns_correct_info() -> None:
@@ -82,40 +102,23 @@ def test_video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
     assert any(b != 0 for b in raw)
 
 
+def test_video_encoder_scales_to_target_resolution(tmp_path: Path) -> None:
+    in_w, in_h = 1280, 720
+    output = tmp_path / "encoded.mp4"
+
+    encoder = video_encoder(24.0, in_w, in_h, str(output), "480p")
+    assert encoder.stdin is not None
+    encoder.stdin.write(bytes(in_w * in_h * 3 // 2))  # one yuv420p frame
+    encoder.stdin.close()
+    assert encoder.wait() == 0
+
+    _, out_h, _, _ = _extract_video_info(str(output))
+    assert out_h == 480
+
+
 def test_recombine_video_audio_produces_output_file(recombined_video: Path) -> None:
     assert recombined_video.exists()
     assert recombined_video.stat().st_size > 0
-
-
-def test_recombine_video_audio_scales_to_target_resolution(
-    one_frame_video: Path, tmp_path: Path
-) -> None:
-    """The upscale model only produces 2x/4x scale factors, which frequently
-    don't match the resolution the caller actually asked for (e.g. a 720p
-    source upscaled for a "4K" target only gets a 2x model, producing
-    1440p). When a target_res is given, recombine_video_audio must scale the
-    real output to that exact resolution."""
-    src_w, src_h, _, _ = _extract_video_info(str(one_frame_video))
-    assert src_h != 1440, (
-        "fixture height must differ from the target to prove scaling happened"
-    )
-
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(one_frame_video),
-            "/tmp/upscaled_noaudio-job_id1.mp4",
-        ],
-        check=True,
-        stderr=subprocess.DEVNULL,
-    )
-    output = tmp_path / "recombined.mp4"
-    recombine_video_audio("job_id1", str(TEST_VIDEO), str(output), target_res="1440p")
-
-    _, out_h, _, _ = _extract_video_info(str(output))
-    assert out_h == 1440
 
 
 def test_recombine_video_audio_output_has_audio_stream(recombined_video: Path) -> None:

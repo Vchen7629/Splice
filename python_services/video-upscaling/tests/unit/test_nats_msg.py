@@ -111,6 +111,7 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
         "/tmp/video.mp4",
         model_path,
         4,
+        "1080p",
         ANY,
     )
 

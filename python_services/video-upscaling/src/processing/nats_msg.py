@@ -127,6 +127,7 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
             ctx.local_video_path,
             model_path,
             resolution_scale,
+            ctx.metadata.target_resolution,
             upscale_reporter,
         )
         logger.debug("upscaled video", job_id=job_id)
@@ -141,7 +142,6 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
             job_id,
             ctx.local_video_path,
             temp_file_loc,
-            ctx.metadata.target_resolution,
             recombine_reporter,
         )
         logger.debug("recombined video with audio", job_id=job_id)
