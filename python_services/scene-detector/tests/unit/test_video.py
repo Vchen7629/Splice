@@ -1,6 +1,7 @@
 import io
 import os
 import tempfile
+from scenedetect import FrameTimecode
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -13,19 +14,15 @@ from src.processing.video import split_into_chunks
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
 MOCK_CANCEL_EVENT.is_set.return_value = False
 
+FPS = 30
 
-class FakeTimecode:
-    """minimal stand-in for scenedetect's FrameTimecode: supports subtraction and
-    get_seconds(), which is all split_into_chunks needs from a scene boundary"""
 
-    def __init__(self, seconds: float) -> None:
-        self.seconds = seconds
+def tc(seconds: float) -> FrameTimecode:
+    return FrameTimecode(float(seconds), fps=FPS)
 
-    def get_seconds(self) -> float:
-        return self.seconds
 
-    def __sub__(self, other: "FakeTimecode") -> "FakeTimecode":
-        return FakeTimecode(self.seconds - other.seconds)
+def scene_files(count: int) -> list[str]:
+    return [f"myvideo-Scene-{i:03d}.mp4" for i in range(1, count + 1)]
 
 
 def scene_manager_stopping_immediately(scenes: list) -> MagicMock:
@@ -48,7 +45,7 @@ def fake_popen(progress_lines: tuple[str, ...] = ()) -> MagicMock:
 
 @pytest.fixture
 def detection():
-    video = MagicMock(frame_rate=30, duration=None)
+    video = MagicMock(frame_rate=FPS, duration=None)
     manager = scene_manager_stopping_immediately([])
     with (
         patch("src.processing.video.open_video", return_value=video),
@@ -59,23 +56,21 @@ def detection():
 
 def test_returns_correct_chunk_paths(detection) -> None:
     """Returns zero-padded scene paths based on detected scene count"""
-    detection.manager.get_scene_list.return_value = [
-        (FakeTimecode(0), FakeTimecode(1))
-    ] * 3
+    detection.manager.get_scene_list.return_value = [(tc(0), tc(1))] * 3
 
     with tempfile.TemporaryDirectory() as output_dir:
         with (
             patch("src.processing.video.subprocess.Popen", new=fake_popen()) as popen,
             patch(
                 "src.processing.video.glob.glob",
-                return_value=["chunk-1", "chunk-2", "chunk-3"],
+                return_value=scene_files(3),
             ) as mock_glob,
         ):
             result = split_into_chunks(
                 MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir
             )
 
-    assert result == ["chunk-1", "chunk-2", "chunk-3"]
+    assert result == scene_files(3)
     assert popen.call_args.args[0][-1] == os.path.join(
         output_dir, "myvideo-Scene-%03d.mp4"
     )
@@ -110,7 +105,7 @@ def test_no_scene_boundaries_copies_original_as_single_chunk(detection) -> None:
         assert percents == [100]
 
 
-def test_progress_capped_at_90_during_detection_then_reaches_100_after_split(
+def test_progress_capped_90_during_detection_then_reaches_100_after_split(
     detection,
 ) -> None:
     fake_video = detection.video
@@ -124,7 +119,7 @@ def test_progress_capped_at_90_during_detection_then_reaches_100_after_split(
         return 150
 
     detection.manager.detect_scenes.side_effect = fake_detect_scenes
-    scene = (FakeTimecode(0), FakeTimecode(1))
+    scene = (tc(0), tc(1))
     detection.manager.get_scene_list.return_value = [scene, scene]
 
     percents: list[int] = []
@@ -133,7 +128,7 @@ def test_progress_capped_at_90_during_detection_then_reaches_100_after_split(
             "src.processing.video.subprocess.Popen",
             new=fake_popen(("out_time_us=5000000\n", "out_time_us=10000000\n")),
         ),
-        patch("src.processing.video.glob.glob", return_value=["a", "b"]),
+        patch("src.processing.video.glob.glob", return_value=scene_files(2)),
     ):
         with tempfile.TemporaryDirectory() as output_dir:
             split_into_chunks(
@@ -165,9 +160,7 @@ def test_raises_job_cancelled_when_cancel_event_is_set_during_detect_scan(
 
 
 def test_cancel_terminates_ffmpeg_even_when_emits_no_progress_lines(detection) -> None:
-    detection.manager.get_scene_list.return_value = [
-        (FakeTimecode(0), FakeTimecode(1))
-    ] * 3
+    detection.manager.get_scene_list.return_value = [(tc(0), tc(1))] * 3
     cancel_event, terminated = Event(), Event()
 
     popen = fake_popen(("frame=1\n",))
@@ -212,15 +205,12 @@ def test_raises_job_cancelled_when_set_after_detect_scan_with_no_scenes(
 
 
 def test_raises_when_chunk_count_does_not_match_scene_count(detection) -> None:
-    detection.manager.get_scene_list.return_value = [
-        (FakeTimecode(0), FakeTimecode(1)),
-        (FakeTimecode(1), FakeTimecode(2)),
-    ]
+    detection.manager.get_scene_list.return_value = [(tc(0), tc(1)), (tc(1), tc(2))]
 
     with tempfile.TemporaryDirectory() as output_dir:
         with (
             patch("src.processing.video.subprocess.Popen", new=fake_popen()),
-            patch("src.processing.video.glob.glob", return_value=["only-one"]),
+            patch("src.processing.video.glob.glob", return_value=scene_files(1)),
         ):
             with pytest.raises(RuntimeError, match="expected 2 scene chunks"):
                 split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
@@ -230,9 +220,9 @@ def test_ffmpeg_command_uses_same_cut_points_for_keyframes_and_segments(
     detection,
 ) -> None:
     detection.manager.get_scene_list.return_value = [
-        (FakeTimecode(0), FakeTimecode(2.5)),
-        (FakeTimecode(2.5), FakeTimecode(7)),
-        (FakeTimecode(7), FakeTimecode(9)),
+        (tc(0), tc(2.5)),
+        (tc(2.5), tc(7)),
+        (tc(7), tc(9)),
     ]
 
     with tempfile.TemporaryDirectory() as output_dir:
@@ -240,11 +230,27 @@ def test_ffmpeg_command_uses_same_cut_points_for_keyframes_and_segments(
             patch(
                 "src.processing.video.subprocess.Popen", new=fake_popen()
             ) as mock_popen,
-            patch("src.processing.video.glob.glob", return_value=["a", "b", "c"]),
+            patch("src.processing.video.glob.glob", return_value=scene_files(3)),
         ):
             split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
 
     cmd = mock_popen.call_args.args[0]
-    assert cmd[cmd.index("-force_key_frames") + 1] == "2.5,7"
-    assert cmd[cmd.index("-segment_times") + 1] == "2.5,7"
+    assert cmd[cmd.index("-force_key_frames") + 1] == "2.5,7.0"
+    assert cmd[cmd.index("-segment_times") + 1] == "2.5,7.0"
     assert "-sn" in cmd
+
+
+def test_chunks_ordered_numerically_past_999_scenes(detection) -> None:
+    detection.manager.get_scene_list.return_value = [(tc(0), tc(1))] * 4
+    unordered = [f"myvideo-Scene-{n}.mp4" for n in ("1000", "002", "999", "100")]
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with (
+            patch("src.processing.video.subprocess.Popen", new=fake_popen()),
+            patch("src.processing.video.glob.glob", return_value=unordered),
+        ):
+            result = split_into_chunks(
+                MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir
+            )
+
+    assert result == [f"myvideo-Scene-{n}.mp4" for n in ("002", "100", "999", "1000")]

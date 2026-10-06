@@ -62,15 +62,14 @@ def split_into_chunks(
 
     scene_list = scene_manager.get_scene_list()
 
+    os.makedirs(output_dir, exist_ok=True)
     if len(scene_list) <= 1:
-        os.makedirs(output_dir, exist_ok=True)
         dest = os.path.join(output_dir, os.path.basename(video_path))
         shutil.copy2(video_path, dest)
         if on_progress:
             on_progress(100)
         return [dest]
 
-    os.makedirs(output_dir, exist_ok=True)
     video_stem = os.path.splitext(os.path.basename(video_path))[0]
 
     cuts = ",".join(str(start.get_seconds()) for start, _ in scene_list[1:])
@@ -133,7 +132,10 @@ def split_into_chunks(
             proc.stdout.close()
 
     output_paths = sorted(
-        glob.glob(os.path.join(output_dir, f"{video_stem}-Scene-*.mp4"))
+        glob.glob(os.path.join(output_dir, f"{video_stem}-Scene-*.mp4")),
+        key=lambda path: int(
+            os.path.splitext(os.path.basename(path))[0].rsplit("-", 1)[1]
+        ),
     )
     if len(output_paths) != len(scene_list):
         raise RuntimeError(
