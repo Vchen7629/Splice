@@ -1,12 +1,12 @@
 import io
 import os
 import tempfile
-from scenedetect import FrameTimecode
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from scenedetect import FrameTimecode
 from shared_handler.exceptions import JobCancelledError
 
 from src.processing.video import split_into_chunks
