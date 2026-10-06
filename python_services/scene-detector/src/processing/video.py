@@ -1,7 +1,8 @@
+import glob
 import os
 import shutil
 import subprocess
-from threading import Event
+from threading import Event, Thread
 from typing import Callable, Optional
 
 from scenedetect import (
@@ -39,7 +40,6 @@ def split_into_chunks(
     Raises:
         JobCancelledError: when the cancel event is set and stops processing
     """
-
     video = open_video(video_path)
     scene_manager = SceneManager()
     scene_manager.add_detector(AdaptiveDetector())
@@ -62,49 +62,91 @@ def split_into_chunks(
 
     scene_list = scene_manager.get_scene_list()
 
-    if not scene_list:
-        os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+    if len(scene_list) <= 1:
         dest = os.path.join(output_dir, os.path.basename(video_path))
         shutil.copy2(video_path, dest)
         if on_progress:
             on_progress(100)
         return [dest]
 
-    os.makedirs(output_dir, exist_ok=True)
     video_stem = os.path.splitext(os.path.basename(video_path))[0]
-    output_paths = []
 
-    for i, (start, end) in enumerate(scene_list):
+    cuts = ",".join(str(start.get_seconds()) for start, _ in scene_list[1:])
+    total_us = int(video.duration.get_seconds() * 1_000_000) if video.duration else None
+
+    proc = subprocess.Popen(
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-y",
+            "-progress",
+            "pipe:1",
+            "-i",
+            video_path,
+            *DEFAULT_FFMPEG_ARGS.split(" "),
+            "-sn",
+            "-force_key_frames",
+            cuts,
+            "-f",
+            "segment",
+            "-segment_times",
+            cuts,
+            "-segment_start_number",
+            "1",
+            "-reset_timestamps",
+            "1",
+            os.path.join(output_dir, f"{video_stem.replace('%', '%%')}-Scene-%03d.mp4"),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    watcher_stop = Event()
+
+    def terminate_on_cancel() -> None:
+        while not watcher_stop.wait(0.1):
+            if cancel_event.is_set():
+                if proc.poll() is None:
+                    proc.terminate()
+                return
+
+    watcher = Thread(target=terminate_on_cancel, daemon=True)
+    watcher.start()
+    assert proc.stdout is not None  # should not trigger since stdout=subprocess.PIPE
+    try:
+        for line in proc.stdout:
+            if total_us and on_progress and line.startswith("out_time_us="):
+                value = line.split("=")[1].strip()
+                if value.isdigit():
+                    on_progress(90 + int(min(int(value) / total_us, 1) * 10))
         if cancel_event.is_set():
-            raise JobCancelledError(
-                f"split_into_chunks cancelled before scene {i} for job"
+            raise JobCancelledError("split_into_chunks cancelled during scene-split")
+        if proc.wait() != 0:
+            raise subprocess.CalledProcessError(proc.returncode, proc.args)
+    finally:
+        watcher_stop.set()
+        watcher.join()
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+        proc.stdout.close()
+
+    output_paths = sorted(
+        glob.glob(
+            os.path.join(
+                glob.escape(output_dir), f"{glob.escape(video_stem)}-Scene-*.mp4"
             )
-
-        output_path = os.path.join(output_dir, f"{video_stem}-Scene-{i + 1:03d}.mp4")
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-v",
-                "quiet",
-                "-nostdin",
-                "-y",
-                "-ss",
-                str(start.get_seconds()),
-                "-i",
-                video_path,
-                "-t",
-                str((end - start).get_seconds()),
-                *DEFAULT_FFMPEG_ARGS.split(" "),
-                "-sn",
-                output_path,
-            ],
-            check=True,
+        ),
+        key=lambda path: int(
+            os.path.splitext(os.path.basename(path))[0].rsplit("-", 1)[1]
+        ),
+    )
+    if len(output_paths) != len(scene_list):
+        raise RuntimeError(
+            f"expected {len(scene_list)} scene chunks but ffmpeg produced {len(output_paths)}"
         )
-        output_paths.append(output_path)
-        if on_progress:
-            on_progress(90 + int((i + 1) / len(scene_list) * 10))
 
-    if cancel_event.is_set():
-        raise JobCancelledError("split_into_chunks during scene-split")
+    if on_progress:
+        on_progress(100)
 
     return output_paths
