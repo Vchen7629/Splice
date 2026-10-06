@@ -127,7 +127,6 @@ def video_encoder(fps: float, out_w: int, out_h: int, out_path: str) -> Popen[by
         out_w: the desired video width for the compressed video file
         out_h: the desired video height for the compressed video file
         out_path: the path for the compressed video file to be saved to
-        target_res: Optional target resolution (e.g. "1080p"); when set, output is scaled to that height
 
     Raises:
         ValueError if fps, out_w, or out_h is invalid (negative value)
