@@ -96,7 +96,7 @@ def split_into_chunks(
             "1",
             "-reset_timestamps",
             "1",
-            os.path.join(output_dir, f"{video_stem}-Scene-%03d.mp4"),
+            os.path.join(output_dir, f"{video_stem.replace('%', '%%')}-Scene-%03d.mp4"),
         ],
         stdout=subprocess.PIPE,
         text=True,
@@ -112,8 +112,9 @@ def split_into_chunks(
 
     watcher = Thread(target=terminate_on_cancel, daemon=True)
     watcher.start()
+    assert proc.stdout is not None  # should not trigger since stdout=subprocess.PIPE
     try:
-        for line in proc.stdout: # pyrefly: ignore[not-iterable]  (stdout=PIPE above)
+        for line in proc.stdout:
             if total_us and on_progress and line.startswith("out_time_us="):
                 value = line.split("=")[1].strip()
                 if value.isdigit():
@@ -128,11 +129,14 @@ def split_into_chunks(
         if proc.poll() is None:
             proc.kill()
         proc.wait()
-        if proc.stdout is not None:
-            proc.stdout.close()
+        proc.stdout.close()
 
     output_paths = sorted(
-        glob.glob(os.path.join(output_dir, f"{video_stem}-Scene-*.mp4")),
+        glob.glob(
+            os.path.join(
+                glob.escape(output_dir), f"{glob.escape(video_stem)}-Scene-*.mp4"
+            )
+        ),
         key=lambda path: int(
             os.path.splitext(os.path.basename(path))[0].rsplit("-", 1)[1]
         ),
