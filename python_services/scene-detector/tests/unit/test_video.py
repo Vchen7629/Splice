@@ -163,15 +163,23 @@ def test_raises_job_cancelled_when_cancel_event_is_set_during_detect_scan(
             split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
 
 
-def test_raises_job_cancelled_and_terminates_ffmpeg_when_cancelled_mid_split(
-    detection,
-) -> None:
+def test_cancel_terminates_ffmpeg_even_when_emits_no_progress_lines(detection) -> None:
     detection.manager.get_scene_list.return_value = [
         (FakeTimecode(0), FakeTimecode(1))
     ] * 3
-    cancel_event = MagicMock(spec=Event)
-    cancel_event.is_set.side_effect = [False, True]
+    cancel_event, terminated = Event(), Event()
+
     popen = fake_popen(("frame=1\n",))
+    proc = popen.return_value
+    proc.poll.return_value = None
+    proc.terminate.side_effect = terminated.set
+
+    def silent_stdout():
+        cancel_event.set()
+        terminated.wait(timeout=2)
+        yield from ()
+
+    proc.stdout = silent_stdout()
 
     with tempfile.TemporaryDirectory() as output_dir:
         with patch("src.processing.video.subprocess.Popen", new=popen):
@@ -181,7 +189,7 @@ def test_raises_job_cancelled_and_terminates_ffmpeg_when_cancelled_mid_split(
             ):
                 split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
 
-    popen.return_value.terminate.assert_called_once()
+    proc.terminate.assert_called_once()
 
 
 def test_raises_job_cancelled_when_set_after_detect_scan_with_no_scenes(

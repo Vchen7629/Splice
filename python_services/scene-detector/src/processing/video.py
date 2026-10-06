@@ -2,7 +2,7 @@ import glob
 import os
 import shutil
 import subprocess
-from threading import Event
+from threading import Event, Thread
 from typing import Callable, Optional
 
 from scenedetect import (
@@ -40,7 +40,6 @@ def split_into_chunks(
     Raises:
         JobCancelledError: when the cancel event is set and stops processing
     """
-
     video = open_video(video_path)
     scene_manager = SceneManager()
     scene_manager.add_detector(AdaptiveDetector())
@@ -74,8 +73,6 @@ def split_into_chunks(
     os.makedirs(output_dir, exist_ok=True)
     video_stem = os.path.splitext(os.path.basename(video_path))[0]
 
-    # N scenes need N-1 split points, scene 1 starts at 0. The same string feeds both flags
-    # so the forced keyframes and the segment cuts can never disagree
     cuts = ",".join(str(start.get_seconds()) for start, _ in scene_list[1:])
     total_us = int(video.duration.get_seconds() * 1_000_000) if video.duration else None
 
@@ -105,20 +102,30 @@ def split_into_chunks(
         stdout=subprocess.PIPE,
         text=True,
     )
+    watcher_stop = Event()
+
+    def terminate_on_cancel() -> None:
+        while not watcher_stop.wait(0.1):
+            if cancel_event.is_set():
+                if proc.poll() is None:
+                    proc.terminate()
+                return
+
+    watcher = Thread(target=terminate_on_cancel, daemon=True)
+    watcher.start()
     try:
         for line in proc.stdout:
-            if cancel_event.is_set():
-                proc.terminate()
-                raise JobCancelledError(
-                    "split_into_chunks cancelled during scene-split"
-                )
             if total_us and on_progress and line.startswith("out_time_us="):
                 value = line.split("=")[1].strip()
                 if value.isdigit():
                     on_progress(90 + int(min(int(value) / total_us, 1) * 10))
+        if cancel_event.is_set():
+            raise JobCancelledError("split_into_chunks cancelled during scene-split")
         if proc.wait() != 0:
             raise subprocess.CalledProcessError(proc.returncode, proc.args)
     finally:
+        watcher_stop.set()
+        watcher.join()
         if proc.poll() is None:
             proc.kill()
 
