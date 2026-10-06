@@ -113,7 +113,7 @@ def split_into_chunks(
     watcher = Thread(target=terminate_on_cancel, daemon=True)
     watcher.start()
     try:
-        for line in proc.stdout:
+        for line in proc.stdout: # pyrefly: ignore[not-iterable]  (stdout=PIPE above)
             if total_us and on_progress and line.startswith("out_time_us="):
                 value = line.split("=")[1].strip()
                 if value.isdigit():
