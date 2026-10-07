@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import type { ProcessingType, UploadedFile } from "../../types/file";
+import type { ProcessedVideo, ProcessingType, UploadedFile } from "../../types/file";
 import { STATUS_BG } from "./StatusStyles";
 import { formatSize } from "../../utils/fileDisplay";
 import ResolutionSelect from "./ResolutionSelect";
@@ -74,8 +74,8 @@ const UploadedFileQueueList = (
 }
 
 interface ProcessedVideosListProps {
-    processedVideos: UploadedFile[]
-    onRemove: (id: number) => void
+    processedVideos: ProcessedVideo[]
+    onRemove: (jobId: string) => void
 }
 
 const ProcessedVideosList = ({ processedVideos, onRemove }: ProcessedVideosListProps) => {
@@ -93,7 +93,7 @@ const ProcessedVideosList = ({ processedVideos, onRemove }: ProcessedVideosListP
         <ul className="flex flex-col overflow-y-auto">
             {processedVideos.map(file => (
                 <li
-                    key={file.id}
+                    key={file.jobId}
                     className="relative flex items-center gap-2.5 px-5 py-3 border-b border-line hover:bg-row transition-colors duration-150"
                 >
                     <span className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full bg-status-done"/>
@@ -102,12 +102,12 @@ const ProcessedVideosList = ({ processedVideos, onRemove }: ProcessedVideosListP
                             {file.name}
                         </span>
                         <span className="font-mono text-eyebrow text-fg-faint tabular-nums">
-                            {formatSize(file.size)} · {file.resolution}
+                            {file.resolution}
                         </span>
                     </span>
                     <DownloadButton file={file}/>
                     <button
-                        onClick={() => onRemove(file.id)}
+                        onClick={() => onRemove(file.jobId)}
                         aria-label={`Remove ${file.name}`}
                         className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-fg-faint hover:text-fg-strong transition-colors duration-100"
                     >

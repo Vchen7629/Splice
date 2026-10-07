@@ -4,17 +4,13 @@ import { useVideoQueueStore } from "../state/videoQueue";
 import { VideoService } from "../api/services/video";
 import { toast } from "sonner";
 
-const isActiveJob = (v: UploadedFile) => (
+type ActiveJob = UploadedFile & { jobId: string }
+
+const isActiveJob = (v: UploadedFile): v is ActiveJob => (
     v.status === 'processing' || 
     v.status === 'degraded' || 
     v.status === 'cancelling'
 ) && !!v.jobId
-
-interface ActiveJob {
-    jobId: string
-    file: UploadedFile
-    processingType: ProcessingType
-}
 
 interface StatusEventData {
     job_id: string
@@ -34,62 +30,53 @@ interface HealthEventData {
     error?: string
 }
 
-function activeJobs(uploadedVideos: Record<ProcessingType, UploadedFile[]>): ActiveJob[] {
-    return Object.entries(uploadedVideos).flatMap(([processingType, videos]) =>
-        videos.filter(isActiveJob).map(v => ({ jobId: v.jobId!, file: v, processingType: processingType as ProcessingType}))
-    )
-}
-
 function openJobConnection(job: ActiveJob, connections: Map<string, EventSource>) {
     const es = VideoService.connectEvents(job.jobId)
     connections.set(job.jobId, es)
 
     es.addEventListener('status', (e: MessageEvent) => {
         const data: StatusEventData = JSON.parse(e.data)
-        const { updateVideoStatus, markComplete, markCancelled } = useVideoQueueStore.getState()
+        const { updateVideo, markComplete, markCancelled } = useVideoQueueStore.getState()
         
         switch (data.state) {
             case 'COMPLETE':
                 es.close()
                 connections.delete(job.jobId)
-                markComplete(job.processingType, job.file)
+                markComplete(job.id)
                 break
             case 'CANCELLED':
                 es.close()
                 connections.delete(job.jobId)
-                markCancelled(job.processingType, job.file)
+                markCancelled(job.id)
                 break
             case 'FAILED':
                 es.close()
                 connections.delete(job.jobId)
-                updateVideoStatus(job.processingType, job.file.id, { status: 'error', error: data.error })
-                toast.error(`${job.file.name} failed to ${job.processingType.toLowerCase()}`, { description: data.error })
+                updateVideo(job.id, { status: 'error', error: data.error })
+                toast.error(`${job.name} failed to ${job.processingType.toLowerCase()}`, { description: data.error })
                 break
             case 'PROCESSING':
-                updateVideoStatus(job.processingType, job.file.id, { status: 'processing', stage: data.stage, jobProgress: undefined })
+                updateVideo(job.id, { status: 'processing', stage: data.stage, jobProgress: undefined })
                 break
         }
     })
 
     es.addEventListener('progress', (e: MessageEvent) => {
         const data: ProgressEventData = JSON.parse(e.data)
-        const store = useVideoQueueStore.getState()
-        const current = store.uploadedVideos[job.processingType]
-            .find(video => video.id === job.file.id)
-        
+        const { videos, updateVideo } = useVideoQueueStore.getState()
+        const current = videos.find(v => v.id === job.id)
         if (!current || current.jobId !== data.job_id || current.stage !==data.stage) return
-        
-        useVideoQueueStore.getState().updateVideoStatus(job.processingType, job.file.id, { jobProgress: data.progress })
+        updateVideo(job.id, { jobProgress: data.progress })    
     })
 
     es.addEventListener('health', (e: MessageEvent) => {
         const data: HealthEventData = JSON.parse(e.data)
-        const { updateVideoStatus } = useVideoQueueStore.getState()
+        const { updateVideo } = useVideoQueueStore.getState()
 
         if (data.state === 'DEGRADED') {
-            updateVideoStatus(job.processingType, job.file.id, { status: 'degraded', error: data.error })
+            updateVideo(job.id, { status: 'degraded', error: data.error })
         } else {
-            updateVideoStatus(job.processingType, job.file.id, { status: 'processing' })
+            updateVideo(job.id, { status: 'processing' })
         }
     })
 
@@ -98,8 +85,8 @@ function openJobConnection(job: ActiveJob, connections: Map<string, EventSource>
         // once EventSource has fully given up (fatal, non-retryable).
         if (es.readyState == EventSource.CLOSED && connections.has(job.jobId)) {
             connections.delete(job.jobId)
-            useVideoQueueStore.getState().updateVideoStatus(job.processingType, job.file.id, { status: 'error' })
-            toast.error(`${job.file.name} failed to ${job.processingType.toLowerCase()}`)
+            useVideoQueueStore.getState().updateVideo(job.id, { status: 'error' })
+            toast.error(`${job.name} failed to ${job.processingType.toLowerCase()}`)
         }
     }
 }
@@ -109,7 +96,7 @@ export function useJobEvents() {
 
     useEffect(() => {
         function sync() {
-            const current = activeJobs(useVideoQueueStore.getState().uploadedVideos)
+            const current = useVideoQueueStore.getState().videos.filter(isActiveJob)
             const currentIds = new Set(current.map(j => j.jobId))
 
             for (const [jobId, es] of connections.current) {
