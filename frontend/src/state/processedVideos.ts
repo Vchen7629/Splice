@@ -28,7 +28,10 @@ export const useProcessedStore = create<ProcessedStore>()(
             name: STORAGE_KEY,
             version: 1,
             merge: (persisted, current) => {
-                const saved = (persisted as Partial<ProcessedStore> | undefined)?.processed ?? []
+                const raw = (persisted as Partial<ProcessedStore> | undefined)?.processed
+                const saved = Array.isArray(raw)
+                    ? raw.filter(v => v && typeof v.jobId === "string" && typeof v.processingType === "string")
+                    : []
                 return { ...current, processed: saved} /**TODO: in the future when we implement ttl on backend storage ttl, filter for ttl*/
             }
         }
