@@ -4,3 +4,8 @@ export const abortRefs = new Map<number, () => void>()
 
 let nextId = 0
 export const nextFileId = () => nextId++
+
+export function releaseFile(id: number) {
+    fileMap.delete(id)
+    abortRefs.delete(id)
+}

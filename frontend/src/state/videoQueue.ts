@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import type { UploadedFile } from "../types/file"
 import { useProcessedStore } from "./processedVideos"
+import { releaseFile } from "./fileRegistry"
 
 interface VideoQueueStore {
     videos: UploadedFile[]
@@ -44,6 +45,7 @@ export const useVideoQueueStore = create<VideoQueueStore>((set, get) => ({
             processingType: video.processingType,
             completedAt: Date.now(),
         })
+        releaseFile(id)
         set(state => ({ videos: state.videos.filter(v => v.id !== id)}))
     },
 
@@ -53,6 +55,7 @@ export const useVideoQueueStore = create<VideoQueueStore>((set, get) => ({
         const video = get().videos.find(v => v.id === id)
         if (!video) return
 
+        releaseFile(id)
         set(state => ({
             videos: state.videos.filter(v => v.id !== id),
             cancelled: [...state.cancelled, { ...video, status: 'cancelled' }],
