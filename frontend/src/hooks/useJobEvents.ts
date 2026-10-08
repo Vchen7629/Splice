@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { ProcessingType, UploadedFile } from "../types/file";
+import type { UploadedFile } from "../types/file";
 import { useVideoQueueStore } from "../state/videoQueue";
 import { VideoService } from "../api/services/video";
 import { toast } from "sonner";
@@ -95,21 +95,23 @@ export function useJobEvents() {
     const connections = useRef(new Map<string, EventSource>())
 
     useEffect(() => {
+        const activeConnections = connections.current
+
         function sync() {
             const current = useVideoQueueStore.getState().videos.filter(isActiveJob)
             const currentIds = new Set(current.map(j => j.jobId))
 
-            for (const [jobId, es] of connections.current) {
+            for (const [jobId, es] of activeConnections) {
                 if (!currentIds.has(jobId)) {
                     es.close()
-                    connections.current.delete(jobId)
+                    activeConnections.delete(jobId)
                 }
             }
 
             for (const job of current) {
-                if (connections.current.has(job.jobId)) continue
-                
-                openJobConnection(job, connections.current)
+                if (activeConnections.has(job.jobId)) continue
+
+                openJobConnection(job, activeConnections)
             }
         }
 
@@ -118,8 +120,8 @@ export function useJobEvents() {
 
         return () => {
             unsubscribe()
-            connections.current.forEach(es => es.close())
-            connections.current.clear()
+            activeConnections.forEach(es => es.close())
+            activeConnections.clear()
         }
     }, [])
 }
