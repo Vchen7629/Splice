@@ -13,6 +13,7 @@ import (
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -276,26 +277,26 @@ func TestTryUpdateMilestone(t *testing.T) {
 	})
 }
 
-func TestPollJobStatus_BadRequest(t *testing.T) {
-	h := newHandler(NewMockKV())
-	req := httptest.NewRequest(http.MethodGet, "/jobs//status", nil)
-	// path value is empty string — simulates missing segment
-	req.SetPathValue("id", "")
-	rec := httptest.NewRecorder()
+func TestPollJobStatus(t *testing.T) {
+	t.Run("missing jobID should return and http error", func(t *testing.T) {
+		h := newHandler(NewMockKV())
+		req := httptest.NewRequest(http.MethodGet, "/jobs//status", nil)
+		req.SetPathValue("id", "")
+		rec := httptest.NewRecorder()
 
-	h.PollJobStatus(rec, req)
+		h.PollJobStatus(rec, req)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "missing job_id")
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "job_id is not a valid uuid")
 
-	var resp jobStatusResponse
-	assert.Error(t, json.Unmarshal(rec.Body.Bytes(), &resp), "error response should not be valid JSON")
-}
+		var resp jobStatusResponse
+		assert.Error(t, json.Unmarshal(rec.Body.Bytes(), &resp), "error response should not be valid JSON")
+	})
 
-func TestPollJobStatus_KVErrors(t *testing.T) {
 	kvErr := errors.New("kv unavailable")
+	const testJobID = "11111111-1111-4111-8111-111111111111"
 
-	tests := []struct {
+	kvErrTests := []struct {
 		name       string
 		kv         *MockKV
 		wantStatus int
@@ -321,7 +322,7 @@ func TestPollJobStatus_KVErrors(t *testing.T) {
 			name: "malformed KV value returns 500",
 			kv: func() *MockKV {
 				m := NewMockKV()
-				m.Seed("job-1", []byte("not valid json{{"))
+				m.Seed(testJobID, []byte("not valid json{{"))
 				return m
 			}(),
 			wantStatus: http.StatusInternalServerError,
@@ -329,11 +330,11 @@ func TestPollJobStatus_KVErrors(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range kvErrTests {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHandler(tc.kv)
 			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
+			req.SetPathValue("id", testJobID)
 			rec := httptest.NewRecorder()
 
 			h.PollJobStatus(rec, req)
@@ -345,10 +346,8 @@ func TestPollJobStatus_KVErrors(t *testing.T) {
 			assert.Error(t, json.Unmarshal(rec.Body.Bytes(), &resp), "error response should not be valid JSON")
 		})
 	}
-}
 
-func TestPollJobStatus_States(t *testing.T) {
-	tests := []struct {
+	statesTests := []struct {
 		name       string
 		status     sJetstream.JobStatus
 		wantState  sJetstream.JobState
@@ -388,14 +387,15 @@ func TestPollJobStatus_States(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range statesTests {
 		t.Run(tc.name, func(t *testing.T) {
 			kv := NewMockKV()
-			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
+			id := uuid.New().String()
+			kv.Seed(id, mustMarshalStatus(t, tc.status))
 			h := newHandler(kv)
 
 			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
+			req.SetPathValue("id", id)
 			rec := httptest.NewRecorder()
 
 			h.PollJobStatus(rec, req)
@@ -407,19 +407,17 @@ func TestPollJobStatus_States(t *testing.T) {
 			assert.Equal(t, tc.wantErrMsg, resp.Error)
 		})
 	}
-}
 
-func TestPollJobStatus_ResponseShape(t *testing.T) {
-	tests := []struct {
+	responseShapesTests := []struct {
 		name      string
 		jobID     string
 		wantStage string
 	}{
-		{"echoes job_id in response", "my-specific-job", ""},
-		{"echoes different job_id", "another-job-456", ""},
+		{"echoes job_id in response", uuid.New().String(), ""},
+		{"echoes different job_id", uuid.New().String(), ""},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range responseShapesTests {
 		t.Run(tc.name, func(t *testing.T) {
 			kv := NewMockKV()
 			kv.Seed(tc.jobID, mustMarshalStatus(t, sJetstream.JobStatus{State: sJetstream.StateProcessing}))
@@ -440,10 +438,8 @@ func TestPollJobStatus_ResponseShape(t *testing.T) {
 			assert.Equal(t, tc.wantStage, resp.Stage)
 		})
 	}
-}
 
-func TestPollJobStatus_DroppedConnection(t *testing.T) {
-	tests := []struct {
+	droppedConnTests := []struct {
 		name   string
 		status sJetstream.JobStatus
 	}{
@@ -452,7 +448,7 @@ func TestPollJobStatus_DroppedConnection(t *testing.T) {
 		{"does not panic on dropped connection (FAILED)", sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range droppedConnTests {
 		t.Run(tc.name, func(t *testing.T) {
 			kv := NewMockKV()
 			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
@@ -466,6 +462,20 @@ func TestPollJobStatus_DroppedConnection(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("watch error on kv causes error", func(t *testing.T) {
+		kv := &MockKV{WatchErr: errors.New("kv unavailable")}
+		h := newHandler(kv)
+
+		req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/events", nil)
+		req.SetPathValue("id", uuid.New().String())
+		rec := httptest.NewRecorder()
+
+		h.JobEvents(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "failed to watch job status")
+	})
 }
 
 func TestJobEvents_MissingJobID(t *testing.T) {
@@ -478,19 +488,5 @@ func TestJobEvents_MissingJobID(t *testing.T) {
 	h.JobEvents(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "missing job_id")
-}
-
-func TestJobEvents_WatchError(t *testing.T) {
-	kv := &MockKV{WatchErr: errors.New("kv unavailable")}
-	h := newHandler(kv)
-
-	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/events", nil)
-	req.SetPathValue("id", "job-1")
-	rec := httptest.NewRecorder()
-
-	h.JobEvents(rec, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "failed to watch job status")
+	assert.Contains(t, rec.Body.String(), "job_id is not a valid uuid")
 }

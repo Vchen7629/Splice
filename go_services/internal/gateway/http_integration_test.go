@@ -19,6 +19,7 @@ import (
 
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 
+	"github.com/google/uuid"
 	nats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -69,21 +70,21 @@ func TestResponse(t *testing.T) {
 	}{
 		{
 			name:      "PROCESSING job returns 200 with correct state",
-			jobID:     "job-processing",
+			jobID:     uuid.New().String(),
 			status:    sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"},
 			wantCode:  http.StatusOK,
 			wantState: "PROCESSING",
 		},
 		{
 			name:      "COMPLETE job returns 200 with correct state",
-			jobID:     "job-complete",
+			jobID:     uuid.New().String(),
 			status:    sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"},
 			wantCode:  http.StatusOK,
 			wantState: "COMPLETE",
 		},
 		{
 			name:      "FAILED job returns 200 with error field populated",
-			jobID:     "job-failed",
+			jobID:     uuid.New().String(),
 			status:    sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "pipeline failed at stage: transcoder-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "FAILED",
@@ -91,7 +92,7 @@ func TestResponse(t *testing.T) {
 		},
 		{
 			name:      "DEGRADED job returns 200 with error field and stage",
-			jobID:     "job-degraded",
+			jobID:     uuid.New().String(),
 			status:    sJetstream.JobStatus{State: sJetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
 			wantCode:  http.StatusOK,
 			wantState: "DEGRADED",
@@ -122,7 +123,7 @@ func TestResponse_NotFound(t *testing.T) {
 	t.Run("unknown job ID returns 404", func(t *testing.T) {
 		ts := newTestServer(t)
 
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/nonexistent-job/status", ts.URL))
+		resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", ts.URL, uuid.New().String()))
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -147,10 +148,10 @@ func TestConnectionDrop(t *testing.T) {
 		jobID  string
 		status sJetstream.JobStatus
 	}{
-		{"does not panic on dropped connection (PROCESSING)", "drop-processing", sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (COMPLETE)", "drop-complete", sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"}},
-		{"does not panic on dropped connection (FAILED)", "drop-failed", sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
-		{"does not panic on dropped connection (not found)", "drop-notfound", sJetstream.JobStatus{}},
+		{"does not panic on dropped connection (PROCESSING)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"}},
+		{"does not panic on dropped connection (COMPLETE)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"}},
+		{"does not panic on dropped connection (FAILED)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
+		{"does not panic on dropped connection (not found)", uuid.New().String(), sJetstream.JobStatus{}},
 	}
 
 	for _, tc := range tests {
@@ -172,7 +173,8 @@ func TestConnectionDrop(t *testing.T) {
 
 func TestConcurrentRequests(t *testing.T) {
 	t.Run("concurrent requests for a completed job return consistent state", func(t *testing.T) {
-		seedStatus(t, "concurrent-job", sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"})
+		jobID := uuid.New().String()
+		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"})
 		ts := newTestServer(t)
 
 		const goroutines = 20
@@ -183,7 +185,7 @@ func TestConcurrentRequests(t *testing.T) {
 		for i := range goroutines {
 			go func(idx int) {
 				defer wg.Done()
-				resp, err := http.Get(fmt.Sprintf("%s/jobs/concurrent-job/status", ts.URL))
+				resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", ts.URL, jobID))
 				if err != nil {
 					return
 				}
@@ -213,7 +215,7 @@ func TestConcurrentRequests(t *testing.T) {
 		for i := range goroutines {
 			go func(idx int) {
 				defer wg.Done()
-				resp, err := http.Get(fmt.Sprintf("%s/jobs/missing-job/status", ts.URL))
+				resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", ts.URL, uuid.New().String()))
 				if err != nil {
 					return
 				}
@@ -232,14 +234,15 @@ func TestConcurrentRequests(t *testing.T) {
 
 // continues serving requests after a client disconnects
 func TestServerContinuesAfterDisconnect(t *testing.T) {
-	seedStatus(t, "reconnect-job", sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
+	jobID := uuid.New().String()
+	seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 	ts := newTestServer(t)
 
-	firstResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
+	firstResp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", ts.URL, jobID))
 	require.NoError(t, err)
 	firstResp.Body.Close()
 
-	secondResp, err := http.Get(fmt.Sprintf("%s/jobs/reconnect-job/status", ts.URL))
+	secondResp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", ts.URL, jobID))
 	require.NoError(t, err)
 	defer secondResp.Body.Close()
 
@@ -261,7 +264,7 @@ func testVideoBytes(t *testing.T) []byte {
 // seedProcessedVideo writes a processed output where GetProcessedVideo looks for
 // it: {filer}/{jobID}/{fileName}/processed. shared/test's copy uses a different
 // layout ({filer}/{jobID}/processed/{fileName}), so it cannot be reused here.
-func seedProcessedVideo(t *testing.T, filerURL, jobID, fileName string, content []byte) {
+func seedProcessedVideo(t *testing.T, filerURL, fileName string, jobID uuid.UUID, content []byte) {
 	t.Helper()
 	url := fmt.Sprintf("%s/%s/%s/processed", filerURL, jobID, fileName)
 
@@ -469,9 +472,10 @@ func TestDownloadVideoFlow(t *testing.T) {
 
 	t.Run("Streams the exact bytes of a seeded processed video", func(t *testing.T) {
 		content := []byte("fake processed video bytes")
-		seedProcessedVideo(t, sharedFilerUrl, "job-1", "output.mp4", content)
+		id := uuid.New()
+		seedProcessedVideo(t, sharedFilerUrl, "output.mp4", id, content)
 
-		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "job-1", "output.mp4")
+		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "output.mp4", id)
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -484,9 +488,10 @@ func TestDownloadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("Returns correct Content-Disposition and Content-Type headers", func(t *testing.T) {
-		seedProcessedVideo(t, sharedFilerUrl, "job-2", "output.mp4", []byte("data"))
+		id := uuid.New()
+		seedProcessedVideo(t, sharedFilerUrl, "output.mp4", id, []byte("data"))
 
-		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "job-2", "output.mp4")
+		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "output.mp4", id)
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -497,7 +502,7 @@ func TestDownloadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("Returns 500 when the processed video does not exist in storage", func(t *testing.T) {
-		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "no-such-job", "output.mp4")
+		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "output.mp4", uuid.New())
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -511,8 +516,9 @@ func TestDownloadVideoFlow(t *testing.T) {
 func TestStartHttpApi(t *testing.T) {
 	env := setupServer(t)
 
-	const seedJobID, seedFileName = "route-test-job", "output.mp4"
-	seedProcessedVideo(t, sharedFilerUrl, seedJobID, seedFileName, []byte("processed"))
+	seedJobID := uuid.New()
+	const seedFileName = "output.mp4"
+	seedProcessedVideo(t, sharedFilerUrl, seedFileName, seedJobID, []byte("processed"))
 
 	tests := []struct {
 		name       string
@@ -661,7 +667,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 func TestCancelRouteI(t *testing.T) {
 	t.Run("happy path for processing", func(t *testing.T) {
-		jobID := "cancel-happy-path"
+		jobID := uuid.New().String()
 		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		ts := newTestServer(t)
 
@@ -685,7 +691,7 @@ func TestCancelRouteI(t *testing.T) {
 	})
 
 	t.Run("repeated cancels (3 sequential delete) all return 200 CANCELLED and only one KV revision bump", func(t *testing.T) {
-		jobID := "cancel-repeated"
+		jobID := uuid.New().String()
 		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		ts := newTestServer(t)
 
@@ -711,7 +717,7 @@ func TestCancelRouteI(t *testing.T) {
 	})
 
 	t.Run("cancel on COMPLETED job is no-op", func(t *testing.T) {
-		jobID := "cancel-terminal"
+		jobID := uuid.New().String()
 		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "scene-detector"})
 		ts := newTestServer(t)
 

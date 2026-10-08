@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 )
@@ -77,7 +78,7 @@ func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte,
 }
 
 // NewDownloadRequest builds a GET request with a JSON body containing job_id and file_name.
-func NewDownloadRequest(t *testing.T, target, jobID, fileName string) *http.Request {
+func NewDownloadRequest(t *testing.T, target, fileName string, jobID uuid.UUID) *http.Request {
 	t.Helper()
 	body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, jobID, fileName)
 	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(body))
