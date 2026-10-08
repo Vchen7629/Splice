@@ -2,11 +2,15 @@ export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'e
 
 export type ProcessingType = 'Transcode' | 'Upscale' | 'Denoise' | 'Convert'
 
-export interface UploadedFile {
-    id: number
+interface baseFile {
     name: string
-    size: number
     resolution: string
+    processingType: ProcessingType
+}
+
+export interface UploadedFile extends baseFile {
+    id: number
+    size: number
     sourceHeight: number
     status: JobStatus
     uploadProgress: number
@@ -14,4 +18,9 @@ export interface UploadedFile {
     stage?: string
     jobProgress?: number
     error?: string
+}
+
+export interface ProcessedVideo extends baseFile {
+    jobId: string
+    completedAt: number
 }

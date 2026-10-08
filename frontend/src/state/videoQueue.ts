@@ -1,135 +1,66 @@
 import { create } from "zustand"
-import type { ProcessingType, UploadedFile } from "../types/file"
+import type { UploadedFile } from "../types/file"
+import { useProcessedStore } from "./processedVideos"
+import { releaseFile } from "./fileRegistry"
 
 interface VideoQueueStore {
-    uploadedVideos: Record<ProcessingType, UploadedFile[]>
-    processedVideos: Record<ProcessingType, UploadedFile[]>
-    cancelledVideos: Record<ProcessingType, UploadedFile[]>
-    addVideos: (processingType: ProcessingType, videos: UploadedFile[]) => void
-    updateVideoStatus: (processingType: ProcessingType, id: number, patch: Partial<UploadedFile>) => void
-    setResolution: (processingType: ProcessingType, id: number, resolution: string) => void
-    removeUploadedVideo: (processingType: ProcessingType, id: number) => void
-    removeProcessedVideo: (processingType: ProcessingType, id: number) => void
-    removeCancelledVideo: (processingType: ProcessingType, id: number) => void
-    markComplete: (processingType: ProcessingType, video: UploadedFile) => void
-    markCancelling: (processingType: ProcessingType, id: number) => void
-    markCancelled: (processingType: ProcessingType, video: UploadedFile) => void
-    resetVideo: (processingType: ProcessingType, id: number) => void
+    videos: UploadedFile[]
+    cancelled: UploadedFile[]
+    addVideos: (videos: UploadedFile[]) => void
+    updateVideo: (id: number, patch: Partial<UploadedFile>) => void
+    setResolution: (id: number, resolution: string) => void
+    removeVideo: (id: number) => void
+    removeCancelled: (id: number) => void
+    markComplete: (id: number) => void
+    markCancelling: (id: number) => void
+    markCancelled: (id: number) => void
+    resetVideo: (id: number) => void
 }
 
-/** Replaces one processingType's list within a queues record, leaving the others untouched. */
-function withUpdatedQueue(
-    queues: Record<ProcessingType, UploadedFile[]>,
-    processingType: ProcessingType,
-    updater: (list: UploadedFile[]) => UploadedFile[]
-): Record<ProcessingType, UploadedFile[]> {
-    return { ...queues, [processingType]: updater(queues[processingType]) }
-}
+export const useVideoQueueStore = create<VideoQueueStore>((set, get) => ({
+    videos: [],
+    cancelled: [],
 
-export const useVideoQueueStore = create<VideoQueueStore>((set) => ({
-    uploadedVideos: {
-        "Transcode": [],
-        "Upscale": [],
-        "Denoise": [],
-        "Convert": []
+    addVideos: (videos) => set(state => ({ videos: [...state.videos, ...videos ]})),
+
+    updateVideo: (id, patch) =>
+        set(state => ({ 
+            videos: state.videos.map(v => v.id === id ? { ...v, ...patch} : v)
+        })),
+
+    setResolution: (id, resolution) => get().updateVideo(id, { resolution }),
+
+    removeVideo: (id) => set(state => ({ videos: state.videos.filter(v => v.id !== id) })),
+
+    removeCancelled: (id) => set(state => ({ cancelled: state.cancelled.filter(v => v.id !== id) })),
+
+    markComplete: (id) => {
+        const video = get().videos.find(v => v.id === id)
+        if (!video?.jobId) return
+
+        useProcessedStore.getState().add({
+            jobId: video.jobId,
+            name: video.name,
+            resolution: video.resolution,
+            processingType: video.processingType,
+            completedAt: Date.now(),
+        })
+        releaseFile(id)
+        set(state => ({ videos: state.videos.filter(v => v.id !== id)}))
     },
-    processedVideos: {
-        "Transcode": [],
-        "Upscale": [],
-        "Denoise": [],
-        "Convert": []
-    },
-    cancelledVideos: {
-        "Transcode": [],
-        "Upscale": [],
-        "Denoise": [],
-        "Convert": []
-    },
 
-    addVideos: (processingType, videos) =>
-        set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list => [...list, ...videos])
-        })),
+    markCancelling: (id) => get().updateVideo(id, { status: 'cancelling' }),
 
-    updateVideoStatus: (processingType, id, patch) =>
-        set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                list.map(v => v.id === id ? { ...v, ...patch } : v)
-            )
-        })),
+    markCancelled: (id) => {
+        const video = get().videos.find(v => v.id === id)
+        if (!video) return
 
-    setResolution: (processingType, id, resolution) =>
+        releaseFile(id)
         set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                list.map(v => v.id === id ? { ...v, resolution } : v)
-            )
-        })),
-
-    removeUploadedVideo: (processingType, id) =>
-        set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                list.filter(v => v.id !== id)
-            )
-        })),
-
-    removeProcessedVideo: (processingType, id) =>
-        set(state => ({
-            processedVideos: withUpdatedQueue(state.processedVideos, processingType, list =>
-                list.filter(v => v.id !== id)
-            )
-        })),
-
-    removeCancelledVideo(processingType, id) {
-        set(state => ({
-            cancelledVideos: withUpdatedQueue(state.cancelledVideos, processingType, list => 
-                list.filter(v => v.id !== id)
-            )
+            videos: state.videos.filter(v => v.id !== id),
+            cancelled: [...state.cancelled, { ...video, status: 'cancelled' }],
         }))
     },
 
-    resetVideo: (processingType, id) =>
-        set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                list.map(v => v.id === id ? { ...v, status: 'pending', error: undefined, uploadProgress: 0 } : v)
-            )
-        })),
-
-    markComplete: (processingType, video) => 
-        set(state => {
-            const current = state.uploadedVideos[processingType]
-                .find(v => v.id === video.id)
-            if (!current) return {}
-
-            return {
-                uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                    list.filter(v => v.id !== video.id)
-                ),
-                processedVideos: withUpdatedQueue(state.processedVideos, processingType, list =>
-                    [...list, { ...current, status: 'complete' }]
-                ),
-            }
-        }),
-
-    markCancelling: (processingType, id) => 
-        set(state => ({
-            uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                list.map(v => v.id === id ? { ...v, status: 'cancelling' } : v)
-            )
-        })),
-
-    markCancelled: (processingType, video) =>
-        set(state => {
-            const current = state.uploadedVideos[processingType]
-                .find(v => v.id === video.id)
-            if (!current) return {}
-
-            return {
-                uploadedVideos: withUpdatedQueue(state.uploadedVideos, processingType, list =>
-                    list.filter(v => v.id !== video.id)
-                ),
-                cancelledVideos: withUpdatedQueue(state.cancelledVideos, processingType, list =>
-                    [...list, { ...current, status: 'cancelled' }]
-                ),
-            }
-        }),
+    resetVideo: (id) => get().updateVideo(id, { status: 'pending', error: undefined, uploadProgress: 0 }),
 }))
