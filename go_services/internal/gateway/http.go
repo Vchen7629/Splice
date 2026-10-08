@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -224,6 +225,16 @@ func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// validation for security
+	if err := storage.ValidatePathSegment(payload.FileName); err != nil {
+		http.Error(w, "invalid video filename", http.StatusBadRequest)
+		return
+	}
+	if err := validateJobID(payload.JobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	body, err := GetProcessedVideo(v.storageURL, payload.JobID, payload.FileName)
 	if err != nil {
 		v.logger.Error("failed to fetch processed video", "err", err)
@@ -267,9 +278,9 @@ type cancelHandler struct {
 
 func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
-	if jobID == "" {
-		c.logger.Error("missing job_id param")
-		http.Error(w, "missing job_id", http.StatusBadRequest)
+	if err := validateJobID(jobID); err != nil {
+		c.logger.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -298,4 +309,14 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 		c.logger.Error("error encoding success http response", "err", err)
 		return
 	}
+}
+
+// validates that jobID is non-empty and is a uuid
+func validateJobID(jobID string) error {
+	parsed, err := uuid.Parse(jobID)
+	if err != nil || parsed.String() != jobID {
+		return errors.New("job_id is not a valid uuid")
+	}
+
+	return nil
 }
