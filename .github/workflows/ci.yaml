@@ -205,6 +205,11 @@ jobs:
           go-version-file: 'go_services/go.mod'
           cache: 'true'
 
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Download Go modules
         working-directory: ./go_services
         run: go mod download
