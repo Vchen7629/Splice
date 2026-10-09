@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -280,7 +281,7 @@ func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request
 
 	v.logger.Debug("fetching output video", "job_id", payload.JobID, "fileName", payload.FileName)
 
-	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(payload.FileName))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(payload.FileName)}))
 	w.Header().Set("Content-Type", "application/octet-stream")
 
 	_, err = io.Copy(w, body)
