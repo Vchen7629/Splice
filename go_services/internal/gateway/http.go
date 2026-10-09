@@ -23,9 +23,32 @@ import (
 )
 
 type Config struct {
-	HTTPPort   string
-	StorageURL string
-	URLs       ServiceURLs
+	HTTPPort             string
+	MaxConcurrentUploads int
+	StorageURL           string
+	URLs                 ServiceURLs
+}
+
+type videoHandler struct {
+	logger         *slog.Logger
+	js             jetstream.JetStream
+	kv             jetstream.KeyValue
+	storageURL     string
+	uploadSem      chan struct{}
+	maxUploadBytes int64
+}
+
+type JobStatusHandler struct {
+	Logger       *slog.Logger
+	NC           *nats.Conn
+	KV           jetstream.KeyValue
+	URLs         ServiceURLs
+	HealthClient *http.Client
+}
+
+type cancelHandler struct {
+	logger *slog.Logger
+	kv     jetstream.KeyValue
 }
 
 func StartHttpApi(
@@ -37,7 +60,7 @@ func StartHttpApi(
 ) *http.Server {
 	router := http.NewServeMux()
 
-	vh := &videoHandler{logger: logger, js: js, kv: kv, storageURL: cfg.StorageURL}
+	vh := &videoHandler{logger: logger, js: js, kv: kv, uploadSem: make(chan struct{}, cfg.MaxConcurrentUploads), storageURL: cfg.StorageURL}
 	jh := &JobStatusHandler{Logger: logger, NC: nc, KV: kv, URLs: cfg.URLs, HealthClient: &http.Client{Timeout: 3 * time.Second}}
 	ch := &cancelHandler{logger: logger, kv: kv}
 
@@ -70,14 +93,6 @@ func StartHttpApi(
 	return server
 }
 
-type videoHandler struct {
-	logger         *slog.Logger
-	js             jetstream.JetStream
-	kv             jetstream.KeyValue
-	storageURL     string
-	maxUploadBytes int64
-}
-
 type uploadResponse struct {
 	JobID string `json:"job_id"`
 }
@@ -85,6 +100,14 @@ type uploadResponse struct {
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
 // and publishes a scene split message to NATS for downstream processing
 func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) {
+	release, ok := v.acquireUploadSlot(r.Context())
+	if !ok {
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "server busy, try again shortly", http.StatusServiceUnavailable)
+		return
+	}
+	defer release()
+
 	limit := v.maxUploadBytes
 	if limit == 0 {
 		limit = 10 << 30 // 10 GB
@@ -203,6 +226,24 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+var uploadAcquireTimeout = 10 * time.Second
+
+// for the upload route concurrency control semaphore
+func (v *videoHandler) acquireUploadSlot(ctx context.Context) (release func(), ok bool) {
+	if v.uploadSem == nil { // unlimited for tests
+		return func() {}, true
+	}
+	select {
+	case v.uploadSem <- struct{}{}: // acquire the upload slot
+		return func() { <-v.uploadSem }, true
+	case <-time.After(uploadAcquireTimeout): // upload limit reached
+		return nil, false
+	case <-ctx.Done(): // client gave up while waiting
+		return nil, false
+	}
+
+}
+
 // handler for streaming the completed out video for a given job ID
 func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
@@ -258,11 +299,6 @@ func writeSSEEvent(w io.Writer, event string, payload any) error {
 
 	_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
 	return err
-}
-
-type cancelHandler struct {
-	logger *slog.Logger
-	kv     jetstream.KeyValue
 }
 
 func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Request) {

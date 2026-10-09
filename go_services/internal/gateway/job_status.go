@@ -115,14 +115,6 @@ type jobStatusResponse struct {
 	Error string              `json:"error,omitempty"`
 }
 
-type JobStatusHandler struct {
-	Logger       *slog.Logger
-	NC           *nats.Conn
-	KV           jetstream.KeyValue
-	URLs         ServiceURLs
-	HealthClient *http.Client
-}
-
 func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
 	if jobID == "" {

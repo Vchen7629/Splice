@@ -19,11 +19,12 @@ import (
 
 type Config struct {
 	service.BaseConfig
-	HTTPPort          string `envconfig:"HTTP_PORT"          default:"8080"`
-	SceneDetectorURL  string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
-	TranscoderURL     string `envconfig:"TRANSCODER_URL"     default:"http://localhost:9095"`
-	RecombinerURL     string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
-	VideoUpscalingURL string `envconfig:"VIDEO_UPSCALING_URL" default:"http://localhost:9101"`
+	HTTPPort             string `envconfig:"HTTP_PORT"          default:"8080"`
+	MaxConcurrentUploads int    `envconfig:"MAX_CONCURRENT_UPLOAD" default:"10"`
+	SceneDetectorURL     string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
+	TranscoderURL        string `envconfig:"TRANSCODER_URL"     default:"http://localhost:9095"`
+	RecombinerURL        string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
+	VideoUpscalingURL    string `envconfig:"VIDEO_UPSCALING_URL" default:"http://localhost:9101"`
 }
 
 func main() {
@@ -72,8 +73,9 @@ func runGateway(
 	logger.Debug("starting service...")
 
 	server := gateway.StartHttpApi(logger, nc, js, jobMilestoneKV, gateway.Config{
-		HTTPPort:   cfg.HTTPPort,
-		StorageURL: cfg.BaseStorageURL,
+		HTTPPort:             cfg.HTTPPort,
+		MaxConcurrentUploads: cfg.MaxConcurrentUploads,
+		StorageURL:           cfg.BaseStorageURL,
 		URLs: gateway.ServiceURLs{
 			SceneDetector:  cfg.SceneDetectorURL,
 			Transcoder:     cfg.TranscoderURL,

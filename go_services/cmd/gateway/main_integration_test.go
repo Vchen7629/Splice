@@ -70,8 +70,9 @@ func TestRunGateway_Lifecycle(t *testing.T) {
 	js, nc := stest.SetupNats(t)
 
 	cfg := &Config{
-		BaseConfig: service.BaseConfig{BaseStorageURL: sharedStorageURL, NatsURL: nc.ConnectedUrl()},
-		HTTPPort:   stest.FreePort(t),
+		BaseConfig:           service.BaseConfig{BaseStorageURL: sharedStorageURL, NatsURL: nc.ConnectedUrl()},
+		HTTPPort:             stest.FreePort(t),
+		MaxConcurrentUploads: 10,
 	}
 	baseURL := "http://localhost:" + cfg.HTTPPort
 

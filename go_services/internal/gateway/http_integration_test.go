@@ -311,7 +311,7 @@ func setupServer(t *testing.T) *serverEnv {
 	url := "http://localhost:" + httpPort
 
 	server := StartHttpApi(stest.SilentLogger(), nil, js, kv, Config{
-		httpPort, sharedFilerUrl, ServiceURLs{},
+		httpPort, 10, sharedFilerUrl, ServiceURLs{},
 	})
 	t.Cleanup(func() { _ = server.Shutdown(context.Background()) })
 

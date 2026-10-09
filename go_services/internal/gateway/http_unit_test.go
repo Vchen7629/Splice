@@ -16,6 +16,7 @@ import (
 
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -40,12 +41,13 @@ func startTestServer(t *testing.T, kv jetstream.KeyValue) (*http.Server, string)
 	return server, httpPort
 }
 
-func newVideoHandler(storageURL string, js *MockJS) *videoHandler {
+func newVideoHandler(storageURL string, js *MockJS, uploadSem chan struct{}) *videoHandler {
 	return &videoHandler{
 		logger:         stest.SilentLogger(),
 		js:             js,
 		kv:             &MockKV{},
 		storageURL:     storageURL,
+		uploadSem:      uploadSem,
 		maxUploadBytes: 0,
 	}
 }
@@ -55,6 +57,13 @@ func newCancelHandler(kv jetstream.KeyValue, nc *nats.Conn) *cancelHandler {
 		logger: stest.SilentLogger(),
 		kv:     kv,
 	}
+}
+
+func patchUploadAcquireTimeout(t *testing.T) {
+	t.Helper()
+	old := uploadAcquireTimeout
+	uploadAcquireTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { uploadAcquireTimeout = old })
 }
 
 func TestStartHttp(t *testing.T) {
@@ -198,7 +207,7 @@ func TestStartHttpApiRouting(t *testing.T) {
 
 func TestUploadVideo(t *testing.T) {
 	t.Run("Returns 400 when body is not a multipart form", func(t *testing.T) {
-		h := newVideoHandler("http://localhost:1", &MockJS{})
+		h := newVideoHandler("http://localhost:1", &MockJS{}, nil)
 		req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader("plain text body"))
 		req.Header.Set("Content-Type", "text/plain")
 		rec := httptest.NewRecorder()
@@ -222,7 +231,7 @@ func TestUploadVideo(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newVideoHandler("http://localhost:1", &MockJS{})
+			h := newVideoHandler("http://localhost:1", &MockJS{}, nil)
 			req := NewUploadRequest(t, "/jobs", tc.fileName, tc.content, tc.targetRes, "1080p", "Transcode")
 			rec := httptest.NewRecorder()
 
@@ -235,7 +244,7 @@ func TestUploadVideo(t *testing.T) {
 
 	t.Run("Returns 500 when saving the video file fails", func(t *testing.T) {
 		// Null byte in the storage URL makes the upload request fail to build.
-		h := newVideoHandler("\x00", &MockJS{})
+		h := newVideoHandler("\x00", &MockJS{}, nil)
 		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
@@ -246,12 +255,15 @@ func TestUploadVideo(t *testing.T) {
 	})
 
 	t.Run("returns 500 when KV.Put fails during upload", func(t *testing.T) {
-		kv := &MockKV{PutErr: errors.New("kv unavailable")}
-		server, _ := startTestServer(t, kv)
+		fakeStorage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		t.Cleanup(fakeStorage.Close)
+
+		h := newVideoHandler(fakeStorage.URL, &MockJS{}, nil)
+		h.kv = &MockKV{PutErr: errors.New("kv unavailable")}
 
 		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
 		w := httptest.NewRecorder()
-		server.Handler.ServeHTTP(w, req)
+		h.uploadVideoRoute(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "failed to record job status")
@@ -259,13 +271,74 @@ func TestUploadVideo(t *testing.T) {
 
 	t.Run("Does not publish to NATS when saving fails", func(t *testing.T) {
 		js := &MockJS{}
-		h := newVideoHandler("\x00", js)
+		h := newVideoHandler("\x00", js, nil)
 		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
 
 		assert.False(t, js.PublishCalled, "publish should not be called when save fails")
+	})
+
+	t.Run("returns 503 with Retry-After when upload concurrency limit reached", func(t *testing.T) {
+		patchUploadAcquireTimeout(t)
+		sem := make(chan struct{}, 1)
+		sem <- struct{}{}
+		h := newVideoHandler("http://localhost:1", &MockJS{}, sem)
+		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
+		rec := httptest.NewRecorder()
+
+		h.uploadVideoRoute(rec, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		assert.Equal(t, "30", rec.Header().Get("Retry-After"))
+		assert.Len(t, sem, 1) // rejected request must not have released someone else's slot
+	})
+
+	t.Run("slot is released regardless", func(t *testing.T) {
+		sem := make(chan struct{}, 1)
+		h := newVideoHandler("http://localhost:1", &MockJS{}, sem)
+		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "", "1080p", "Transcode")
+		rec := httptest.NewRecorder()
+
+		h.uploadVideoRoute(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Len(t, sem, 0)
+	})
+}
+
+func TestAcquireUploadSlot(t *testing.T) {
+	t.Run("acquires a free slot and release frees it", func(t *testing.T) {
+		sem := make(chan struct{}, 1)
+		h := newVideoHandler("", &MockJS{}, sem)
+
+		release, ok := h.acquireUploadSlot(context.Background())
+		require.True(t, ok)
+
+		release()
+		assert.Len(t, sem, 0)
+	})
+
+	t.Run("returns false when full and timeout elapses", func(t *testing.T) {
+		patchUploadAcquireTimeout(t)
+		sem := make(chan struct{}, 1)
+		sem <- struct{}{}
+		h := newVideoHandler("", &MockJS{}, sem)
+
+		_, ok := h.acquireUploadSlot(context.Background())
+		assert.False(t, ok)
+	})
+
+	t.Run("returns false when client cancels while waiting", func(t *testing.T) {
+		sem := make(chan struct{}, 1)
+		sem <- struct{}{}
+		h := newVideoHandler("", &MockJS{}, sem)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, ok := h.acquireUploadSlot(ctx)
+		assert.False(t, ok)
 	})
 }
 
@@ -284,7 +357,7 @@ func TestDownloadVideo(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newVideoHandler("http://localhost:1", &MockJS{})
+			h := newVideoHandler("http://localhost:1", &MockJS{}, nil)
 			req := httptest.NewRequest(http.MethodGet, "/jobs", strings.NewReader(tc.body))
 			rec := httptest.NewRecorder()
 
@@ -298,8 +371,8 @@ func TestDownloadVideo(t *testing.T) {
 	}
 
 	t.Run("Returns 500 when storage is unreachable", func(t *testing.T) {
-		h := newVideoHandler("http://localhost:1", &MockJS{})
-		req := NewDownloadRequest(t, "/jobs/download", "abc-123", "video.mp4")
+		h := newVideoHandler("http://localhost:1", &MockJS{}, nil)
+		req := NewDownloadRequest(t, "/jobs/download", "video.mp4", uuid.New())
 		rec := httptest.NewRecorder()
 
 		h.downloadVideoRoute(rec, req)
