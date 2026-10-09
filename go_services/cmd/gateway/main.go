@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -54,7 +55,7 @@ func main() {
 func runGateway(
 	cfg *Config, nc *nats.Conn, js jetstream.JetStream, logger *slog.Logger, quit <-chan os.Signal,
 ) error {
-	jobMilestoneKV := sJetstream.CreateKV("job-milestones", js, 0, logger) // no ttl for now
+	jobMilestoneKV := sJetstream.CreateKV("job-milestones", js, 24*time.Hour, logger)
 
 	advisorySub, err := gateway.ListenAdvisoriesFailure(nc, js, jobMilestoneKV, logger)
 	if err != nil {
