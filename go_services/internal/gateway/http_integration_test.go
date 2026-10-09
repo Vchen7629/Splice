@@ -335,6 +335,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	js, nc := stest.SetupNats(t)
 	kv := stest.SetupJobMilestoneKV(t, js)
 	h := newUploadHandler(js, kv, sharedFilerUrl)
+	patchValidateVideo(t)
 
 	t.Run("Rejects uploads exceeding MaxUploadBytes", func(t *testing.T) {
 		h.maxUploadBytes = 100

@@ -204,6 +204,13 @@ func patchOsExit(t *testing.T) *int {
 	return code
 }
 
+func patchValidateVideo(t *testing.T) {
+	t.Helper()
+	orig := validateVideoFn
+	validateVideoFn = func(context.Context, string, int64) error { return nil }
+	t.Cleanup(func() { validateVideoFn = orig })
+}
+
 type jobMsg struct {
 	JobID string `json:"job_id"`
 }

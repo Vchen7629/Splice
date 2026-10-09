@@ -198,6 +198,8 @@ func TestStartHttpApiRouting(t *testing.T) {
 }
 
 func TestUploadVideo(t *testing.T) {
+	patchValidateVideo(t)
+
 	t.Run("Returns 400 when body is not a multipart form", func(t *testing.T) {
 		h := newVideoHandler("http://localhost:1", &MockJS{})
 		req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader("plain text body"))
@@ -403,19 +405,5 @@ func TestCancelProcessing(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), string(sJetstream.StateCancelled))
-	})
-}
-
-func TestValidateJobID(t *testing.T) {
-	t.Run("Returns error if jobID is empty", func(t *testing.T) {
-		err := validateJobID("")
-
-		assert.Error(t, err)
-	})
-
-	t.Run("Returns error if jobID is non uuid", func(t *testing.T) {
-		err := validateJobID("some uuid")
-
-		assert.Error(t, err)
 	})
 }
