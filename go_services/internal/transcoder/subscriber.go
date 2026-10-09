@@ -1,6 +1,8 @@
 package transcoder
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -49,8 +51,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		_, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
-		if stopJob {
+		if _, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 			return
 		}
 
@@ -58,15 +59,22 @@ func ConsumeVideoChunk(
 			chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 			defer cleanupTempFolders(chunkName, logger)
 
-			shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
-			if stopJob {
+			if shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 				return shouldCancel
 			}
 
 			outputPath, err := processChunk(jobMilestoneKV, payload, logger)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					sJetstream.NakWithErrHandling(logger, msg)
+					return false
+				}
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
+			}
+
+			if shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
+				return shouldCancel
 			}
 
 			outFileName := filepath.Base(outputPath)
@@ -84,13 +92,11 @@ func ConsumeVideoChunk(
 				return false
 			}
 
-			shouldCancel, stopJob = sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger)
-			if stopJob {
+			if shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 				return shouldCancel
 			}
 
-			err = publishJetstreamProcessedMsg(nc, js, processedKV, payload, storageURL, logger)
-			if err != nil {
+			if err := publishJetstreamProcessedMsg(nc, js, processedKV, payload, storageURL, logger); err != nil {
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
 			}
