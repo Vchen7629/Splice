@@ -14,6 +14,7 @@ class Settings(SharedSettings):
     HTTP_PORT: int = 9101
     BATCH_SIZE: int = 4
     SERVICE_NAME: str = "video-upscaling"
+    FFPROBE_TIMEOUT_S: int = 60
 
     # Nats config
     SUB_SUBJECT: str = "jobs.video.upscale"
