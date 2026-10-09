@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,16 +20,18 @@ func GetProcessedVideo(storageUrl, jobID, fileName string) (io.ReadCloser, error
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			return nil, errors.New("error closing resp body")
+		}
 	}
 
 	switch resp.StatusCode {
 	case http.StatusNotFound:
-		return nil, fmt.Errorf("video not found")
+		return nil, errors.New("video not found")
 	case http.StatusForbidden:
-		return nil, fmt.Errorf("access denied")
+		return nil, errors.New("access denied")
 	case http.StatusInternalServerError:
-		return nil, fmt.Errorf("error accessing seedweedfs")
+		return nil, errors.New("error accessing seedweedfs")
 	}
 
 	return resp.Body, nil
