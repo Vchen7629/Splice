@@ -4,13 +4,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
+
+var storageClient = &http.Client{
+	Transport: &http.Transport{ResponseHeaderTimeout: 10 * time.Second},
+}
 
 // fetch a completely processed video from seedweedfs storage
 func GetProcessedVideo(storageUrl, jobID, fileName string) (io.ReadCloser, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/%s/%s/processed", storageUrl, jobID, fileName))
+	resp, err := storageClient.Get(fmt.Sprintf("%s/%s/%s/processed", storageUrl, jobID, fileName))
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to seedweedfs, %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
 	}
 
 	switch resp.StatusCode {
