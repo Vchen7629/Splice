@@ -317,6 +317,8 @@ def _extract_video_info(video_path: str) -> tuple[int, int, float, int]:
     w, h, fps_frac, nb_frames = ffprobe.split(",")
 
     fps_num, fps_den = fps_frac.split("/")
+    if float(fps_den) == 0:
+        raise RuntimeError(f"invalid frame rate {fps_frac!r}")
     fps = float(fps_num) / float(fps_den)
 
     if nb_frames == "N/A":
@@ -333,12 +335,15 @@ def _run_ffprobe(video_path: str, *extra_args: str) -> str:
     if not video_path:
         raise TypeError("Missing video_path input")
 
-    probe = subprocess.run([
-        "ffprobe", "-v", "error",
-        *extra_args,
-        "-of", "csv=p=0",
-        video_path
-    ], capture_output=True, text=True, check=True)
+    try:
+        probe = subprocess.run([
+            "ffprobe", "-v", "error",
+            *extra_args,
+            "-of", "csv=p=0",
+            video_path
+        ], capture_output=True, text=True, check=True, timeout=settings.FFPROBE_TIMEOUT_S)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"ffprobe timed out after {settings.FFPROBE_TIMEOUT_S}s") from e
 
     return probe.stdout.strip()
 
