@@ -3,6 +3,7 @@ package recombiner
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+)
+
+var (
+	recombineChunkTimeout = 15 * time.Minute // TODO: in the future update this to scale with video size via ffprobe
+	probeDurationTimeout  = 15 * time.Second
 )
 
 // stitches transcoded video chunks for a job into a single output video file
@@ -50,8 +57,12 @@ func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)
 		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), recombineChunkTimeout)
+	defer cancel()
+
 	outputPath := filepath.Join(outDir, "output.mp4")
-	cmd := exec.Command(
+	cmd := exec.CommandContext(
+		ctx,
 		"ffmpeg",
 		"-f", "concat",
 		"-safe", "0",
@@ -71,6 +82,9 @@ func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)
 	cmd.Stderr = &stderr
 
 	wrapFfmpegErr := func(err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("ffmpeg concat timed out after %s: %w", recombineChunkTimeout, ctxErr)
+		}
 		return fmt.Errorf("ffmpeg concat error: %w\n%s", err, stderr.String())
 	}
 
@@ -95,7 +109,11 @@ func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)
 
 // returns a video file's duration in seconds via ffprobe
 func probeDurationSeconds(filePath string) (float64, error) {
-	out, err := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), probeDurationTimeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(
+		ctx,
 		"ffprobe",
 		"-v", "error",
 		"-show_entries", "format=duration",
@@ -103,6 +121,9 @@ func probeDurationSeconds(filePath string) (float64, error) {
 		filePath,
 	).Output()
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return 0, fmt.Errorf("ffprobe timed out after %s: %w", probeDurationTimeout, ctxErr)
+		}
 		return 0, fmt.Errorf("ffprobe duration error: %w", err)
 	}
 

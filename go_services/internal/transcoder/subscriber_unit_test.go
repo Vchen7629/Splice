@@ -11,9 +11,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"splice.com/go_services/internal/shared/handler"
 	"testing"
 	"time"
+
+	"splice.com/go_services/internal/shared/handler"
 
 	"splice.com/go_services/internal/shared/test"
 

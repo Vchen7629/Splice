@@ -3,6 +3,7 @@
 package recombiner
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +72,16 @@ func TestCombineChunksErrors(t *testing.T) {
 		assert.Contains(t, err.Error(), "ffmpeg concat error")
 	})
 
+	t.Run("ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
+		orig := recombineChunkTimeout
+		recombineChunkTimeout = time.Microsecond
+		t.Cleanup(func() { recombineChunkTimeout = orig })
+
+		_, err := CombineChunks("job-1", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Contains(t, err.Error(), "timed out")
+	})
 }
 
 func TestManifest(t *testing.T) {
@@ -150,6 +162,17 @@ func TestProbeDurationSeconds(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ffprobe duration error")
+	})
+
+	t.Run("ffprobe processing timeout returns context deadline exceeded", func(t *testing.T) {
+		orig := probeDurationTimeout
+		probeDurationTimeout = time.Microsecond
+		t.Cleanup(func() { probeDurationTimeout = orig })
+
+		_, err := probeDurationSeconds("/idk")
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Contains(t, err.Error(), "timed out")
 	})
 }
 

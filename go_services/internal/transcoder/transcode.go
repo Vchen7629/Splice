@@ -1,13 +1,17 @@
 package transcoder
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+var ffmpegTimeout = 2 * time.Hour // TODO: in the future scale timeout with input video size via ffprobe
 
 // transcode by upscaling/downscaling the input video chunk to the specified value and output and return
 // the resulting video chunk. Uses lanczos algorithm is used for upscaling for now since AI super resolution
@@ -24,7 +28,11 @@ func TranscodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 	outputPath := filepath.Join(outDir, stem+".mp4")
 	height := strings.TrimSuffix(target_resolution, "p")
 
-	cmd := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(
+		ctx,
 		"ffmpeg",
 		"-i", filePath,
 		"-vf", fmt.Sprintf("scale=-2:%s:flags=lanczos", height),
@@ -32,10 +40,11 @@ func TranscodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 		"-c:a", "copy",
 		"-y",
 		outputPath,
-	)
-
-	out, err := cmd.CombinedOutput()
+	).Output()
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("ffmpeg timed out after %s: %w", ffmpegTimeout, ctxErr)
+		}
 		return "", fmt.Errorf("ffmpeg error: %w\n%s", err, out)
 	}
 
