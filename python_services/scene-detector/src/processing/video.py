@@ -2,6 +2,7 @@ import glob
 import os
 import shutil
 import subprocess
+import time
 from threading import Event, Thread
 from typing import Callable, Optional
 
@@ -13,6 +14,8 @@ from scenedetect import (
 )
 from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
 from shared_handler.exceptions import JobCancelledError
+
+from ..core.settings import settings
 
 DETECT_SLICE_FRAMES = 150  # frames processed per detect_scenes() call
 
@@ -102,10 +105,17 @@ def split_into_chunks(
         text=True,
     )
     watcher_stop = Event()
+    timed_out = Event()
+    deadline = time.monotonic() + settings.SPLIT_VIDEO_SCENES_TIMEOUT_S
 
     def terminate_on_cancel() -> None:
         while not watcher_stop.wait(0.1):
             if cancel_event.is_set():
+                if proc.poll() is None:
+                    proc.terminate()
+                return
+            if time.monotonic() > deadline:
+                timed_out.set()
                 if proc.poll() is None:
                     proc.terminate()
                 return
@@ -121,6 +131,10 @@ def split_into_chunks(
                     on_progress(90 + int(min(int(value) / total_us, 1) * 10))
         if cancel_event.is_set():
             raise JobCancelledError("split_into_chunks cancelled during scene-split")
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired(
+                "ffmpeg", settings.SPLIT_VIDEO_SCENES_TIMEOUT_S
+            )
         if proc.wait() != 0:
             raise subprocess.CalledProcessError(proc.returncode, proc.args)
     finally:
