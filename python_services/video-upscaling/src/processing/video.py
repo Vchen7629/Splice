@@ -335,15 +335,12 @@ def _run_ffprobe(video_path: str, *extra_args: str) -> str:
     if not video_path:
         raise TypeError("Missing video_path input")
 
-    try:
-        probe = subprocess.run([
-            "ffprobe", "-v", "error",
-            *extra_args,
-            "-of", "csv=p=0",
-            video_path
-        ], capture_output=True, text=True, check=True, timeout=settings.FFPROBE_TIMEOUT_S)
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"ffprobe timed out after {settings.FFPROBE_TIMEOUT_S}s") from e
+    probe = subprocess.run([
+        "ffprobe", "-v", "error",
+        *extra_args,
+        "-of", "csv=p=0",
+        video_path
+    ], capture_output=True, text=True, check=True, timeout=settings.FFPROBE_TIMEOUT_S)
 
     return probe.stdout.strip()
 

@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import json
+import subprocess
 from dataclasses import dataclass
 from threading import Event
 from typing import Any, AsyncGenerator, Awaitable, Callable
@@ -196,6 +197,9 @@ async def _handle_consumer_message(
     except JobCancelledError as e:
         ctx.logger.debug("job cancelled during processing", err=str(e))
         await msg.ack()
+    except subprocess.TimeoutExpired as e:
+        ctx.logger.error("timed out out processing job, naking for retry", err=str(e))
+        needs_nak = True
     except Exception as e:
         ctx.logger.error("unexpected error processing job", err=str(e))
         if metadata is not None:
