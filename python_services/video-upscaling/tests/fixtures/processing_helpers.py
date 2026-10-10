@@ -6,8 +6,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from src.processing.video import recombine_video_audio
-
 TEST_VIDEO = Path(__file__).parent / "testvideo.mp4"
 
 
@@ -79,7 +77,7 @@ def video_upscale_patches() -> Generator[dict[str, Any], Any, None]:
             "src.processing.video.video_encoder", return_value=mock_encoder
         ) as mock_enc,
         patch(
-            "src.processing.video.flush_batch", return_value=(0.0, 0.0, 0)
+            "src.processing.video.flush_and_upscale_batch", return_value=(0.0, 0.0, 0)
         ) as mock_flush,
         patch("src.processing.video.encoder_worker") as mock_worker,
         patch("src.processing.video.threading.Thread", return_value=mock_thread) as _,

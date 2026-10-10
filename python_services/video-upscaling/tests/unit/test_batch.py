@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 import torch
 
-from src.processing.batch import _rgb_to_yuv420, _upscale_frames, flush_batch
+from src.processing.batch import (
+    _rgb_to_yuv420,
+    _upscale_frames,
+    flush_and_upscale_batch,
+)
 
 
 def _make_rgb_frame(r: float, g: float, b: float, h: int = 4, w: int = 4) -> np.ndarray:
@@ -46,14 +50,14 @@ def _upscale_with_passthrough_model(frames: list[np.ndarray]) -> torch.Tensor:
 def _run_flush(
     frames: list[np.ndarray], yuv_results: list[bytes]
 ) -> tuple[tuple[float, float, int], Queue[Optional[bytes]]]:
-    """Run flush_batch with the model and yuv conversion mocked, returning (timing, queue)."""
+    """Run flush_and_process_batch with the model and yuv conversion mocked, returning (timing, queue)."""
     encode_queue: Queue[Optional[bytes]] = Queue()
 
     with (
         patch("src.processing.batch._upscale_frames"),
         patch("src.processing.batch._rgb_to_yuv420", return_value=yuv_results),
     ):
-        timing = flush_batch(MagicMock(), frames, encode_queue)
+        timing = flush_and_upscale_batch(MagicMock(), frames, encode_queue)
 
     return timing, encode_queue
 
@@ -120,7 +124,7 @@ def test_rgb_to_yuv420_clamps_out_of_range_input(value: float) -> None:
     assert 16 <= v.min() and v.max() <= 240
 
 
-def test_flush_batch_enqueues_all_results_and_returns_frame_count() -> None:
+def test_flush_and_process_batch_enqueues_all_results_and_returns_frame_count() -> None:
     fake_results = [b"a", b"b", b"c"]
     (_, _, count), queue = _run_flush([_make_rgb_frame(1, 0, 0)] * 3, fake_results)
 
@@ -129,7 +133,7 @@ def test_flush_batch_enqueues_all_results_and_returns_frame_count() -> None:
     assert queue.empty()
 
 
-def test_flush_batch_passes_upscaled_frames_to_yuv_conversion() -> None:
+def test_flush_and_process_batch_passes_upscaled_frames_to_yuv_conversion() -> None:
     mock_upsampler = MagicMock()
     frames = [_make_rgb_frame(1, 0, 0)]
 
@@ -137,7 +141,7 @@ def test_flush_batch_passes_upscaled_frames_to_yuv_conversion() -> None:
         patch("src.processing.batch._upscale_frames") as mock_upscale,
         patch("src.processing.batch._rgb_to_yuv420", return_value=[b"x"]) as mock_yuv,
     ):
-        flush_batch(mock_upsampler, frames, Queue())
+        flush_and_upscale_batch(mock_upsampler, frames, Queue())
 
     mock_upscale.assert_called_once_with(mock_upsampler.model, frames)
     mock_yuv.assert_called_once_with(mock_upscale.return_value)

@@ -2,9 +2,10 @@ from pathlib import Path
 
 import pytest
 import torch
-from realesrgan import RealESRGANer
 
-from src.processing.load_model import load_model
+from src.processing.load_model import load_model  # noqa: I001, F401
+
+from realesrgan import RealESRGANer # isort: skip
 
 WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
 
