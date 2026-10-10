@@ -68,7 +68,8 @@ def recombine_popen():
 def _fake_recombine_proc() -> MagicMock:
     """A Popen stand-in with no progress lines and a clean exit"""
     proc = MagicMock()
-    proc.stdout = iter([])
+    proc.stdout = MagicMock()
+    proc.stdout.__iter__.return_value = iter([])
     proc.wait.return_value = 0
     return proc
 

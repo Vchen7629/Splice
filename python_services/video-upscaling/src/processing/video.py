@@ -5,6 +5,7 @@ from queue import Queue
 from subprocess import Popen
 from utils import log_timing, Resolution
 from shared_handler import JobCancelledError
+from shared_util import terminate_on_deadline
 from core.settings import settings
 from .batch import flush_batch
 from .worker import encoder_worker
@@ -32,30 +33,33 @@ def recombine_video_audio(
         on_progress: callback invoked with 0-99 as ffmpeg reports progress
     """
     noaudio_path = f"/tmp/upscaled_noaudio-{job_id}.mp4"
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", noaudio_path,
-        "-i", video_path,
-        "-map", "0:v", "-map", "1:a?",
-        "-c", "copy",
-        "-progress", "pipe:1", "-nostats", output_path,
-    ]
-
-    duration_s = _probe_duration_s(noaudio_path)
     proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+        [
+            "ffmpeg", "-y",
+            "-i", noaudio_path,
+            "-i", video_path,
+            "-map", "0:v", "-map", "1:a?",
+            "-c", "copy",
+            "-progress", "pipe:1", "-nostats", output_path,
+        ],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
     )
+    duration_s = _probe_duration_s(noaudio_path)
+    timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.RECOMBINE_TIMEOUT_FACTOR
 
-    for line in proc.stdout or []:
-        if not line.startswith("out_time=") or on_progress is None:
-            continue
+    with terminate_on_deadline(proc, timeout_s) as timed_out:
+        for line in proc.stdout or []:
+            if not line.startswith("out_time=") or on_progress is None:
+                continue
 
-        out_time_s = _parse_out_time_s(line.strip())
-        if out_time_s is not None:
-            on_progress(min(99, int(out_time_s / duration_s * 100)))
-
-    if proc.wait() != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
+            out_time_s = _parse_out_time_s(line.strip())
+            if out_time_s is not None:
+                on_progress(min(99, int(out_time_s / duration_s * 100)))
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired("ffmpeg recombine", timeout_s)
+        if proc.wait() != 0:
+            raise subprocess.CalledProcessError(proc.returncode, proc.args)
+    
 
 
 def _parse_out_time_s(line: str) -> Optional[float]:
@@ -174,35 +178,38 @@ def video_downscale(
             raise JobCancelledError("video_upscale cancelled for downscale")
         
         tgt_res = Resolution.from_string(target_res)
-        cmd = [
-            "ffmpeg",
-            "-i", video_path,
-            "-vf", f"scale=-2:{tgt_res}",
-            "-c:a", "copy",
-            "-progress", "pipe:1",
-            "-nostats",
-            output_path
-        ]
-
-        duration_s = _probe_duration_s(video_path)
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+            [
+                "ffmpeg",
+                "-i", video_path,
+                "-vf", f"scale=-2:{tgt_res}",
+                "-c:a", "copy",
+                "-progress", "pipe:1",
+                "-nostats",
+                output_path
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
         )
+        duration_s = _probe_duration_s(video_path)
+        timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.DOWNSCALE_TIMEOUT_FACTOR
 
-        for line in proc.stdout or []:
-            if cancel_event.is_set():
-                proc.kill()
-                proc.wait()
-                raise JobCancelledError("video_upscale cancelled for downscale")
-            if not line.startswith("out_time=") or on_progress is None:
-                continue
+        with terminate_on_deadline(proc, timeout_s) as timed_out:
+            for line in proc.stdout or []:
+                if cancel_event.is_set():
+                    proc.kill()
+                    proc.wait()
+                    raise JobCancelledError("video_upscale cancelled for downscale")
+                if not line.startswith("out_time=") or on_progress is None:
+                    continue
 
-            out_time_s = _parse_out_time_s(line.strip())
-            if out_time_s is not None:
-                on_progress(min(99, int(out_time_s / duration_s * 100)))
+                out_time_s = _parse_out_time_s(line.strip())
+                if out_time_s is not None:
+                    on_progress(min(99, int(out_time_s / duration_s * 100)))
 
-        if proc.wait() != 0:
-            raise subprocess.CalledProcessError(proc.returncode, cmd)
+            if timed_out.is_set():
+                raise subprocess.TimeoutExpired("ffmpeg downscale", timeout_s)
+            if proc.wait() != 0:
+                raise subprocess.CalledProcessError(proc.returncode, proc.args)
 
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"ffmpeg downscale failed: {e}") from e
