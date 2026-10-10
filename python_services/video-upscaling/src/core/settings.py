@@ -14,6 +14,8 @@ class Settings(SharedSettings):
     HTTP_PORT: int = 9101
     BATCH_SIZE: int = 4
     SERVICE_NAME: str = "video-upscaling"
+
+    # ffmpeg/ffprobe config
     FFPROBE_TIMEOUT_S: int = 60
     FFMPEG_TIMEOUT_GRACE_S: int = (
         15  # fixed startup/IO slack shared by all ffmpeg calls

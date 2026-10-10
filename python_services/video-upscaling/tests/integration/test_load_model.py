@@ -5,7 +5,7 @@ import torch
 
 from src.processing.load_model import load_model  # noqa: I001, F401
 
-from realesrgan import RealESRGANer # isort: skip
+from realesrgan import RealESRGANer  # isort: skip
 
 WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
 

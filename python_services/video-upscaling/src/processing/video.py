@@ -36,8 +36,8 @@ def recombine_video_audio(
     proc = subprocess.Popen(
         [
             "ffmpeg", "-y",
-            "-i", noaudio_path,
-            "-i", video_path,
+            "-protocol_whitelist", "file,pipe", "-i", noaudio_path,
+            "-protocol_whitelist", "file,pipe", "-i", video_path,
             "-map", "0:v", "-map", "1:a?",
             "-c", "copy",
             "-progress", "pipe:1", "-nostats", output_path,
@@ -107,7 +107,7 @@ def video_decoder(video_path: str) -> Popen[bytes]:
 
     return subprocess.Popen([
         "ffmpeg", *hwaccel_args,
-        "-i", video_path,
+        "-protocol_whitelist", "file,pipe", "-i", video_path,
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
@@ -140,7 +140,7 @@ def video_encoder(fps: float, out_w: int, out_h: int, out_path: str, target_res:
         "-f", "rawvideo", "-pix_fmt", "yuv420p",
         "-s", f"{out_w}x{out_h}",
         "-r", str(fps),
-        "-i", "pipe:0",
+        "-protocol_whitelist", "file,pipe", "-i", "pipe:0",
         *vf,
         "-c:v", "libx264", "-crf", "18",
         "-preset", "ultrafast",
@@ -181,7 +181,7 @@ def video_downscale(
         proc = subprocess.Popen(
             [
                 "ffmpeg",
-                "-i", video_path,
+                "-protocol_whitelist", "file,pipe", "-i", video_path,
                 "-vf", f"scale=-2:{tgt_res}",
                 "-c:a", "copy",
                 "-progress", "pipe:1",
@@ -346,7 +346,7 @@ def _run_ffprobe(video_path: str, *extra_args: str) -> str:
         "ffprobe", "-v", "error",
         *extra_args,
         "-of", "csv=p=0",
-        video_path
+        "-protocol_whitelist", "file,pipe", video_path
     ], capture_output=True, text=True, check=True, timeout=settings.FFPROBE_TIMEOUT_S)
 
     return probe.stdout.strip()
