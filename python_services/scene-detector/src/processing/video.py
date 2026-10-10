@@ -14,6 +14,7 @@ from scenedetect import (
 )
 from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
 from shared_handler.exceptions import JobCancelledError
+from shared_util import terminate_on_deadline
 
 from ..core.settings import settings
 
@@ -104,26 +105,11 @@ def split_into_chunks(
         stdout=subprocess.PIPE,
         text=True,
     )
-    watcher_stop = Event()
-    timed_out = Event()
-    deadline = time.monotonic() + settings.SPLIT_VIDEO_SCENES_TIMEOUT_S
 
-    def terminate_on_cancel() -> None:
-        while not watcher_stop.wait(0.1):
-            if cancel_event.is_set():
-                if proc.poll() is None:
-                    proc.terminate()
-                return
-            if time.monotonic() > deadline:
-                timed_out.set()
-                if proc.poll() is None:
-                    proc.terminate()
-                return
-
-    watcher = Thread(target=terminate_on_cancel, daemon=True)
-    watcher.start()
     assert proc.stdout is not None  # should not trigger since stdout=subprocess.PIPE
-    try:
+    with terminate_on_deadline(
+        proc, settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, cancel_event
+    ) as timed_out:
         for line in proc.stdout:
             if total_us and on_progress and line.startswith("out_time_us="):
                 value = line.split("=")[1].strip()
@@ -137,13 +123,6 @@ def split_into_chunks(
             )
         if proc.wait() != 0:
             raise subprocess.CalledProcessError(proc.returncode, proc.args)
-    finally:
-        watcher_stop.set()
-        watcher.join()
-        if proc.poll() is None:
-            proc.kill()
-        proc.wait()
-        proc.stdout.close()
 
     output_paths = sorted(
         glob.glob(
