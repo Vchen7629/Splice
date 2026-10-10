@@ -198,24 +198,35 @@ async def _handle_consumer_message(
         ctx.logger.debug("job cancelled during processing", err=str(e))
         await msg.ack()
     except subprocess.TimeoutExpired as e:
-        ctx.logger.error("timed out out processing job, naking for retry", err=str(e))
-        needs_nak = True
+        if msg.metadata.num_delivered < sharedsettings.MAX_DELIVER_ATTEMPTS:
+            ctx.logger.error("timed out processing job, naking for retry", err=str(e))
+            needs_nak = True
+        else:
+            ctx.logger.error("timed out on final delivery, failing job", err=str(e))
+            needs_nak = not await _fail_job(ctx, msg, metadata, str(e))
     except Exception as e:
         ctx.logger.error("unexpected error processing job", err=str(e))
-        if metadata is not None:
-            try:
-                await update_job_failed(
-                    ctx.job_milestone_kv, metadata.job_id, str(e), ctx.service_name
-                )
-            except Exception:
-                needs_nak = True
-        if not needs_nak:
-            await msg.ack()
+        needs_nak = not await _fail_job(ctx, msg, metadata, str(e))
     finally:
         if cleanup_job is not None and metadata is not None:
             await cleanup_job(metadata.job_id)
         if needs_nak:
             await msg.nak()
+
+
+async def _fail_job(
+    ctx: JobMsgContext, msg: Msg, metadata: ProcessJobMessage | None, err: str
+) -> bool:
+    """marks job FAILED and acks. returns false if KV write failed so caller should nak and redeliver"""
+    try:
+        if metadata is not None:
+            await update_job_failed(
+                ctx.job_milestone_kv, metadata.job_id, err, ctx.service_name
+            )
+    except Exception:
+        return False
+    await msg.ack()
+    return True
 
 
 async def publisher(
