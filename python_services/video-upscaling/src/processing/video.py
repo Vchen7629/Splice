@@ -9,7 +9,7 @@ from utils import log_timing, Resolution
 from shared_handler import JobCancelledError
 from shared_util import kill_on_deadline
 from core.settings import settings
-from .batch import flush_batch
+from .batch import flush_and_upscale_batch
 from .worker import encoder_worker
 import time
 import threading
@@ -216,7 +216,7 @@ def video_upscale(
                 pending.append(rgb)
 
                 if len(pending) == settings.BATCH_SIZE:
-                    dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
+                    dt_infer, dt_enq, n = flush_and_upscale_batch(upsampler, pending, encode_queue)
                     t_infer += dt_infer
                     t_enq += dt_enq
                     n_frames += n
@@ -231,7 +231,7 @@ def video_upscale(
             raise_if_interrupted()
 
             if pending:
-                dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
+                dt_infer, dt_enq, n = flush_and_upscale_batch(upsampler, pending, encode_queue)
                 t_infer += dt_infer
                 t_enq += dt_enq
                 n_frames += n

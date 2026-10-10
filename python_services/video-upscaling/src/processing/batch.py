@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from realesrgan import RealESRGANer
 
 
-def flush_batch(
+def flush_and_upscale_batch(
     upsampler: RealESRGANer,
     frames: list[np.ndarray],
     encode_queue: Queue[Optional[np.ndarray]],
