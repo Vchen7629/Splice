@@ -34,7 +34,7 @@ func TranscodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 	out, err := exec.CommandContext(
 		ctx,
 		"ffmpeg",
-		"-i", filePath,
+		"-protocol_whitelist", "file,pipe", "-i", filePath,
 		"-vf", fmt.Sprintf("scale=-2:%s:flags=lanczos", height),
 		"-c:v", "libx264",
 		"-c:a", "copy",

@@ -66,7 +66,7 @@ func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)
 		"ffmpeg",
 		"-f", "concat",
 		"-safe", "0",
-		"-i", manifestPath,
+		"-protocol_whitelist", "file,pipe", "-i", manifestPath,
 		"-c", "copy",
 		"-progress", "pipe:1",
 		"-y",
@@ -118,7 +118,7 @@ func probeDurationSeconds(filePath string) (float64, error) {
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "csv=p=0",
-		filePath,
+		"-protocol_whitelist", "file,pipe", filePath,
 	).Output()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
