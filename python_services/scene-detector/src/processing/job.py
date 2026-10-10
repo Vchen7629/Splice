@@ -3,7 +3,6 @@ import os
 from threading import Event
 from typing import Callable, Optional
 
-from scenedetect import VideoOpenFailure
 from shared_core import get_logger
 from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
 from shared_storage import fetch_video, upload_video
@@ -49,22 +48,13 @@ async def process_job(
             fetch_video, metadata.storage_url, settings.SERVICE_NAME
         )
 
-        try:
-            chunk_paths = await asyncio.to_thread(
-                split_into_chunks,
-                cancel_event,
-                local_video_path,
-                chunks_dir,
-                on_progress,
-            )
-        except VideoOpenFailure as e:
-            logger.error("could not open video", job_id=metadata.job_id, err=str(e))
-            raise
-        except OSError as e:
-            logger.error(
-                "ffmpeg error while splitting video", job_id=metadata.job_id, err=str(e)
-            )
-            raise
+        chunk_paths = await asyncio.to_thread(
+            split_into_chunks,
+            cancel_event,
+            local_video_path,
+            chunks_dir,
+            on_progress,
+        )
 
         if cancel_event.is_set():
             raise JobCancelledError(

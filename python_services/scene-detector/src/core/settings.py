@@ -13,6 +13,7 @@ class Settings(SharedSettings):
     # general config
     HTTP_PORT: int = 9098
     SERVICE_NAME: str = "scene-detector"
+    SPLIT_VIDEO_SCENES_TIMEOUT_S: int = 30
 
     # Nats config
     SUB_QUEUE_NAME: str = "scene-detector-workers"

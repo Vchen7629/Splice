@@ -1,5 +1,6 @@
 import io
 import os
+import subprocess
 import tempfile
 from threading import Event
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ import pytest
 from scenedetect import FrameTimecode
 from shared_handler.exceptions import JobCancelledError
 
+from src.core.settings import settings
 from src.processing.video import split_into_chunks
 
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
@@ -214,6 +216,33 @@ def test_raises_when_chunk_count_does_not_match_scene_count(detection) -> None:
         ):
             with pytest.raises(RuntimeError, match="expected 2 scene chunks"):
                 split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
+
+
+def test_raises_timeout_expired_when_timed_out_processing(detection) -> None:
+    detection.manager.get_scene_list.return_value = [(tc(0), tc(1))] * 3
+
+    terminated = Event()
+    popen = MagicMock()
+    proc = popen.return_value
+    proc.poll.return_value = None
+    proc.wait.return_value = -15
+    proc.terminate.side_effect = terminated.set
+
+    def hanging_ffmpeg():
+        terminated.wait(timeout=5)
+        yield from ()
+
+    proc.stdout = hanging_ffmpeg()
+
+    with (
+        tempfile.TemporaryDirectory() as output_dir,
+        patch("src.processing.video.subprocess.Popen", new=popen),
+        patch.object(settings, "SPLIT_VIDEO_SCENES_TIMEOUT_S", 0),
+        pytest.raises(subprocess.TimeoutExpired),
+    ):
+        split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
+
+    proc.terminate.assert_called_once()
 
 
 def test_ffmpeg_command_uses_same_cut_points_for_keyframes_and_segments(
