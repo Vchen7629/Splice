@@ -436,7 +436,7 @@ func TestUploadVideoFlow(t *testing.T) {
 
 	t.Run("Large file (5 MB) is fully persisted to SeaweedFS", func(t *testing.T) {
 		content := bytes.Repeat([]byte("x"), 5*1024*1024)
-		req := NewUploadRequest(t, "/jobs", "big.mp4", content, "4k", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "big.mp4", content, "1080p", "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -100,21 +101,29 @@ var processSubjects = map[string]string{
 
 // validates that the request FormValues are non empty, filename is valid, and processType is valid
 func validateUploadFields(filename, targetRes, sourceRes, processType string) error {
-	if targetRes == "" {
-		return errors.New("missing target_resolution field")
+	var allowedTargetRes = map[string][]string{
+		"Transcode": {"480p", "720p", "1080p"},
+		"Upscale":   {"720p", "1080p", "1440p", "4K"},
 	}
-	if sourceRes == "" {
-		return errors.New("missing source_resolution field")
-	}
-	if processType == "" {
-		return errors.New("missing process_type field")
-	}
-	if _, ok := processSubjects[processType]; !ok {
-		return errors.New("invalid process_type field")
-	}
+	var sourceResPattern = regexp.MustCompile(`^\d{3,4}p$`)
+	_, processTypeKnown := processSubjects[processType]
 
-	if err := storage.ValidatePathSegment(filename); err != nil {
-		return errors.New("invalid video filename")
+	checks := []struct {
+		isValid bool
+		msg     string
+	}{
+		{processType != "", "missing process_type field"},
+		{processTypeKnown, "invalid process_type field"},
+		{targetRes != "", "missing target_resolution field"},
+		{slices.Contains(allowedTargetRes[processType], targetRes), "uploaded file target res not allowed"},
+		{sourceRes != "", "missing source_resolution field"},
+		{sourceResPattern.MatchString(sourceRes), "uploaded file source res not allowed"},
+		{storage.ValidatePathSegment(filename) == nil, "invalid video filename"},
+	}
+	for _, c := range checks {
+		if !c.isValid {
+			return errors.New(c.msg)
+		}
 	}
 
 	return nil

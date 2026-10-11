@@ -93,6 +93,8 @@ func TestValidateUploadFields(t *testing.T) {
 		{"invalid process_type field", "1080p", "1080p", "IDK", "somefile"},
 		{"invalid video filename", "1080p", "1080p", "Transcode", "../etc/passwd"}, // path traversal
 		{"invalid video filename", "1080p", "1080p", "Transcode", ""},
+		{"uploaded file target res not allowed", "9999p", "1080p", "Transcode", "somefile"},
+		{"uploaded file source res not allowed", "1080p", "92p", "Transcode", "somefile"},
 	}
 
 	for _, tc := range tt {
