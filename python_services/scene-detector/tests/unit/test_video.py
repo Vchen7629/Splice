@@ -242,7 +242,7 @@ def test_raises_timeout_expired_when_watcher_reports_timeout(detection) -> None:
         split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
 
     watcher.assert_called_once_with(
-        popen.return_value, settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, MOCK_CANCEL_EVENT
+        [popen.return_value], settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, MOCK_CANCEL_EVENT
     )
 
 

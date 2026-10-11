@@ -108,7 +108,7 @@ def split_into_chunks(
 
     assert proc.stdout is not None  # should not trigger since stdout=subprocess.PIPE
     with terminate_on_deadline(
-        proc, settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, cancel_event
+        [proc], settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, cancel_event
     ) as timed_out:
         for line in proc.stdout:
             if total_us and on_progress and line.startswith("out_time_us="):
