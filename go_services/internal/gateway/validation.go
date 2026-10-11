@@ -27,7 +27,7 @@ func validateJobID(jobID string) error {
 
 const (
 	maxFramePixels = 8192 * 4608 // allows videos up to 8K
-	maxTotalPixels = 1e12        // w*h*frames, guard against decompression-bomb
+	maxTotalPixels = 1e12        // w*h*frames, approximate workload limit against decompression-bomb
 	probeTimeout   = time.Minute
 )
 
@@ -77,15 +77,15 @@ func validateVideo(ctx context.Context, path string, size int64) error {
 	}
 
 	stream := probe.Streams[0]
-	frames, _ := strconv.ParseInt(stream.Packets, 10, 64)
+	packets, _ := strconv.ParseInt(stream.Packets, 10, 64)
 	pixels := int64(stream.Width) * int64(stream.Height)
 
 	switch {
-	case pixels <= 0 || frames <= 0:
+	case pixels <= 0 || packets <= 0:
 		return &rejectError{"video is empty"}
 	case pixels > maxFramePixels:
 		return &rejectError{"video resolution too large"}
-	case float64(pixels)*float64(frames) > maxTotalPixels:
+	case float64(pixels)*float64(packets) > maxTotalPixels:
 		return &rejectError{"video too large to process"}
 	}
 
