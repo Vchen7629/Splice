@@ -7,7 +7,9 @@ from typing import Generator, Sequence
 
 @contextmanager
 def terminate_on_deadline(
-    procs: Sequence[Popen[str]], timeout_s: float, cancel_event: Event | None = None
+    procs: Sequence[Popen[str] | Popen[bytes]],
+    timeout_s: float,
+    cancel_event: Event | None = None,
 ) -> Generator[Event, None, None]:
     """Terminates proc if timeout_s elapses or cancel_event is set"""
     watcher_stop, timed_out = Event(), Event()
