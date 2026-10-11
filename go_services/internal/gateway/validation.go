@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -52,6 +53,10 @@ func validateVideo(ctx context.Context, path string, size int64) error {
 		"-show_entries", "format=format_name:stream=width,height,nb_read_packets", path).Output()
 
 	if err != nil {
+		var exitErr *exec.ExitError
+		if ctx.Err() != nil || !errors.As(err, &exitErr) {
+			return fmt.Errorf("ffprobe failed to run: %w", err) // timeout, cancel, or ffprobe missing
+		}
 		return &rejectError{"unreadable video"} // bad input or timeout
 	}
 
