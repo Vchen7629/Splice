@@ -131,7 +131,8 @@ def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     cancel_event.is_set.side_effect = [False, True]
 
     mock_proc = MagicMock()
-    mock_proc.stdout = iter(["out_time=00:00:01.00\n"])
+    mock_proc.stdout.__iter__.return_value = iter(["out_time=00:00:01.00\n"])
+    mock_proc.poll.return_value = None
 
     monkeypatch.setattr("src.processing.video._probe_duration_s", lambda p: 10.0)
     monkeypatch.setattr(
@@ -141,8 +142,9 @@ def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     with pytest.raises(JobCancelledError):
         video_downscale(cancel_event, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
 
-    mock_proc.kill.assert_called_once()
-    mock_proc.wait.assert_called_once()
+    mock_proc.kill.assert_called()
+    mock_proc.wait.assert_called()
+    mock_proc.stdout.close.assert_called_once()
 
 
 def test_video_decoder_calls_popen_with_video_path(decoder_popen) -> None:
