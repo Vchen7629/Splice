@@ -106,6 +106,12 @@ func TestValidateUploadFields(t *testing.T) {
 		})
 	}
 
+	t.Run("denoise and convert ignore resolution fields", func(t *testing.T) {
+		assert.NoError(t, validateUploadFields("somefilename", "", "", "Denoise"))
+		assert.NoError(t, validateUploadFields("somefilename", "", "", "Convert"))
+		assert.NoError(t, validateUploadFields("somefilename", "1080p", "92p", "Denoise")) // ignored, not validated
+	})
+
 	t.Run("valid fields returns no error", func(t *testing.T) {
 		assert.NoError(t, validateUploadFields("somefilename", "1080p", "1080p", "Transcode"))
 	})

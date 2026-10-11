@@ -106,18 +106,21 @@ func validateUploadFields(filename, targetRes, sourceRes, processType string) er
 		"Upscale":   {"720p", "1080p", "1440p", "4K"},
 	}
 	var sourceResPattern = regexp.MustCompile(`^\d{3,4}p$`)
+	allowedRes, takesResolution := allowedTargetRes[processType]
 	_, processTypeKnown := processSubjects[processType]
 
+	// NOTE: Right now it ignores target and source res for services that are not transcode or upscale so
+	// attackers can just pass in any resolution but its harmless since the services itself will not use them
 	checks := []struct {
 		isValid bool
 		msg     string
 	}{
 		{processType != "", "missing process_type field"},
 		{processTypeKnown, "invalid process_type field"},
-		{targetRes != "", "missing target_resolution field"},
-		{slices.Contains(allowedTargetRes[processType], targetRes), "uploaded file target res not allowed"},
-		{sourceRes != "", "missing source_resolution field"},
-		{sourceResPattern.MatchString(sourceRes), "uploaded file source res not allowed"},
+		{!takesResolution || targetRes != "", "missing target_resolution field"},
+		{!takesResolution || slices.Contains(allowedRes, targetRes), "uploaded file target res not allowed"},
+		{!takesResolution || sourceRes != "", "missing source_resolution field"},
+		{!takesResolution || sourceResPattern.MatchString(sourceRes), "uploaded file source res not allowed"},
 		{storage.ValidatePathSegment(filename) == nil, "invalid video filename"},
 	}
 	for _, c := range checks {
