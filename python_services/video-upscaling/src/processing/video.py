@@ -34,6 +34,8 @@ def recombine_video_audio(
         on_progress: callback invoked with 0-99 as ffmpeg reports progress
     """
     noaudio_path = f"/tmp/upscaled_noaudio-{job_id}.mp4"
+    duration_s = _probe_duration_s(noaudio_path)
+    timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.RECOMBINE_TIMEOUT_FACTOR
     proc = subprocess.Popen(
         [
             "ffmpeg", "-y",
@@ -45,8 +47,6 @@ def recombine_video_audio(
         ],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
     )
-    duration_s = _probe_duration_s(noaudio_path)
-    timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.RECOMBINE_TIMEOUT_FACTOR
 
     with kill_on_deadline([proc], timeout_s) as timed_out:
         for line in proc.stdout or []:
@@ -101,6 +101,8 @@ def video_downscale(
             raise JobCancelledError("video_upscale cancelled for downscale")
         
         tgt_res = Resolution.from_string(target_res)
+        duration_s = _probe_duration_s(video_path)
+        timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.DOWNSCALE_TIMEOUT_FACTOR
         proc = subprocess.Popen(
             [
                 "ffmpeg",
@@ -113,8 +115,6 @@ def video_downscale(
             ],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
         )
-        duration_s = _probe_duration_s(video_path)
-        timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.DOWNSCALE_TIMEOUT_FACTOR
 
         with kill_on_deadline([proc], timeout_s) as timed_out:
             for line in proc.stdout or []:
