@@ -40,7 +40,7 @@ func (e *rejectError) Error() string { return e.reason }
 
 // validates that the video uploaded by user is a proper video type,
 // not extremely large, non-empty, etc just ffprobe on file on disk
-func validateVideo(ctx context.Context, path string, size int64) error {
+func validateVideo(ctx context.Context, path, declaredRes string, size int64) error {
 	if size == 0 {
 		return &rejectError{"empty file"}
 	}
@@ -92,6 +92,8 @@ func validateVideo(ctx context.Context, path string, size int64) error {
 		return &rejectError{"video resolution too large"}
 	case float64(pixels)*float64(packets) > maxTotalPixels:
 		return &rejectError{"video too large to process"}
+	case declaredRes != fmt.Sprintf("%dp", stream.Height):
+		return &rejectError{"source_resolution doesn't match actual video resolution"}
 	}
 
 	return nil

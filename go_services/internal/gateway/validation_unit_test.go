@@ -51,35 +51,37 @@ func TestValidateJobID(t *testing.T) {
 
 func TestValidateVideo(t *testing.T) {
 	const small = "color=c=black:s=64x64:r=1:d=1"
+	const smallRes = "64p" // small is 64x64
 
 	t.Run("accepts a valid mp4", func(t *testing.T) {
 		path, size := makeVideo(t, "ok.mp4", small)
 
-		assert.NoError(t, validateVideo(context.Background(), path, size))
+		assert.NoError(t, validateVideo(context.Background(), path, smallRes, size))
 	})
 
-	tt := []struct{ name, file, src, wantReason string }{
-		{"audio only", "audio.mp4", "sine=d=1", "no video stream"},
-		{"unsupported container", "ok.flv", small, "unsupported video format"},
-		{"resolution too large", "big.mp4", "color=c=black:s=8200x4700:r=1:d=1", "video resolution too large"},
+	tt := []struct{ name, file, src, videoRes, wantReason string }{
+		{"audio only", "audio.mp4", "sine=d=1", smallRes, "no video stream"},
+		{"unsupported container", "ok.flv", small, smallRes, "unsupported video format"},
+		{"resolution too large", "big.mp4", "color=c=black:s=8200x4700:r=1:d=1", smallRes, "video resolution too large"},
+		{"rejects source resolution that doesnt match", "ok.mp4", small, "200p", "source_resolution doesn't match actual video resolution"},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			path, size := makeVideo(t, tc.file, tc.src)
 
-			assertRejected(t, validateVideo(context.Background(), path, size), tc.wantReason)
+			assertRejected(t, validateVideo(context.Background(), path, tc.videoRes, size), tc.wantReason)
 		})
 	}
 
 	t.Run("rejects empty file", func(t *testing.T) {
-		assertRejected(t, validateVideo(context.Background(), "unused", 0), "empty file")
+		assertRejected(t, validateVideo(context.Background(), "unused", small, 0), "empty file")
 	})
 
 	t.Run("rejects bytes that are not a video", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "junk.mp4")
 		require.NoError(t, os.WriteFile(path, []byte("not a video"), 0o600))
 
-		assertRejected(t, validateVideo(context.Background(), path, 11), "unreadable video")
+		assertRejected(t, validateVideo(context.Background(), path, small, 11), "unreadable video")
 	})
 }
 
