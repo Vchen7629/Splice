@@ -2,6 +2,8 @@ from threading import Event
 from typing import Optional, Callable
 from pathlib import Path
 from queue import Queue
+from realesrgan import RealESRGANer
+from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 from subprocess import Popen
 from utils import log_timing, Resolution
 from shared_handler import JobCancelledError
@@ -9,7 +11,6 @@ from shared_util import terminate_on_deadline
 from core.settings import settings
 from .batch import flush_batch
 from .worker import encoder_worker
-from .load_model import load_model
 import time
 import threading
 import subprocess
@@ -47,7 +48,7 @@ def recombine_video_audio(
     duration_s = _probe_duration_s(noaudio_path)
     timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.RECOMBINE_TIMEOUT_FACTOR
 
-    with terminate_on_deadline(proc, timeout_s) as timed_out:
+    with terminate_on_deadline([proc], timeout_s) as timed_out:
         for line in proc.stdout or []:
             if not line.startswith("out_time=") or on_progress is None:
                 continue
@@ -69,84 +70,6 @@ def _parse_out_time_s(line: str) -> Optional[float]:
         return None
     h, m, s = value.split(":")
     return int(h) * 3600 + int(m) * 60 + float(s)
-
-
-# maps ffprobe codec_name to matching NVDEC (cuvid) decoder
-_CUVID_DECODERS = {
-    "h264": "h264_cuvid",
-    "hevc": "hevc_cuvid",
-    "vp8": "vp8_cuvid",
-    "vp9": "vp9_cuvid",
-    "mpeg2video": "mpeg2_cuvid",
-    "mpeg4": "mpeg4_cuvid",
-    "av1": "av1_cuvid"
-}
-
-
-def video_decoder(video_path: str) -> Popen[bytes]:
-    """
-    Uses ffmpeg to read the input video file to output raw pixel
-    data (RGB24) frame-by-frame to stdout. Used to pipe directly into
-    the model to upscale frames without writing temp png files
-
-    Usage:
-        decoder.stdout.read(frame_bytes)
-
-    Args:
-        video_path: path to video to process
-    
-    Returns:
-        decoder instance
-    """
-    hwaccel_args: list[str] = []
-    if torch.cuda.is_available():
-        codec = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=codec_name")
-        cuvid_decoder = _CUVID_DECODERS.get(codec)
-        if cuvid_decoder is not None:
-            hwaccel_args = ["-hwaccel", "cuda", "-c:v", cuvid_decoder]
-
-    return subprocess.Popen([
-        "ffmpeg", *hwaccel_args,
-        "-i", video_path,
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "-"
-    ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-
-
-def video_encoder(fps: float, out_w: int, out_h: int, out_path: str, target_res: str | None = None) -> Popen[bytes]:
-    """
-    Long running encoder that takes in upscaled frames from encode_worker via stdin
-    and encodes the frames to the correct resolution and framerate as a compressed 
-    H264 .mp4 video file with no audio
-
-    Args:
-        fps: the desired fps for the compressed video file
-        out_w: the desired video width for the compressed video file
-        out_h: the desired video height for the compressed video file
-        out_path: the path for the compressed video file to be saved to
-
-    Raises:
-        ValueError if fps, out_w, or out_h is invalid (negative value)
-    """
-    if fps <= 0:
-        raise ValueError("fps cant be negative or 0")
-    if out_w <= 0:
-        raise ValueError("out_w cant be negative or 0")
-    if out_h is None or out_h <= 0:
-        raise ValueError("out_h cant be negative or 0")
-
-    vf = ["-vf", f"scale=-2:{Resolution.from_string(target_res)}"] if target_res else []
-    return subprocess.Popen([
-        "ffmpeg", "-y",
-        "-f", "rawvideo", "-pix_fmt", "yuv420p",
-        "-s", f"{out_w}x{out_h}",
-        "-r", str(fps),
-        "-i", "pipe:0",
-        *vf,
-        "-c:v", "libx264", "-crf", "18",
-        "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p",
-        out_path
-    ], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 
 def video_downscale(
@@ -193,7 +116,7 @@ def video_downscale(
         duration_s = _probe_duration_s(video_path)
         timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.DOWNSCALE_TIMEOUT_FACTOR
 
-        with terminate_on_deadline(proc, timeout_s) as timed_out:
+        with terminate_on_deadline([proc], timeout_s) as timed_out:
             for line in proc.stdout or []:
                 if cancel_event.is_set():
                     proc.kill()
@@ -214,94 +137,6 @@ def video_downscale(
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"ffmpeg downscale failed: {e}") from e
 
-def video_upscale(
-    cancel_event: Event,
-    job_id: str,
-    video_path: str, 
-    model_path: Path, 
-    scale: int,
-    target_res: str | None = None,
-    on_progress: Callable[[int], None] | None = None
-) -> None:
-    """Upscale a video using the model, writing audio-less result to /tmp/upscaled_noaudio.mp4"""
-    w, h, fps, total_frames = _extract_video_info(video_path)
-
-    out_w, out_h = w * scale, h * scale
-
-    upsampler = load_model(model_path, scale)
-
-    decoder = video_decoder(video_path)
-    encoder = video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4", target_res)
-
-    encode_queue: Queue[Optional[np.ndarray]] = Queue(maxsize=4)
-
-    encoder_fail_event = Event()
-    encoder_thread = threading.Thread(
-        target=encoder_worker, args=(encode_queue, encoder, encoder_fail_event), daemon=True
-    )
-    encoder_thread.start()
-
-    frame_bytes = h * w * 3
-    t_read = t_infer = t_enq = 0.0
-    n_frames = 0
-    n_batches = 0
-    pending: list[np.ndarray] = []
-
-    while True:
-        # check for cancel and stop and cleanup before running any processing
-        if cancel_event.is_set():
-            _cleanup_upscale_resources(decoder, encoder, encode_queue, encoder_thread)
-            raise JobCancelledError(f"video_upscale cancelled for job {job_id}")
-        if encoder_fail_event.is_set():
-            _cleanup_upscale_resources(decoder, encoder, encode_queue, encoder_thread)
-            raise Exception("encoder failed")
-
-        t0 = time.perf_counter()
-        if not decoder.stdout:
-            break
-
-        raw = decoder.stdout.read(frame_bytes)
-        t_read += time.perf_counter() - t0
-        if len(raw) < frame_bytes:
-            break
-
-        rgb = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3).copy()
-        pending.append(rgb)
-
-        if len(pending) == settings.BATCH_SIZE:
-            dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
-            t_infer += dt_infer
-            t_enq += dt_enq
-            n_frames += n
-            n_batches += 1
-
-            if on_progress is not None:
-                pct = min(99, int(n_frames / total_frames * 100))
-                on_progress(pct)
-
-            pending.clear()
-
-    if pending:
-        dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
-        t_infer += dt_infer
-        t_enq += dt_enq
-        n_frames += n
-        n_batches += 1
-
-    if decoder.stdout:
-        decoder.stdout.close()
-    decoder.wait()
-    encode_queue.put(None)
-
-    t_enc_start = time.perf_counter()
-    encoder_thread.join()
-    if encoder_fail_event.is_set():
-        raise Exception("encoder failed")
-    
-    t_enc = time.perf_counter() - t_enc_start
-
-    log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
-
 
 def _probe_duration_s(video_path: str) -> float:
     """use ffprobe to extract the video duration in seconds"""
@@ -315,6 +150,208 @@ def _probe_duration_s(video_path: str) -> float:
 
     _, _, fps, total_frames =  _extract_video_info(video_path)
     return total_frames / fps
+
+
+def video_upscale(
+    cancel_event: Event,
+    job_id: str,
+    video_path: str, 
+    model_path: Path, 
+    scale: int,
+    target_res: str | None = None,
+    on_progress: Callable[[int], None] | None = None
+) -> None:
+    """Upscale a video using the model, writing audio-less result to /tmp/upscaled_noaudio.mp4"""
+    w, h, fps, total_frames = _extract_video_info(video_path)
+    out_w, out_h = w * scale, h * scale
+
+    per_frame_s = {2: settings.UPSCALE_2X_TIMEOUT_S_PER_FRAME, 4: settings.UPSCALE_4X_TIMEOUT_S_PER_FRAME}
+    if scale not in per_frame_s:
+        raise ValueError(f"unsupported scale {scale}")
+    timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + total_frames * per_frame_s[scale]
+
+    upsampler = _load_model(model_path, scale)
+
+    decoder = _video_decoder(video_path)
+    encoder = _video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4", target_res)
+
+    encode_queue: Queue[Optional[np.ndarray]] = Queue(maxsize=4)
+
+    encoder_fail_event = Event()
+    encoder_thread = threading.Thread(
+        target=encoder_worker, args=(encode_queue, encoder, encoder_fail_event), daemon=True
+    )
+    encoder_thread.start()
+
+    def raise_if_interrupted() -> None:
+        if cancel_event.is_set():
+            raise JobCancelledError(f"video_upscale cancelled for job {job_id}")
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired("video upscale", timeout_s)
+        if encoder_fail_event.is_set():
+            raise Exception("encoder failed")
+        
+    frame_bytes = h * w * 3
+    t_read = t_infer = t_enq = 0.0
+    n_frames = 0
+    n_batches = 0
+    pending: list[np.ndarray] = []
+
+    with terminate_on_deadline([decoder, encoder], timeout_s, cancel_event) as timed_out:
+        try:
+            while True:
+                # check for cancel and stop and cleanup before running any processing
+                raise_if_interrupted()
+
+                t0 = time.perf_counter()
+                if not decoder.stdout:
+                    break
+
+                raw = decoder.stdout.read(frame_bytes)
+                t_read += time.perf_counter() - t0
+                if len(raw) < frame_bytes:
+                    break
+
+                rgb = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3).copy()
+                pending.append(rgb)
+
+                if len(pending) == settings.BATCH_SIZE:
+                    dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
+                    t_infer += dt_infer
+                    t_enq += dt_enq
+                    n_frames += n
+                    n_batches += 1
+
+                    if on_progress is not None:
+                        pct = min(99, int(n_frames / total_frames * 100))
+                        on_progress(pct)
+
+                    pending.clear()
+
+            raise_if_interrupted()
+
+            if pending:
+                dt_infer, dt_enq, n = flush_batch(upsampler, pending, encode_queue)
+                t_infer += dt_infer
+                t_enq += dt_enq
+                n_frames += n
+                n_batches += 1
+        except BaseException:
+            # kill so the encoder thread's join doesn't wait on ffmpeg finalizing a partial file
+            encoder.kill()
+            raise
+        finally:
+            t_enc_start = time.perf_counter()
+            encode_queue.put(None)
+            encoder_thread.join()
+            if encoder_fail_event.is_set():
+                raise Exception("encoder failed")
+
+        raise_if_interrupted()
+            
+    t_enc = time.perf_counter() - t_enc_start
+
+    log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
+
+
+def _load_model(model_path: Path, scale: int) -> RealESRGANer:
+    """
+    Loads a RealESRGAN upscaler model onto CUDA with fp16 and torch.compile optimization.
+    Tiling is disabled so full-frame inference only.
+
+    Args:
+        model_path: the path to the model weights
+        scale: the upscaling ratio for the model to use
+
+    Returns:
+        The loaded RealESRGANer model
+
+    Raises:
+        ValueError if the scale isnt 2 or 4 since we only support x2 and x4 upscaling
+    """
+    if scale not in (2, 4):
+        raise ValueError("scale must be either 2 or 4")
+
+    model = SRVGGNetCompact(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_conv=16,
+        upscale=scale,
+        act_type="prelu",
+    )
+
+    upsampler = RealESRGANer(
+        scale=scale,
+        model_path=str(model_path),
+        model=model,
+        tile=0,
+        tile_pad=10,
+        pre_pad=0,
+        device="cuda",
+    )
+    upsampler.model = upsampler.model.half()
+    upsampler.model = torch.compile(upsampler.model, mode="reduce-overhead")
+    return upsampler
+
+
+
+# maps ffprobe codec_name to matching NVDEC (cuvid) decoder
+_CUVID_DECODERS = {
+    "h264": "h264_cuvid",
+    "hevc": "hevc_cuvid",
+    "vp8": "vp8_cuvid",
+    "vp9": "vp9_cuvid",
+    "mpeg2video": "mpeg2_cuvid",
+    "mpeg4": "mpeg4_cuvid",
+    "av1": "av1_cuvid"
+}
+
+
+def _video_decoder(video_path: str) -> Popen[bytes]:
+    """reads the input video file and outputs raw pixel data (RGB24) frame-by-frame to stdout. 
+    Used to pipe directly into the model to upscale frames without writing temp png files
+    """
+    hwaccel_args: list[str] = []
+    if torch.cuda.is_available():
+        codec = _run_ffprobe(video_path, "-select_streams", "v:0", "-show_entries", "stream=codec_name")
+        cuvid_decoder = _CUVID_DECODERS.get(codec)
+        if cuvid_decoder is not None:
+            hwaccel_args = ["-hwaccel", "cuda", "-c:v", cuvid_decoder]
+
+    return subprocess.Popen([
+        "ffmpeg", *hwaccel_args,
+        "-i", video_path,
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "-"
+    ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+
+def _video_encoder(fps: float, out_w: int, out_h: int, out_path: str, target_res: str | None = None) -> Popen[bytes]:
+    """
+    Long running encoder that takes in upscaled frames from encode_worker via stdin
+    and encodes the frames to the correct resolution and framerate as a compressed 
+    H264 .mp4 video file with no audio
+    """
+    if fps <= 0:
+        raise ValueError("fps cant be negative or 0")
+    if out_w <= 0:
+        raise ValueError("out_w cant be negative or 0")
+    if out_h is None or out_h <= 0:
+        raise ValueError("out_h cant be negative or 0")
+
+    vf = ["-vf", f"scale=-2:{Resolution.from_string(target_res)}"] if target_res else []
+    return subprocess.Popen([
+        "ffmpeg", "-y",
+        "-f", "rawvideo", "-pix_fmt", "yuv420p",
+        "-s", f"{out_w}x{out_h}",
+        "-r", str(fps),
+        "-i", "pipe:0",
+        *vf,
+        "-c:v", "libx264", "-crf", "18",
+        "-preset", "ultrafast",
+        "-pix_fmt", "yuv420p",
+        out_path
+    ], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 
 def _extract_video_info(video_path: str) -> tuple[int, int, float, int]:
@@ -350,19 +387,3 @@ def _run_ffprobe(video_path: str, *extra_args: str) -> str:
     ], capture_output=True, text=True, check=True, timeout=settings.FFPROBE_TIMEOUT_S)
 
     return probe.stdout.strip()
-
-
-def _cleanup_upscale_resources(
-    decoder: Popen[bytes], 
-    encoder: Popen[bytes], 
-    encode_queue: Queue[Optional[np.ndarray]], 
-    encoder_thread: threading.Thread
-) -> None:
-    """used to kill/cleanup processing processes in upscaling"""
-    if decoder.stdout:
-        decoder.stdout.close()
-    decoder.kill()
-    encoder.kill()
-    encode_queue.put(None)
-    encoder_thread.join()
-    decoder.wait()

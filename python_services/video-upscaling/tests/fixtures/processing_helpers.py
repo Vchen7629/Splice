@@ -44,13 +44,13 @@ def mock_deps() -> Generator[dict[str, Any], Any, None]:
 
     with (
         patch(
-            "src.processing.load_model.SRVGGNetCompact", return_value=mock_net
+            "src.processing.video.SRVGGNetCompact", return_value=mock_net
         ) as mock_srvgg,
         patch(
-            "src.processing.load_model.RealESRGANer", return_value=mock_upsampler
+            "src.processing.video.RealESRGANer", return_value=mock_upsampler
         ) as mock_realesrgan,
         patch(
-            "src.processing.load_model.torch.compile", return_value=mock_compiled
+            "src.processing.video.torch.compile", return_value=mock_compiled
         ) as mock_compile,
     ):
         yield {
@@ -73,10 +73,12 @@ def video_upscale_patches() -> Generator[dict[str, Any], Any, None]:
             "src.processing.video._extract_video_info",
             return_value=(64, 64, 24.0, 0),
         ) as mock_info,
-        patch("src.processing.video.load_model", return_value=MagicMock()) as mock_load,
-        patch("src.processing.video.video_decoder") as mock_decoder,
         patch(
-            "src.processing.video.video_encoder", return_value=mock_encoder
+            "src.processing.video._load_model", return_value=MagicMock()
+        ) as mock_load,
+        patch("src.processing.video._video_decoder") as mock_decoder,
+        patch(
+            "src.processing.video._video_encoder", return_value=mock_encoder
         ) as mock_enc,
         patch(
             "src.processing.video.flush_batch", return_value=(0.0, 0.0, 0)
