@@ -56,7 +56,13 @@ func TestValidateVideo(t *testing.T) {
 	t.Run("accepts a valid mp4", func(t *testing.T) {
 		path, size := makeVideo(t, "ok.mp4", small)
 
-		assert.NoError(t, validateVideo(context.Background(), path, smallRes, size))
+		assert.NoError(t, validateVideo(context.Background(), path, smallRes, "Transcode", size))
+	})
+
+	t.Run("Doesnt error for Non resolution service (Denoise) that supplies non matching res", func(t *testing.T) {
+		path, size := makeVideo(t, "ok.mp4", small)
+
+		assert.NoError(t, validateVideo(context.Background(), path, "999p", "Denoise", size))
 	})
 
 	tt := []struct{ name, file, src, videoRes, wantReason string }{
@@ -69,19 +75,19 @@ func TestValidateVideo(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path, size := makeVideo(t, tc.file, tc.src)
 
-			assertRejected(t, validateVideo(context.Background(), path, tc.videoRes, size), tc.wantReason)
+			assertRejected(t, validateVideo(context.Background(), path, tc.videoRes, "Transcode", size), tc.wantReason)
 		})
 	}
 
 	t.Run("rejects empty file", func(t *testing.T) {
-		assertRejected(t, validateVideo(context.Background(), "unused", small, 0), "empty file")
+		assertRejected(t, validateVideo(context.Background(), "unused", small, "Transcode", 0), "empty file")
 	})
 
 	t.Run("rejects bytes that are not a video", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "junk.mp4")
 		require.NoError(t, os.WriteFile(path, []byte("not a video"), 0o600))
 
-		assertRejected(t, validateVideo(context.Background(), path, small, 11), "unreadable video")
+		assertRejected(t, validateVideo(context.Background(), path, small, "Transcode", 11), "unreadable video")
 	})
 }
 

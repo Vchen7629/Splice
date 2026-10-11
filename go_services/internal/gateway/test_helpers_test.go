@@ -207,7 +207,7 @@ func patchOsExit(t *testing.T) *int {
 func patchValidateVideo(t *testing.T) {
 	t.Helper()
 	orig := validateVideoFn
-	validateVideoFn = func(context.Context, string, string, int64) error { return nil }
+	validateVideoFn = func(context.Context, string, string, string, int64) error { return nil }
 	t.Cleanup(func() { validateVideoFn = orig })
 }
 

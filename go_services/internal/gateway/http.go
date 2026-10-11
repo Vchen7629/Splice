@@ -142,7 +142,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := validateVideoFn(r.Context(), tmp.Name(), sourceRes, size); err != nil {
+	if err := validateVideoFn(r.Context(), tmp.Name(), sourceRes, sourceRes, size); err != nil {
 		var rejected *rejectError
 		if errors.As(err, &rejected) {
 			http.Error(w, rejected.reason, http.StatusUnprocessableEntity)

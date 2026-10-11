@@ -33,6 +33,10 @@ const (
 )
 
 var allowedContainers = []string{"mov", "mp4", "matroska", "webm", "avi"} // allowed video formats
+var allowedTargetRes = map[string][]string{
+	"Transcode": {"480p", "720p", "1080p"},
+	"Upscale":   {"720p", "1080p", "1440p", "4K"},
+}
 
 type rejectError struct{ reason string }
 
@@ -40,7 +44,7 @@ func (e *rejectError) Error() string { return e.reason }
 
 // validates that the video uploaded by user is a proper video type,
 // not extremely large, non-empty, etc just ffprobe on file on disk
-func validateVideo(ctx context.Context, path, declaredRes string, size int64) error {
+func validateVideo(ctx context.Context, path, declaredRes, processType string, size int64) error {
 	if size == 0 {
 		return &rejectError{"empty file"}
 	}
@@ -84,6 +88,7 @@ func validateVideo(ctx context.Context, path, declaredRes string, size int64) er
 	stream := probe.Streams[0]
 	packets, _ := strconv.ParseInt(stream.Packets, 10, 64)
 	pixels := int64(stream.Width) * int64(stream.Height)
+	_, takesResolution := allowedTargetRes[processType]
 
 	switch {
 	case pixels <= 0 || packets <= 0:
@@ -92,7 +97,7 @@ func validateVideo(ctx context.Context, path, declaredRes string, size int64) er
 		return &rejectError{"video resolution too large"}
 	case float64(pixels)*float64(packets) > maxTotalPixels:
 		return &rejectError{"video too large to process"}
-	case declaredRes != fmt.Sprintf("%dp", stream.Height):
+	case declaredRes != fmt.Sprintf("%dp", stream.Height) && takesResolution:
 		return &rejectError{"source_resolution doesn't match actual video resolution"}
 	}
 
@@ -108,10 +113,6 @@ var processSubjects = map[string]string{
 
 // validates that the request FormValues are non empty, filename is valid, and processType is valid
 func validateUploadFields(filename, targetRes, sourceRes, processType string) error {
-	var allowedTargetRes = map[string][]string{
-		"Transcode": {"480p", "720p", "1080p"},
-		"Upscale":   {"720p", "1080p", "1440p", "4K"},
-	}
 	var sourceResPattern = regexp.MustCompile(`^\d{3,4}p$`)
 	allowedRes, takesResolution := allowedTargetRes[processType]
 	_, processTypeKnown := processSubjects[processType]
