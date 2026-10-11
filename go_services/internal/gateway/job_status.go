@@ -125,9 +125,9 @@ type JobStatusHandler struct {
 
 func (j *JobStatusHandler) PollJobStatus(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
-	if jobID == "" {
-		http.Error(w, "missing job_id", http.StatusBadRequest)
-		j.Logger.Error("missing job_id path param")
+	if err := validateJobID(jobID); err != nil {
+		j.Logger.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -171,9 +171,9 @@ type healthProbeResult struct {
 // (COMPLETE/FAILED) or client disconnect
 func (j *JobStatusHandler) JobEvents(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
-	if jobID == "" {
-		http.Error(w, "missing job_id", http.StatusBadRequest)
-		j.Logger.Error("missing job_id path param")
+	if err := validateJobID(jobID); err != nil {
+		j.Logger.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

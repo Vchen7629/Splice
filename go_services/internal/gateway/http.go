@@ -3,11 +3,13 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -82,6 +84,8 @@ type uploadResponse struct {
 	JobID string `json:"job_id"`
 }
 
+var validateVideoFn = validateVideo // used for tests
+
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
 // and publishes a scene split message to NATS for downstream processing
 func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) {
@@ -113,61 +117,61 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
-	targetRes := r.FormValue("target_resolution")
-	if targetRes == "" {
-		http.Error(w, "missing target_resolution field", http.StatusBadRequest)
-		v.logger.Error("missing target_resolution field")
+	targetRes, sourceRes, processType := r.FormValue("target_resolution"), r.FormValue("source_resolution"), r.FormValue("process_type")
+	if err := validateUploadFields(header.Filename, targetRes, sourceRes, processType); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		v.logger.Error(err.Error())
 		return
 	}
 
-	sourceRes := r.FormValue("source_resolution")
-	if sourceRes == "" {
-		http.Error(w, "missing source_resolution field", http.StatusBadRequest)
-		v.logger.Error("missing source_resolution field")
+	tmp, err := os.CreateTemp("", "upload-*")
+	if err != nil { // ffprobe needs a tmp file to seek
+		http.Error(w, "failed to process upload", http.StatusInternalServerError)
+		v.logger.Error("failed to create temp file for validation", "err", err)
+		return
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+
+	size, err := io.Copy(tmp, file)
+	if err != nil {
+		http.Error(w, "failed to process upload", http.StatusInternalServerError)
+		v.logger.Error("failed to copy upload to temp file", "err", err)
 		return
 	}
 
-	processType := r.FormValue("process_type")
-	if processType == "" {
-		http.Error(w, "missing process_type field", http.StatusBadRequest)
-		v.logger.Error("missing process_type field")
+	if err := validateVideoFn(r.Context(), tmp.Name(), sourceRes, sourceRes, size); err != nil {
+		var rejected *rejectError
+		if errors.As(err, &rejected) {
+			http.Error(w, rejected.reason, http.StatusUnprocessableEntity)
+			v.logger.Warn("rejected uploaded video", "reason", rejected.reason, "file", header.Filename)
+			return
+		}
+		http.Error(w, "failed to validate video", http.StatusInternalServerError)
+		v.logger.Error("failed to validate video", "err", err)
 		return
 	}
 
-	var pubSubject string
-
-	switch processType {
-	case "Transcode":
-		pubSubject = "jobs.video.scene-split"
-	case "Upscale":
-		pubSubject = "jobs.video.upscale"
-	case "Denoise":
-		pubSubject = "jobs.video.denoise"
-	case "Convert":
-		pubSubject = "jobs.video.convert"
-	default:
-		http.Error(w, "invalid process_type field", http.StatusBadRequest)
-		v.logger.Error("invalid process_type field", "process_type", processType)
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "failed to process upload", http.StatusInternalServerError)
+		v.logger.Error("failed to rewind temp video file", "err", err)
 		return
 	}
-
-	v.logger.Debug("pubsubject called", "subject", pubSubject)
 
 	const uploadTimeout = 10 * time.Minute // this needs to stay under the http server WriteTimeout
 	jobID := uuid.New().String()
-	if err := storage.ValidatePathSegment(header.Filename); err != nil {
-		http.Error(w, "invalid video filename", http.StatusBadRequest)
-		return
-	}
+	pubSubject := processSubjects[processType]
 
 	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, url.PathEscape(header.Filename))
-	if err := storage.Upload(r.Context(), url, file, uploadTimeout); err != nil {
+	if err := storage.Upload(r.Context(), url, tmp, uploadTimeout); err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
 		v.logger.Error("failed to save uploaded video", "err", err)
 		return
 	}
 
-	v.logger.Debug("pubSubject is", "pubSubject", pubSubject)
+	v.logger.Debug("pubsubject called", "subject", pubSubject)
 
 	kh := KVHandler{logger: v.logger, kv: v.kv}
 	err = kh.updateJobStatusKV(r.Context(), jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
@@ -224,6 +228,16 @@ func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// validation for security
+	if err := storage.ValidatePathSegment(payload.FileName); err != nil {
+		http.Error(w, "invalid video filename", http.StatusBadRequest)
+		return
+	}
+	if err := validateJobID(payload.JobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	body, err := GetProcessedVideo(v.storageURL, payload.JobID, payload.FileName)
 	if err != nil {
 		v.logger.Error("failed to fetch processed video", "err", err)
@@ -267,9 +281,9 @@ type cancelHandler struct {
 
 func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Request) {
 	jobID := r.PathValue("id")
-	if jobID == "" {
-		c.logger.Error("missing job_id param")
-		http.Error(w, "missing job_id", http.StatusBadRequest)
+	if err := validateJobID(jobID); err != nil {
+		c.logger.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

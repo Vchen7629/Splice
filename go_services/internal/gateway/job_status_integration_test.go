@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"splice.com/go_services/internal/shared/handler"
@@ -92,7 +93,7 @@ func decodeSSEEvent[T any](t *testing.T, ev sseEvent, wantEvent string) T {
 }
 
 func TestJobEvents_FullLifecycle(t *testing.T) {
-	jobID := "job-events-lifecycle"
+	jobID := uuid.New().String()
 	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "upload"})
 	ts := newTestServer(t, ServiceURLs{})
 	_, r := connectSSE(t, context.Background(), ts, jobID)
@@ -138,7 +139,7 @@ func TestJobEvents_HealthFlip(t *testing.T) {
 	}))
 	defer stageSrv.Close()
 
-	jobID := "job-events-health"
+	jobID := uuid.New().String()
 	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "scene-detector"})
 	ts := newTestServer(t, ServiceURLs{SceneDetector: stageSrv.URL})
 	_, r := connectSSE(t, context.Background(), ts, jobID)
@@ -161,7 +162,7 @@ func TestJobEvents_HealthFlip(t *testing.T) {
 }
 
 func TestJobEvents_ClientDisconnect(t *testing.T) {
-	jobID := "job-events-disconnect"
+	jobID := uuid.New().String()
 	seedStatus(t, jobID, jetstream.JobStatus{State: jetstream.StateProcessing, Stage: "upload"})
 	ts := newTestServer(t, ServiceURLs{})
 

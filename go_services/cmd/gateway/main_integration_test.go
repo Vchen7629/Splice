@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -99,7 +100,7 @@ func TestRunGateway_Lifecycle(t *testing.T) {
 	})
 
 	t.Run("serves the status route", func(t *testing.T) {
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/no-such-job/status", baseURL))
+		resp, err := http.Get(fmt.Sprintf("%s/jobs/%s/status", baseURL, uuid.New().String()))
 		require.NoError(t, err)
 		defer resp.Body.Close() //nolint:errcheck
 

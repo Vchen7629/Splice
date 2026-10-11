@@ -16,6 +16,7 @@ import (
 
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -197,6 +198,8 @@ func TestStartHttpApiRouting(t *testing.T) {
 }
 
 func TestUploadVideo(t *testing.T) {
+	patchValidateVideo(t)
+
 	t.Run("Returns 400 when body is not a multipart form", func(t *testing.T) {
 		h := newVideoHandler("http://localhost:1", &MockJS{})
 		req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader("plain text body"))
@@ -299,7 +302,7 @@ func TestDownloadVideo(t *testing.T) {
 
 	t.Run("Returns 500 when storage is unreachable", func(t *testing.T) {
 		h := newVideoHandler("http://localhost:1", &MockJS{})
-		req := NewDownloadRequest(t, "/jobs/download", "abc-123", "video.mp4")
+		req := NewDownloadRequest(t, "/jobs/download", "video.mp4", uuid.New())
 		rec := httptest.NewRecorder()
 
 		h.downloadVideoRoute(rec, req)
@@ -319,14 +322,13 @@ func TestCancelProcessing(t *testing.T) {
 		c.cancelProcessingRoute(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Contains(t, rec.Body.String(), "missing job_id")
+		assert.Contains(t, rec.Body.String(), "job_id is not a valid uuid")
 	})
 
-	// get already returns the errKeyNotFound so no need to mock error
 	t.Run("Returns 404 when KV Get returns ErrKeyNotFound", func(t *testing.T) {
 		c := newCancelHandler(&MockKV{}, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/jobs/id-2", nil)
-		req.SetPathValue("id", "id-2")
+		req.SetPathValue("id", uuid.New().String())
 		rec := httptest.NewRecorder()
 
 		c.cancelProcessingRoute(rec, req)
@@ -338,7 +340,7 @@ func TestCancelProcessing(t *testing.T) {
 	t.Run("Returns 500 when KV Get returns generic error", func(t *testing.T) {
 		c := newCancelHandler(&MockKV{GetErr: errors.New("kv unavailable")}, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/jobs/id-2", nil)
-		req.SetPathValue("id", "id-2")
+		req.SetPathValue("id", uuid.New().String())
 		rec := httptest.NewRecorder()
 
 		c.cancelProcessingRoute(rec, req)
@@ -349,13 +351,14 @@ func TestCancelProcessing(t *testing.T) {
 
 	t.Run("terminal state returns 200 with the existing status and update never called", func(t *testing.T) {
 		kv := NewMockKV()
+		id := uuid.New().String()
 		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateCancelled, Stage: "scene-detector"})
 		require.NoError(t, err)
-		kv.Seed("job-2", status)
+		kv.Seed(id, status)
 
 		c := newCancelHandler(kv, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-2", nil)
-		req.SetPathValue("id", "job-2")
+		req.SetPathValue("id", id)
 		rec := httptest.NewRecorder()
 
 		c.cancelProcessingRoute(rec, req)
@@ -367,13 +370,14 @@ func TestCancelProcessing(t *testing.T) {
 
 	t.Run("cancels a processing job and returns 200 with the new status", func(t *testing.T) {
 		kv := NewMockKV()
+		id := uuid.New().String()
 		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		require.NoError(t, err)
-		kv.Seed("job-3", status)
+		kv.Seed(id, status)
 
 		c := newCancelHandler(kv, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-3", nil)
-		req.SetPathValue("id", "job-3")
+		req.SetPathValue("id", id)
 		rec := httptest.NewRecorder()
 
 		c.cancelProcessingRoute(rec, req)
@@ -385,15 +389,16 @@ func TestCancelProcessing(t *testing.T) {
 
 	t.Run("Retries and succeeds after a revision conflict from a concurrent cancel", func(t *testing.T) {
 		kv := NewMockKV()
+		id := uuid.New().String()
 		status, err := json.Marshal(sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"})
 		require.NoError(t, err)
-		kv.Seed("job-4", status)
+		kv.Seed(id, status)
 		// simulates another concurrent DELETE request winning the race and bumping the revision first
 		kv.UpdateErr = jetstream.ErrKeyExists
 
 		c := newCancelHandler(kv, nil)
 		req := httptest.NewRequest(http.MethodDelete, "/jobs/job-4", nil)
-		req.SetPathValue("id", "job-4")
+		req.SetPathValue("id", id)
 		rec := httptest.NewRecorder()
 
 		c.cancelProcessingRoute(rec, req)
