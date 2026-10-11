@@ -244,8 +244,6 @@ def video_upscale(
             t_enc_start = time.perf_counter()
             encode_queue.put(None)
             encoder_thread.join()
-            if encoder_fail_event.is_set():
-                raise Exception("encoder failed")
 
         raise_if_interrupted()
             
