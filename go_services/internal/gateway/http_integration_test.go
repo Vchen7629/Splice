@@ -351,7 +351,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("File is saved to SeaweedFS and is fetchable at the returned StorageURL", func(t *testing.T) {
-		req := NewUploadRequest(t, "/jobs", "clip.mp4", testVideoBytes(t), "1080p", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "clip.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -394,7 +394,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		require.NoError(t, err)
 		defer sub.Unsubscribe() //nolint:errcheck
 
-		req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "720p", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "720p", "720p", "Transcode")
 		rec := httptest.NewRecorder()
 		h.uploadVideoRoute(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code)
@@ -420,7 +420,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		seen := make(map[string]bool)
 
 		for range 3 {
-			req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "1080p", "1080p", "Transcode")
+			req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
 			rec := httptest.NewRecorder()
 			h.uploadVideoRoute(rec, req)
 			require.Equal(t, http.StatusCreated, rec.Code)
@@ -529,7 +529,7 @@ func TestStartHttpApi(t *testing.T) {
 		{
 			name: "POST /jobs/upload is wired to the upload handler",
 			buildReq: func() *http.Request {
-				return NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", testVideoBytes(t), "1080p", "1080p", "Transcode")
+				return NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
 			},
 			wantStatus: http.StatusCreated,
 		},
@@ -566,7 +566,7 @@ func TestUploadPipeline(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "720p", "1080p", "Transcode")
+		req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "720p", "720p", "Transcode")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close() //nolint:errcheck
@@ -605,7 +605,7 @@ func TestUploadPipeline(t *testing.T) {
 		jobIDs := make([]string, 3)
 
 		for i := range jobIDs {
-			req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "1080p", "1080p", "Transcode")
+			req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close() //nolint:errcheck
