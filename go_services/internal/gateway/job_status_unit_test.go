@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -451,11 +452,12 @@ func TestPollJobStatus(t *testing.T) {
 	for _, tc := range droppedConnTests {
 		t.Run(tc.name, func(t *testing.T) {
 			kv := NewMockKV()
-			kv.Seed("job-1", mustMarshalStatus(t, tc.status))
+			jobID := uuid.New().String()
+			kv.Seed(jobID, mustMarshalStatus(t, tc.status))
 			h := newHandler(kv)
 
-			req := httptest.NewRequest(http.MethodGet, "/jobs/job-1/status", nil)
-			req.SetPathValue("id", "job-1")
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/jobs/%s/status", jobID), nil)
+			req.SetPathValue("id", jobID)
 
 			assert.NotPanics(t, func() {
 				h.PollJobStatus(newDroppedConnectionWriter(), req)
