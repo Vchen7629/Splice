@@ -119,7 +119,7 @@ func probeDurationSeconds(filePath string) (float64, error) {
 		"-show_entries", "format=duration",
 		"-of", "csv=p=0",
 		filePath,
-	).Output()
+	).CombinedOutput()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return 0, fmt.Errorf("ffprobe timed out after %s: %w", probeDurationTimeout, ctxErr)

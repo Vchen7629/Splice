@@ -40,7 +40,7 @@ func TranscodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 		"-c:a", "copy",
 		"-y",
 		outputPath,
-	).Output()
+	).CombinedOutput()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return "", fmt.Errorf("ffmpeg timed out after %s: %w", ffmpegTimeout, ctxErr)
