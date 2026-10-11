@@ -7,7 +7,7 @@ from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 from subprocess import Popen
 from utils import log_timing, Resolution
 from shared_handler import JobCancelledError
-from shared_util import terminate_on_deadline
+from shared_util import kill_on_deadline
 from core.settings import settings
 from .batch import flush_batch
 from .worker import encoder_worker
@@ -48,7 +48,7 @@ def recombine_video_audio(
     duration_s = _probe_duration_s(noaudio_path)
     timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.RECOMBINE_TIMEOUT_FACTOR
 
-    with terminate_on_deadline([proc], timeout_s) as timed_out:
+    with kill_on_deadline([proc], timeout_s) as timed_out:
         for line in proc.stdout or []:
             if not line.startswith("out_time=") or on_progress is None:
                 continue
@@ -116,7 +116,7 @@ def video_downscale(
         duration_s = _probe_duration_s(video_path)
         timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.DOWNSCALE_TIMEOUT_FACTOR
 
-        with terminate_on_deadline([proc], timeout_s) as timed_out:
+        with kill_on_deadline([proc], timeout_s) as timed_out:
             for line in proc.stdout or []:
                 if cancel_event.is_set():
                     proc.kill()
@@ -197,7 +197,7 @@ def video_upscale(
     n_batches = 0
     pending: list[np.ndarray] = []
 
-    with terminate_on_deadline([decoder, encoder], timeout_s, cancel_event) as timed_out:
+    with kill_on_deadline([decoder, encoder], timeout_s, cancel_event) as timed_out:
         try:
             while True:
                 # check for cancel and stop and cleanup before running any processing

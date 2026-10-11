@@ -186,7 +186,7 @@ def test_cancel_terminates_ffmpeg_even_when_emits_no_progress_lines(detection) -
     with (
         tempfile.TemporaryDirectory() as output_dir,
         patch("src.processing.video.subprocess.Popen", new=popen),
-        patch("src.processing.video.terminate_on_deadline", new=fake_watch()),
+        patch("src.processing.video.kill_on_deadline", new=fake_watch()),
         pytest.raises(
             JobCancelledError,
             match="split_into_chunks cancelled during scene-split",
@@ -236,7 +236,7 @@ def test_raises_timeout_expired_when_watcher_reports_timeout(detection) -> None:
     with (
         tempfile.TemporaryDirectory() as output_dir,
         patch("src.processing.video.subprocess.Popen", new=popen),
-        patch("src.processing.video.terminate_on_deadline", new=watcher),
+        patch("src.processing.video.kill_on_deadline", new=watcher),
         pytest.raises(subprocess.TimeoutExpired),
     ):
         split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)

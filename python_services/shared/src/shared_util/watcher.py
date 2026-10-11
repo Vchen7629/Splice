@@ -6,7 +6,7 @@ from typing import Generator, Sequence
 
 
 @contextmanager
-def terminate_on_deadline(
+def kill_on_deadline(
     procs: Sequence[Popen[str] | Popen[bytes]],
     timeout_s: float,
     cancel_event: Event | None = None,

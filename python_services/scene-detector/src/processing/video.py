@@ -14,7 +14,7 @@ from scenedetect import (
 )
 from scenedetect.video_splitter import DEFAULT_FFMPEG_ARGS
 from shared_handler.exceptions import JobCancelledError
-from shared_util import terminate_on_deadline
+from shared_util import kill_on_deadline
 
 from ..core.settings import settings
 
@@ -107,7 +107,7 @@ def split_into_chunks(
     )
 
     assert proc.stdout is not None  # should not trigger since stdout=subprocess.PIPE
-    with terminate_on_deadline(
+    with kill_on_deadline(
         [proc], settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, cancel_event
     ) as timed_out:
         for line in proc.stdout:
