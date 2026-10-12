@@ -23,15 +23,16 @@ func GetProcessedVideo(storageUrl, jobID, fileName string) (io.ReadCloser, error
 		if err := resp.Body.Close(); err != nil {
 			return nil, errors.New("error closing resp body")
 		}
-	}
-
-	switch resp.StatusCode {
-	case http.StatusNotFound:
-		return nil, errors.New("video not found")
-	case http.StatusForbidden:
-		return nil, errors.New("access denied")
-	case http.StatusInternalServerError:
-		return nil, errors.New("error accessing seedweedfs")
+		switch resp.StatusCode {
+		case http.StatusNotFound:
+			return nil, errors.New("video not found")
+		case http.StatusForbidden:
+			return nil, errors.New("access denied")
+		case http.StatusInternalServerError:
+			return nil, errors.New("error accessing seedweedfs")
+		default:
+			return nil, fmt.Errorf("unexpected storage status: %d", resp.StatusCode)
+		}
 	}
 
 	return resp.Body, nil
