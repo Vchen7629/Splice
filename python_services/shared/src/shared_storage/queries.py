@@ -7,8 +7,6 @@ import requests
 
 from shared_core import get_logger, sharedsettings
 
-TEMP_DIR: str = "../temp"
-
 
 def fetch_video(storage_url: str, service_name: str) -> str:
     """
@@ -29,7 +27,7 @@ def fetch_video(storage_url: str, service_name: str) -> str:
     logger = get_logger(service_name)
 
     parts = storage_url.rstrip("/").split("/")
-    dest_path: str = f"{TEMP_DIR}/{parts[-2]}/{parts[-1]}"
+    dest_path: str = f"{sharedsettings.TEMP_ROOT}/input/{parts[-2]}/{parts[-1]}"
 
     tmp_path: str | None = None
     completed = False

@@ -8,6 +8,7 @@ import torch
 from realesrgan import RealESRGANer
 
 from src.processing.video import (
+    TEMP_ROOT,
     _extract_video_info,
     _load_model,
     _video_decoder,
@@ -30,13 +31,15 @@ requires_cuda = pytest.mark.skipif(
 @pytest.fixture()
 def recombined_video(one_frame_video: Path, tmp_path: Path) -> Path:
     """Place 1-frame clip at the job-scoped noaudio path, recombine with original audio."""
+    noaudio = Path(f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4")
+    noaudio.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             "ffmpeg",
             "-y",
             "-i",
             str(one_frame_video),
-            "/tmp/upscaled_noaudio-job_id1.mp4",
+            str(noaudio),
         ],
         check=True,
         stderr=subprocess.DEVNULL,
@@ -154,7 +157,8 @@ def test_recombine_video_audio_output_has_audio_stream(recombined_video: Path) -
 def test_video_upscale_produces_output_file(
     one_frame_video: Path, filename: str, scale: int
 ) -> None:
-    output = Path("/tmp/upscaled_noaudio-jobid1.mp4")
+    output = Path(f"{TEMP_ROOT}/output/jobid1/upscaled_noaudio.mp4")
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.unlink(missing_ok=True)
     video_upscale(
         MOCK_CANCEL_EVENT, "jobid1", str(one_frame_video), WEIGHTS_DIR / filename, scale
@@ -176,7 +180,8 @@ def test_video_upscale_output_has_correct_resolution(
     one_frame_video: Path, filename: str, scale: int
 ) -> None:
     src_w, src_h, _, _ = _extract_video_info(str(one_frame_video))
-    output = "/tmp/upscaled_noaudio-job_id1.mp4"
+    output = f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4"
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).unlink(missing_ok=True)
 
     video_upscale(

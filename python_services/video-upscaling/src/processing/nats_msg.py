@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
-from shared_core import get_logger
+from shared_core import get_logger, sharedsettings
 from shared_handler import (
     ProcessJobMsgContext,
     UpscaleCompleteMsg,
@@ -19,8 +19,10 @@ from utils import select_model
 from ..core.settings import settings
 from .video import recombine_video_audio, video_downscale, video_upscale
 
-logger = get_logger(settings.SERVICE_NAME)
 SERVICE_NAME = settings.SERVICE_NAME
+TEMP_ROOT = settings.TEMP_ROOT
+
+logger = get_logger(SERVICE_NAME)
 
 
 @dataclass
@@ -52,7 +54,7 @@ async def process_job_msg(ctx: ProcessJobMsgContext, cancel_event: Event) -> Non
     res = select_model(ctx.metadata.source_resolution, ctx.metadata.target_resolution)
     if res is None:
         filename = os.path.basename(local_video_path)
-        temp_file_loc = f"../temp_output/{job_id}/{filename}"
+        temp_file_loc = f"{TEMP_ROOT}/output/{job_id}/{filename}"
         os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
         downscaleJobCtx = DownscaleJobContext(
@@ -83,8 +85,8 @@ async def process_job_msg(ctx: ProcessJobMsgContext, cancel_event: Event) -> Non
 
 async def cleanup_job(job_id: str) -> None:
     """TODO: docstring"""
-    await cleanup_temp(f"../temp_output/{job_id}", job_id, logger)
-    await cleanup_temp(f"../temp/{job_id}", job_id, logger)
+    await cleanup_temp(f"{TEMP_ROOT}/output/{job_id}", job_id, logger)
+    await cleanup_temp(f"{TEMP_ROOT}/input/{job_id}", job_id, logger)
 
     logger.debug("removed temp dirs", job_id=job_id)
 
@@ -113,7 +115,7 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
     # reusing the source filename's extension (e.g. .webm) produces a
     # container/codec mismatch when recombine_video_audio muxes with -c copy
     stem = os.path.splitext(os.path.basename(ctx.local_video_path))[0]
-    temp_file_loc = f"../temp_output/{job_id}/{stem}.mp4"
+    temp_file_loc = f"{TEMP_ROOT}/output/{job_id}/{stem}.mp4"
     os.makedirs(os.path.dirname(temp_file_loc), exist_ok=True)
 
     loop = asyncio.get_event_loop()
@@ -149,7 +151,9 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
 
     finally:
         logger.debug("cleaning up no audio upscale mp4 file", job_id=job_id)
-        await cleanup_temp(f"/tmp/upscaled_noaudio-{job_id}.mp4", job_id, logger)
+        await cleanup_temp(
+            f"{TEMP_ROOT}/output/{job_id}/upscaled_noaudio.mp4", job_id, logger
+        )
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     await asyncio.to_thread(
