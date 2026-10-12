@@ -3,7 +3,7 @@ name = "scene-detector"
 version = "0.1.0"
 description = "service that takes in raw videos, splits it into scenes, and sends it downstream for parallel processing"
 license = "MIT"
-requires-python = ">=3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "nats-py>=2.14.0",
     "pydantic-settings>=2.13.1",
@@ -19,12 +19,12 @@ shared_python = { path = "../shared", editable = true }
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 include = ["src", "test"]
 extraPaths = [".", "../shared"]
 
 [tool.pyrefly]
-python-version = "3.13"
+python-version = "3.14"
 untyped-def-behavior = "check-and-infer-return-any"
 search-path = [".", "../shared", "../shared/src"]
 project-excludes = ["**/tests/**"]
