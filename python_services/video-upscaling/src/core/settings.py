@@ -15,6 +15,18 @@ class Settings(SharedSettings):
     BATCH_SIZE: int = 4
     SERVICE_NAME: str = "video-upscaling"
 
+    # ffmpeg/ffprobe timeout config
+    FFPROBE_TIMEOUT_S: int = 60
+    FFMPEG_TIMEOUT_GRACE_S: int = (
+        15  # fixed startup/IO slack shared by all ffmpeg calls
+    )
+    RECOMBINE_TIMEOUT_FACTOR: float = 0.5  # seconds allowed per second of video
+    DOWNSCALE_TIMEOUT_FACTOR: float = 4.0
+    UPSCALE_2X_TIMEOUT_S_PER_FRAME: float = 0.5
+    UPSCALE_4X_TIMEOUT_S_PER_FRAME: float = (
+        2.0  # placeholder until i get real logs for 4x
+    )
+
     # Nats config
     SUB_SUBJECT: str = "jobs.video.upscale"
     SUB_QUEUE_NAME: str = "video-upscaling-workers"

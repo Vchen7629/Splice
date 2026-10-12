@@ -1,4 +1,5 @@
 import subprocess
+import time
 from pathlib import Path
 from subprocess import CalledProcessError
 from threading import Event
@@ -11,12 +12,13 @@ from shared_handler.exceptions import JobCancelledError
 
 from src.processing.video import (
     _extract_video_info,
+    _load_model,
     _probe_duration_s,
     _run_ffprobe,
+    _video_decoder,
+    _video_encoder,
     recombine_video_audio,
-    video_decoder,
     video_downscale,
-    video_encoder,
     video_upscale,
 )
 from tests.fixtures.processing_helpers import make_fake_decoder
@@ -25,19 +27,26 @@ MOCK_CANCEL_EVENT = MagicMock(spec=Event)
 MOCK_CANCEL_EVENT.is_set.return_value = False
 
 
+def _running_proc() -> MagicMock:
+    proc = MagicMock()
+    proc.poll.return_value = None
+    proc.kill.side_effect = lambda: setattr(proc.poll, "return_value", -9)
+    return proc
+
+
 @pytest.fixture
 def mock_pipeline(monkeypatch) -> tuple[MagicMock, MagicMock]:
-    mock_decoder = MagicMock()
+    mock_decoder = _running_proc()
     mock_decoder.stdout = MagicMock()
-    mock_encoder = MagicMock()
+    mock_encoder = _running_proc()
 
     monkeypatch.setattr(
         "src.processing.video._extract_video_info",
         lambda p: (100, 100, 30.0, 10),
     )
-    monkeypatch.setattr("src.processing.video.load_model", lambda *a: MagicMock())
-    monkeypatch.setattr("src.processing.video.video_decoder", lambda p: mock_decoder)
-    monkeypatch.setattr("src.processing.video.video_encoder", lambda *a: mock_encoder)
+    monkeypatch.setattr("src.processing.video._load_model", lambda *a: MagicMock())
+    monkeypatch.setattr("src.processing.video._video_decoder", lambda p: mock_decoder)
+    monkeypatch.setattr("src.processing.video._video_encoder", lambda *a: mock_encoder)
     monkeypatch.setattr(
         "src.processing.video.threading.Thread", lambda *a, **kw: MagicMock()
     )
@@ -68,7 +77,8 @@ def recombine_popen():
 def _fake_recombine_proc() -> MagicMock:
     """A Popen stand-in with no progress lines and a clean exit"""
     proc = MagicMock()
-    proc.stdout = iter([])
+    proc.stdout = MagicMock()
+    proc.stdout.__iter__.return_value = iter([])
     proc.wait.return_value = 0
     return proc
 
@@ -82,21 +92,21 @@ def test_run_ffprobe_raises_type_error_for_missing_path(
 
 
 @pytest.mark.parametrize("fps", [0, -1, -30.0])
-def test_video_encoder_raises_for_invalid_fps(fps: float) -> None:
+def test__video_encoder_raises_for_invalid_fps(fps: float) -> None:
     with pytest.raises(ValueError, match="fps cant be negative or 0"):
-        video_encoder(fps, 1280, 720, "/tmp/out.mp4")
+        _video_encoder(fps, 1280, 720, "/tmp/out.mp4")
 
 
 @pytest.mark.parametrize("out_w", [0, -1])
-def test_video_encoder_raises_for_invalid_width(out_w: int) -> None:
+def test__video_encoder_raises_for_invalid_width(out_w: int) -> None:
     with pytest.raises(ValueError, match="out_w cant be negative or 0"):
-        video_encoder(24.0, out_w, 720, "/tmp/out.mp4")
+        _video_encoder(24.0, out_w, 720, "/tmp/out.mp4")
 
 
 @pytest.mark.parametrize("out_h", [0, -1, None])
-def test_video_encoder_raises_for_invalid_height(out_h: int | None) -> None:
+def test__video_encoder_raises_for_invalid_height(out_h: int | None) -> None:
     with pytest.raises(ValueError, match="out_h cant be negative or 0"):
-        video_encoder(24.0, 1280, out_h, "/tmp/out.mp4")  # type: ignore[arg-type]
+        _video_encoder(24.0, 1280, out_h, "/tmp/out.mp4")  # type: ignore[arg-type]
 
 
 def test_video_downscale_raises_runtime_error_when_ffmpeg_fails() -> None:
@@ -130,7 +140,8 @@ def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     cancel_event.is_set.side_effect = [False, True]
 
     mock_proc = MagicMock()
-    mock_proc.stdout = iter(["out_time=00:00:01.00\n"])
+    mock_proc.stdout.__iter__.return_value = iter(["out_time=00:00:01.00\n"])
+    mock_proc.poll.return_value = None
 
     monkeypatch.setattr("src.processing.video._probe_duration_s", lambda p: 10.0)
     monkeypatch.setattr(
@@ -140,29 +151,30 @@ def test_video_downscale_kills_ffmpeg_and_raises_when_cancelled_mid_run(
     with pytest.raises(JobCancelledError):
         video_downscale(cancel_event, "/tmp/input.mp4", "480p", "/tmp/out.mp4")
 
-    mock_proc.kill.assert_called_once()
-    mock_proc.wait.assert_called_once()
+    mock_proc.kill.assert_called()
+    mock_proc.wait.assert_called()
+    mock_proc.stdout.close.assert_called_once()
 
 
-def test_video_decoder_calls_popen_with_video_path(decoder_popen) -> None:
-    video_decoder("/tmp/input.mp4")
+def test__video_decoder_calls_popen_with_video_path(decoder_popen) -> None:
+    _video_decoder("/tmp/input.mp4")
 
     args = decoder_popen.call_args[0][0]
     assert "/tmp/input.mp4" in args
 
 
-def test_video_decoder_returns_popen_instance(decoder_popen) -> None:
-    assert video_decoder("/tmp/input.mp4") is decoder_popen.return_value
+def test__video_decoder_returns_popen_instance(decoder_popen) -> None:
+    assert _video_decoder("/tmp/input.mp4") is decoder_popen.return_value
 
 
-def test_video_decoder_opens_stdout_pipe(decoder_popen) -> None:
-    video_decoder("/tmp/input.mp4")
+def test__video_decoder_opens_stdout_pipe(decoder_popen) -> None:
+    _video_decoder("/tmp/input.mp4")
 
     assert decoder_popen.call_args[1]["stdout"] == subprocess.PIPE
 
 
-def test_video_decoder_outputs_rgb24(decoder_popen) -> None:
-    video_decoder("/tmp/input.mp4")
+def test__video_decoder_outputs_rgb24(decoder_popen) -> None:
+    _video_decoder("/tmp/input.mp4")
 
     args = decoder_popen.call_args[0][0]
     assert "rgb24" in args
@@ -186,6 +198,24 @@ def test_video_upscale_encoder_uses_job_scoped_temp_path(
 
     assert out_path_a == "/tmp/upscaled_noaudio-job_id1.mp4"
     assert out_path_b == "/tmp/upscaled_noaudio-job_id2.mp4"
+
+
+def test_video_upscale_kills_processes_and_raises_when_timeout_exceeded(
+    mock_pipeline, monkeypatch
+) -> None:
+    mock_decoder, mock_encoder = mock_pipeline
+    monkeypatch.setattr("src.processing.video.settings.FFMPEG_TIMEOUT_GRACE_S", 0)
+    monkeypatch.setattr(
+        "src.processing.video.settings.UPSCALE_2X_TIMEOUT_S_PER_FRAME", 0
+    )
+    # stand in for a read blocked on a pipe so the watcher's first 0.1s poll fires mid-read
+    mock_decoder.stdout.read.side_effect = lambda n: time.sleep(0.3) or b""
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        video_upscale(Event(), "job-1", "video.mp4", Path("model.pth"), 2)
+
+    mock_decoder.kill.assert_called_once()
+    mock_encoder.kill.assert_called()
 
 
 def test_recombine_video_audio_reads_job_scoped_temp_path(recombine_popen) -> None:
@@ -304,6 +334,77 @@ def test_video_upscale_kill_processes_and_raises_when_encoder_fails(
     mock_decoder.stdout.close.assert_called_once()
     mock_decoder.kill.assert_called_once()
     mock_encoder.kill.assert_called_once()
+
+
+@pytest.mark.parametrize("scale", [1, 3, 8])
+def test_load_model_invalid_scale_raises(mock_deps: dict[str, Any], scale: int) -> None:
+    with pytest.raises(ValueError, match="scale must be either 2 or 4"):
+        _load_model(Path("model.pth"), scale=scale)
+
+
+@pytest.mark.parametrize("scale", [2, 4])
+def test_load_model_valid_scale_does_not_raise(
+    mock_deps: dict[str, Any], scale: int
+) -> None:
+    _load_model(Path("model.pth"), scale=scale)
+
+
+@pytest.mark.parametrize("scale", [2, 4])
+def test_load_model_srvgg_constructed_with_correct_params(
+    mock_deps: dict[str, Any], scale: int
+) -> None:
+    _load_model(Path("model.pth"), scale=scale)
+
+    mock_deps["srvgg"].assert_called_once_with(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_conv=16,
+        upscale=scale,
+        act_type="prelu",
+    )
+
+
+@pytest.mark.parametrize("scale", [2, 4])
+def test_load_model_realesrganer_constructed_with_correct_params(
+    mock_deps: dict[str, Any], scale: int
+) -> None:
+    model_path = Path("/some/path/model.pth")
+    _load_model(model_path, scale=scale)
+
+    mock_deps["realesrgan"].assert_called_once_with(
+        scale=scale,
+        model_path=str(model_path),
+        model=mock_deps["net"],
+        tile=0,
+        tile_pad=10,
+        pre_pad=0,
+        device="cuda",
+    )
+
+
+def test_load_model_model_converted_to_half_precision(
+    mock_deps: dict[str, Any],
+) -> None:
+    _load_model(Path("model.pth"), scale=2)
+
+    mock_deps["net"].half.assert_called_once()
+
+
+def test_load_model_torch_compile_called_with_reduce_overhead(
+    mock_deps: dict[str, Any],
+) -> None:
+    _load_model(Path("model.pth"), scale=2)
+
+    mock_deps["compile"].assert_called_once_with(
+        mock_deps["net"], mode="reduce-overhead"
+    )
+
+
+def test_load_model_returns_upsampler(mock_deps: dict[str, Any]) -> None:
+    result = _load_model(Path("model.pth"), scale=2)
+
+    assert result is mock_deps["upsampler"]
 
 
 def test_extract_video_info_counts_packets_when_header_has_no_frame_count(

@@ -1,5 +1,6 @@
 import io
 import os
+import subprocess
 import tempfile
 from threading import Event
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ import pytest
 from scenedetect import FrameTimecode
 from shared_handler.exceptions import JobCancelledError
 
+from src.core.settings import settings
 from src.processing.video import split_into_chunks
 
 MOCK_CANCEL_EVENT = MagicMock(spec=Event)
@@ -41,6 +43,15 @@ def fake_popen(progress_lines: tuple[str, ...] = ()) -> MagicMock:
     proc.wait.return_value = 0
     proc.poll.return_value = 0
     return popen
+
+
+def fake_watch(timed_out: bool = False) -> MagicMock:
+    event = Event()
+    if timed_out:
+        event.set()
+    watcher = MagicMock()
+    watcher.return_value.__enter__.return_value = event
+    return watcher
 
 
 @pytest.fixture
@@ -151,39 +162,37 @@ def test_raises_job_cancelled_when_cancel_event_is_set_during_detect_scan(
     cancel_event = MagicMock(spec=Event)
     cancel_event.is_set.return_value = True
 
-    with tempfile.TemporaryDirectory() as output_dir:
-        with pytest.raises(
+    with (
+        tempfile.TemporaryDirectory() as output_dir,
+        pytest.raises(
             JobCancelledError,
             match="split_into_chunks cancelled during detect scan",
-        ):
-            split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
+        ),
+    ):
+        split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
 
 
 def test_cancel_terminates_ffmpeg_even_when_emits_no_progress_lines(detection) -> None:
     detection.manager.get_scene_list.return_value = [(tc(0), tc(1))] * 3
-    cancel_event, terminated = Event(), Event()
+    cancel_event = Event()
 
-    popen = fake_popen(("frame=1\n",))
-    proc = popen.return_value
-    proc.poll.return_value = None
-    proc.terminate.side_effect = terminated.set
-
-    def silent_stdout():
+    def cancelled_mid_split():
         cancel_event.set()
-        terminated.wait(timeout=2)
         yield from ()
 
-    proc.stdout = silent_stdout()
+    popen = fake_popen()
+    popen.return_value.stdout = cancelled_mid_split()
 
-    with tempfile.TemporaryDirectory() as output_dir:
-        with patch("src.processing.video.subprocess.Popen", new=popen):
-            with pytest.raises(
-                JobCancelledError,
-                match="split_into_chunks cancelled during scene-split",
-            ):
-                split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
-
-    proc.terminate.assert_called_once()
+    with (
+        tempfile.TemporaryDirectory() as output_dir,
+        patch("src.processing.video.subprocess.Popen", new=popen),
+        patch("src.processing.video.kill_on_deadline", new=fake_watch()),
+        pytest.raises(
+            JobCancelledError,
+            match="split_into_chunks cancelled during scene-split",
+        ),
+    ):
+        split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
 
 
 def test_raises_job_cancelled_when_set_after_detect_scan_with_no_scenes(
@@ -192,13 +201,15 @@ def test_raises_job_cancelled_when_set_after_detect_scan_with_no_scenes(
     cancel_event = MagicMock(spec=Event)
     cancel_event.is_set.return_value = True
 
-    with tempfile.TemporaryDirectory() as output_dir:
-        with patch("src.processing.video.shutil.copy2") as mock_copy2:
-            with pytest.raises(
-                JobCancelledError,
-                match="split_into_chunks cancelled after detect scan",
-            ):
-                split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
+    with (
+        tempfile.TemporaryDirectory() as output_dir,
+        patch("src.processing.video.shutil.copy2") as mock_copy2,
+        pytest.raises(
+            JobCancelledError,
+            match="split_into_chunks cancelled after detect scan",
+        ),
+    ):
+        split_into_chunks(cancel_event, "/videos/myvideo.mp4", output_dir)
 
     detection.manager.get_scene_list.assert_not_called()
     mock_copy2.assert_not_called()
@@ -214,6 +225,25 @@ def test_raises_when_chunk_count_does_not_match_scene_count(detection) -> None:
         ):
             with pytest.raises(RuntimeError, match="expected 2 scene chunks"):
                 split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
+
+
+def test_raises_timeout_expired_when_watcher_reports_timeout(detection) -> None:
+    detection.manager.get_scene_list.return_value = [(tc(0), tc(1))] * 3
+    popen = fake_popen()
+    popen.return_value.wait.return_value = -15
+    watcher = fake_watch(timed_out=True)
+
+    with (
+        tempfile.TemporaryDirectory() as output_dir,
+        patch("src.processing.video.subprocess.Popen", new=popen),
+        patch("src.processing.video.kill_on_deadline", new=watcher),
+        pytest.raises(subprocess.TimeoutExpired),
+    ):
+        split_into_chunks(MOCK_CANCEL_EVENT, "/videos/myvideo.mp4", output_dir)
+
+    watcher.assert_called_once_with(
+        [popen.return_value], settings.SPLIT_VIDEO_SCENES_TIMEOUT_S, MOCK_CANCEL_EVENT
+    )
 
 
 def test_ffmpeg_command_uses_same_cut_points_for_keyframes_and_segments(

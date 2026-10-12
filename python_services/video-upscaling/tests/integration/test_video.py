@@ -5,13 +5,15 @@ from unittest.mock import MagicMock
 
 import pytest
 import torch
+from realesrgan import RealESRGANer
 
 from src.processing.video import (
     _extract_video_info,
+    _load_model,
+    _video_decoder,
+    _video_encoder,
     recombine_video_audio,
-    video_decoder,
     video_downscale,
-    video_encoder,
     video_upscale,
 )
 from tests.fixtures.processing_helpers import TEST_VIDEO
@@ -74,11 +76,11 @@ def test_video_downscale_output_has_correct_resolution(
     assert h == expected_h
 
 
-def test_video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
+def test__video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
     w, h, _, _ = _extract_video_info(str(one_frame_video))
     frame_bytes = w * h * 3  # rgb24
 
-    decoder = video_decoder(str(one_frame_video))
+    decoder = _video_decoder(str(one_frame_video))
     assert decoder.stdout is not None
 
     raw = decoder.stdout.read(frame_bytes)
@@ -88,11 +90,11 @@ def test_video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
     assert len(raw) == frame_bytes
 
 
-def test_video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
+def test__video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
     w, h, _, _ = _extract_video_info(str(one_frame_video))
     frame_bytes = w * h * 3
 
-    decoder = video_decoder(str(one_frame_video))
+    decoder = _video_decoder(str(one_frame_video))
     assert decoder.stdout is not None
 
     raw = decoder.stdout.read(frame_bytes)
@@ -102,11 +104,11 @@ def test_video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
     assert any(b != 0 for b in raw)
 
 
-def test_video_encoder_scales_to_target_resolution(tmp_path: Path) -> None:
+def test__video_encoder_scales_to_target_resolution(tmp_path: Path) -> None:
     in_w, in_h = 1280, 720
     output = tmp_path / "encoded.mp4"
 
-    encoder = video_encoder(24.0, in_w, in_h, str(output), "480p")
+    encoder = _video_encoder(24.0, in_w, in_h, str(output), "480p")
     assert encoder.stdin is not None
     encoder.stdin.write(bytes(in_w * in_h * 3 // 2))  # one yuv420p frame
     encoder.stdin.close()
@@ -188,3 +190,67 @@ def test_video_upscale_output_has_correct_resolution(
     out_w, out_h, _, _ = _extract_video_info(output)
     assert out_w == src_w * scale
     assert out_h == src_h * scale
+
+
+WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
+
+requires_cuda = pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA not available"
+)
+
+
+@pytest.mark.parametrize(
+    "filename,scale",
+    [
+        ("realesr-animevideov3.pth", 4),
+        ("RealESRGANv2-animevideo-xsx2.pth", 2),
+    ],
+)
+@requires_cuda
+def test_load_model_returns_realesrganer(filename: str, scale: int) -> None:
+    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
+
+    assert isinstance(result, RealESRGANer)
+
+
+@pytest.mark.parametrize(
+    "filename,scale",
+    [
+        ("realesr-animevideov3.pth", 4),
+        ("RealESRGANv2-animevideo-xsx2.pth", 2),
+    ],
+)
+@requires_cuda
+def test_load_model_scale_matches(filename: str, scale: int) -> None:
+    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
+
+    assert result.scale == scale
+
+
+@pytest.mark.parametrize(
+    "filename,scale",
+    [
+        ("realesr-animevideov3.pth", 4),
+        ("RealESRGANv2-animevideo-xsx2.pth", 2),
+    ],
+)
+@requires_cuda
+def test_load_model_is_half_precision(filename: str, scale: int) -> None:
+    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
+
+    param = next(result.model.parameters())
+    assert param.dtype == torch.float16
+
+
+@pytest.mark.parametrize(
+    "filename,scale",
+    [
+        ("realesr-animevideov3.pth", 4),
+        ("RealESRGANv2-animevideo-xsx2.pth", 2),
+    ],
+)
+@requires_cuda
+def test_load_model_tile_disabled(filename: str, scale: int) -> None:
+    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
+
+    assert result.tile_size == 0

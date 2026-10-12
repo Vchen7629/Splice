@@ -1,6 +1,8 @@
 package recombiner
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -67,6 +69,10 @@ func RecombineVideo(
 
 			outputPath, err := recombineVideoChunks(nc, jobMilestoneKV, payload, chunks, logger)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					sJetstream.NakWithErrHandling(logger, msg)
+					return false
+				}
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
 			}
@@ -75,8 +81,7 @@ func RecombineVideo(
 			fileName := filepath.Base(outputPath)
 			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
 
-			_, err = storage.UploadVideoChunk(url, outputPath)
-			if err != nil {
+			if _, err := storage.UploadVideoChunk(url, outputPath); err != nil {
 				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
@@ -135,8 +140,7 @@ func recordVideoChunkArrival(msgRecievedKV jetstream.KeyValue, payload handler.C
 func recombineVideoChunks(
 	nc handler.Publisher, jobMilestoneKV jetstream.KeyValue, payload handler.ChunkCompleteMessage, chunks map[int]string, logger *slog.Logger,
 ) (string, error) {
-	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"})
-	if err != nil {
+	if err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"}); err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 		return "", err
 	}
