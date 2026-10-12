@@ -20,7 +20,7 @@ import (
 type Config struct {
 	service.BaseConfig
 	HTTPPort             string `envconfig:"HTTP_PORT"          default:"8080"`
-	MaxConcurrentUploads int    `envconfig:"MAX_CONCURRENT_UPLOAD" default:"10"`
+	MaxConcurrentUploads int    `envconfig:"MAX_CONCURRENT_UPLOADS" default:"10" validate:"gt=0"`
 	SceneDetectorURL     string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
 	TranscoderURL        string `envconfig:"TRANSCODER_URL"     default:"http://localhost:9095"`
 	RecombinerURL        string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
