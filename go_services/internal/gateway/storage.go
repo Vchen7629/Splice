@@ -8,9 +8,11 @@ import (
 	"time"
 )
 
-var storageClient = &http.Client{
-	Transport: &http.Transport{ResponseHeaderTimeout: 10 * time.Second},
-}
+var storageClient = func() *http.Client {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.ResponseHeaderTimeout = 10 * time.Second
+	return &http.Client{Transport: t}
+}()
 
 // fetch a completely processed video from seedweedfs storage
 func GetProcessedVideo(storageUrl, jobID, fileName string) (io.ReadCloser, error) {
