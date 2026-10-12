@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from shared_storage import queries
+from shared_core import sharedsettings
 
 
 @pytest.fixture(autouse=True)
 def patch_temp_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Redirect fetch_video writes to pytest's tmp_path so cleanup is automatic"""
-    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(sharedsettings, "TEMP_ROOT", tmp_path)

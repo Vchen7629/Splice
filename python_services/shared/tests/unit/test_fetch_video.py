@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from shared_storage import fetch_video, queries
+from shared_core import sharedsettings
+from shared_storage import fetch_video
 
 
 @pytest.mark.parametrize("status_code", [500, 502, 503])
@@ -36,15 +37,15 @@ def test_fetch_video_removes_partial_file_on_copy_failure(
     mock_response.raise_for_status.return_value = None
     mock_response.raw.read.side_effect = [b"partial", requests.ConnectionError("cut")]
 
-    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(sharedsettings, "TEMP_ROOT", tmp_path)
     with (
         patch("shared_storage.queries.requests.get", return_value=mock_response),
         pytest.raises(requests.ConnectionError),
     ):
         fetch_video("http://fake/job-123/video.mp4", service_name="scene-detector")
 
-    assert not (tmp_path / "job-123" / "video.mp4").exists()
-    assert list((tmp_path / "job-123").iterdir()) == []
+    assert not (tmp_path / "input" / "job-123" / "video.mp4").exists()
+    assert list((tmp_path / "input" / "job-123").iterdir()) == []
 
 
 @pytest.mark.parametrize("failure", ["http_error", "copy_error"])
@@ -52,8 +53,8 @@ def test_fetch_video_keeps_existing_file_on_failure(
     failure: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A failed fetch must not delete or corrupt an already-downloaded video"""
-    existing = tmp_path / "job-123" / "video.mp4"
-    existing.parent.mkdir()
+    existing = tmp_path / "input" / "job-123" / "video.mp4"
+    existing.parent.mkdir(parents=True)
     existing.write_bytes(b"original bytes")
 
     mock_response = MagicMock()
@@ -71,7 +72,7 @@ def test_fetch_video_keeps_existing_file_on_failure(
         ]
         expected = requests.ConnectionError
 
-    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(sharedsettings, "TEMP_ROOT", tmp_path)
     with (
         patch("shared_storage.queries.requests.get", return_value=mock_response),
         pytest.raises(expected),
@@ -93,7 +94,7 @@ def test_fetch_video_writes_correct_content(
     mock_response.raise_for_status.return_value = None
     mock_response.raw = io.BytesIO(fake_content)
 
-    monkeypatch.setattr(queries, "TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(sharedsettings, "TEMP_ROOT", tmp_path)
     with patch("shared_storage.queries.requests.get", return_value=mock_response):
         local_path = fetch_video(
             "http://fake/job-123/video.mp4", service_name="scene-detector"

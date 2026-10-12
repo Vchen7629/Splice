@@ -3,7 +3,7 @@ import os
 from threading import Event
 from typing import Callable, Optional
 
-from shared_core import get_logger
+from shared_core import get_logger, sharedsettings
 from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
 from shared_storage import fetch_video, upload_video
 from shared_util import cleanup_temp
@@ -12,6 +12,7 @@ from ..core.settings import settings
 from .video import split_into_chunks
 
 logger = get_logger(settings.SERVICE_NAME)
+TEMP_ROOT = sharedsettings.TEMP_ROOT
 
 
 async def process_job(
@@ -40,9 +41,6 @@ async def process_job(
     Returns:
         list of videochunkmessage with SeaweedFS storage URLS
     """
-    temp_dir = f"../temp/{metadata.job_id}"
-    chunks_dir = f"../temp/{metadata.job_id}/chunks"
-
     try:
         local_video_path = await asyncio.to_thread(
             fetch_video, metadata.storage_url, settings.SERVICE_NAME
@@ -52,7 +50,7 @@ async def process_job(
             split_into_chunks,
             cancel_event,
             local_video_path,
-            chunks_dir,
+            f"{TEMP_ROOT}/input/{metadata.job_id}/chunks",  # chunks dir
             on_progress,
         )
 
@@ -85,7 +83,9 @@ async def process_job(
             raise JobCancelledError("job cancelled during chunk upload")
 
     finally:
-        await cleanup_temp(temp_dir, metadata.job_id, logger)
+        await cleanup_temp(
+            f"{TEMP_ROOT}/input/{metadata.job_id}", metadata.job_id, logger
+        )
 
     return [
         VideoChunkMessage(

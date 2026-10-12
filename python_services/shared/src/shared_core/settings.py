@@ -12,6 +12,7 @@ class SharedSettings(BaseSettings):
     # general config
     LOG_LEVEL: str = "DEBUG"
     LOG_FORMAT: str = "json"
+    TEMP_ROOT: Path = Path("/tmp/splice")
 
     # Nats config
     NATS_URL: str = "nats://localhost:4222"

@@ -10,7 +10,7 @@ from shared_handler import ProcessJobMessage, ProcessJobMsgContext, UpscaleCompl
 from shared_util import ProgressReporter
 
 from src.core.settings import settings
-from src.processing.nats_msg import cleanup_job, process_job_msg
+from src.processing.nats_msg import TEMP_ROOT, cleanup_job, process_job_msg
 
 MOCK_NC = AsyncMock(spec=NATSClient)
 MOCK_JS = AsyncMock(spec=JetStreamContext)
@@ -65,7 +65,7 @@ async def test_upscale_removes_noaudio_temp_file(
     await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["cleanup_temp"].assert_called_once_with(
-        "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
+        f"{TEMP_ROOT}/output/abc/upscaled_noaudio.mp4", "abc", ANY
     )
 
 
@@ -135,7 +135,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
         ANY,
         "/tmp/video.mp4",
         "480p",
-        "../temp_output/abc/video.mp4",
+        f"{TEMP_ROOT}/output/abc/video.mp4",
         ANY,
     )
 
@@ -188,7 +188,7 @@ async def test_upscale_failure_still_cleans_up_noaudio_file(
             await process_job_msg(ctx, AsyncMock())
 
     nats_msg_patches["cleanup_temp"].assert_called_once_with(
-        "/tmp/upscaled_noaudio-abc.mp4", "abc", ANY
+        f"{TEMP_ROOT}/output/abc/upscaled_noaudio.mp4", "abc", ANY
     )
 
 

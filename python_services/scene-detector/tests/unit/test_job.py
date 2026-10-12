@@ -6,7 +6,7 @@ import pytest
 from scenedetect import VideoOpenFailure
 from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
 
-from src.processing.job import logger, process_job
+from src.processing.job import TEMP_ROOT, logger, process_job
 
 METADATA = ProcessJobMessage(
     job_id="test-123",
@@ -56,7 +56,7 @@ async def test_process_job_uses_job_scoped_output_dir() -> None:
     mock_split.assert_called_once_with(
         MOCK_CANCEL_EVENT,
         FAKE_LOCAL_PATH,
-        f"../temp/{METADATA.job_id}/chunks",
+        f"{TEMP_ROOT}/input/{METADATA.job_id}/chunks",
         None,
     )
 
@@ -105,7 +105,7 @@ async def test_process_job_cleans_up_temp_dir_after_upload() -> None:
         await process_job(MOCK_CANCEL_EVENT, METADATA)
 
     mock_cleanup_temp.assert_called_once_with(
-        f"../temp/{METADATA.job_id}", METADATA.job_id, logger
+        f"{TEMP_ROOT}/input/{METADATA.job_id}", METADATA.job_id, logger
     )
 
 

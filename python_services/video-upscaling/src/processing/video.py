@@ -6,6 +6,7 @@ from realesrgan import RealESRGANer
 from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 from subprocess import Popen
 from utils import log_timing, Resolution
+from shared_core import sharedsettings
 from shared_handler import JobCancelledError
 from shared_util import kill_on_deadline
 from core.settings import settings
@@ -16,6 +17,8 @@ import threading
 import subprocess
 import numpy as np
 import torch
+
+TEMP_ROOT = settings.TEMP_ROOT
 
 
 def recombine_video_audio(
@@ -33,7 +36,7 @@ def recombine_video_audio(
         output_path: the path to save the combined video to
         on_progress: callback invoked with 0-99 as ffmpeg reports progress
     """
-    noaudio_path = f"/tmp/upscaled_noaudio-{job_id}.mp4"
+    noaudio_path = f"{TEMP_ROOT}/output/{job_id}/upscaled_noaudio.mp4"
     duration_s = _probe_duration_s(noaudio_path)
     timeout_s = settings.FFMPEG_TIMEOUT_GRACE_S + duration_s * settings.RECOMBINE_TIMEOUT_FACTOR
     proc = subprocess.Popen(
@@ -161,7 +164,7 @@ def video_upscale(
     target_res: str | None = None,
     on_progress: Callable[[int], None] | None = None
 ) -> None:
-    """Upscale a video using the model, writing audio-less result to /tmp/upscaled_noaudio.mp4"""
+    """Upscale a video using the mode and writes audio-less result to temp dir"""
     w, h, fps, total_frames = _extract_video_info(video_path)
     out_w, out_h = w * scale, h * scale
 
@@ -173,7 +176,7 @@ def video_upscale(
     upsampler = _load_model(model_path, scale)
 
     decoder = _video_decoder(video_path)
-    encoder = _video_encoder(fps, out_w, out_h, f"/tmp/upscaled_noaudio-{job_id}.mp4", target_res)
+    encoder = _video_encoder(fps, out_w, out_h, f"{TEMP_ROOT}/output/{job_id}/upscaled_noaudio.mp4", target_res)
 
     encode_queue: Queue[Optional[np.ndarray]] = Queue(maxsize=4)
 

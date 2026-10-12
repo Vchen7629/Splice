@@ -11,6 +11,7 @@ import pytest
 from shared_handler.exceptions import JobCancelledError
 
 from src.processing.video import (
+    TEMP_ROOT,
     _extract_video_info,
     _load_model,
     _probe_duration_s,
@@ -196,8 +197,8 @@ def test_video_upscale_encoder_uses_job_scoped_temp_path(
     )
     out_path_b = video_upscale_patches["encoder"].call_args[0][3]
 
-    assert out_path_a == "/tmp/upscaled_noaudio-job_id1.mp4"
-    assert out_path_b == "/tmp/upscaled_noaudio-job_id2.mp4"
+    assert out_path_a == f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4"
+    assert out_path_b == f"{TEMP_ROOT}/output/job_id2/upscaled_noaudio.mp4"
 
 
 def test_video_upscale_kills_processes_and_raises_when_timeout_exceeded(
@@ -225,8 +226,14 @@ def test_recombine_video_audio_reads_job_scoped_temp_path(recombine_popen) -> No
     recombine_video_audio("job_id2", "/tmp/original.mp4", "/tmp/final.mp4")
     args_b = recombine_popen.call_args[0][0]
 
-    assert args_a[args_a.index("-i") + 1] == "/tmp/upscaled_noaudio-job_id1.mp4"
-    assert args_b[args_b.index("-i") + 1] == "/tmp/upscaled_noaudio-job_id2.mp4"
+    assert (
+        args_a[args_a.index("-i") + 1]
+        == f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4"
+    )
+    assert (
+        args_b[args_b.index("-i") + 1]
+        == f"{TEMP_ROOT}/output/job_id2/upscaled_noaudio.mp4"
+    )
 
 
 def test_recombine_video_audio_passes_correct_paths(recombine_popen) -> None:
@@ -234,7 +241,7 @@ def test_recombine_video_audio_passes_correct_paths(recombine_popen) -> None:
 
     recombine_popen.assert_called_once()
     args = recombine_popen.call_args[0][0]
-    assert "/tmp/upscaled_noaudio-job_id1.mp4" in args
+    assert f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4" in args
     assert "/tmp/original.mp4" in args
     assert "/tmp/final.mp4" in args
 
@@ -300,7 +307,11 @@ def test_video_upscale_encoder_gets_scaled_dimensions(
     )
 
     video_upscale_patches["encoder"].assert_called_once_with(
-        24.0, w * scale, h * scale, "/tmp/upscaled_noaudio-job_id1.mp4", None
+        24.0,
+        w * scale,
+        h * scale,
+        f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4",
+        None,
     )
 
 
