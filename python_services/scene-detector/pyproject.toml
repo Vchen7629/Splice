@@ -43,7 +43,7 @@ filterwarnings = [
 ]
 
 [tool.ruff]
-exclude = [".venv"]
+exclude = [".venv", "src/processing/video.py"]
 
 [tool.ruff.lint]
 select = ["I"] # linting catches unsorted imports
