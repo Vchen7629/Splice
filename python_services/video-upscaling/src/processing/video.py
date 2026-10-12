@@ -116,11 +116,9 @@ def video_downscale(
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
         )
 
-        with kill_on_deadline([proc], timeout_s) as timed_out:
+        with kill_on_deadline([proc], timeout_s, cancel_event) as timed_out:
             for line in proc.stdout or []:
                 if cancel_event.is_set():
-                    proc.kill()
-                    proc.wait()
                     raise JobCancelledError("video_upscale cancelled for downscale")
                 if not line.startswith("out_time=") or on_progress is None:
                     continue
@@ -129,6 +127,8 @@ def video_downscale(
                 if out_time_s is not None:
                     on_progress(min(99, int(out_time_s / duration_s * 100)))
 
+            if cancel_event.is_set():
+                raise JobCancelledError("video_upscale cancelled for downscale")
             if timed_out.is_set():
                 raise subprocess.TimeoutExpired("ffmpeg downscale", timeout_s)
             if proc.wait() != 0:
