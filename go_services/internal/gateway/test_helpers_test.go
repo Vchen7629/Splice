@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,7 +46,7 @@ func (d *droppedConnectionWriter) Write(_ []byte) (int, error) {
 // Pass a path ("/jobs") for direct handler invocation via httptest.NewRecorder,
 // or a full URL ("http://host:port/jobs") for use with http.DefaultClient.
 // Used by upload_unit_test.go and upload_integration_test.go.
-func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte, targetRes, sourceRes, processType string) *http.Request {
+func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte, targetRes, processType string) *http.Request {
 	t.Helper()
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
@@ -59,10 +60,6 @@ func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte,
 
 	if targetRes != "" {
 		require.NoError(t, w.WriteField("target_resolution", targetRes))
-	}
-
-	if sourceRes != "" {
-		require.NoError(t, w.WriteField("source_resolution", sourceRes))
 	}
 
 	if processType != "" {
@@ -204,11 +201,20 @@ func patchOsExit(t *testing.T) *int {
 	return code
 }
 
-func patchValidateVideo(t *testing.T) {
+func assertRejected(t *testing.T, err error, wantReason string) {
 	t.Helper()
-	orig := validateVideoFn
-	validateVideoFn = func(context.Context, string, string, string, int64) error { return nil }
-	t.Cleanup(func() { validateVideoFn = orig })
+	var rejected *rejectError
+	require.True(t, errors.As(err, &rejected), "want *rejectError, got %v", err)
+	assert.Equal(t, wantReason, rejected.reason)
+}
+
+func patchProbeVideo(t *testing.T) {
+	t.Helper()
+	orig := probeVideoFn
+	probeVideoFn = func(context.Context, string) (videoInfo, error) {
+		return videoInfo{format: "mp4", width: 1280, height: 720, packets: 1}, nil
+	}
+	t.Cleanup(func() { probeVideoFn = orig })
 }
 
 type jobMsg struct {

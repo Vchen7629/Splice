@@ -100,7 +100,7 @@ type uploadResponse struct {
 	JobID string `json:"job_id"`
 }
 
-var validateVideoFn = validateVideo // used for tests
+var probeVideoFn = probeVideo // used for tests
 
 // handler for video upload POST requests, Accepts a multipart video upload, saves it to disk,
 // and publishes a scene split message to NATS for downstream processing
@@ -141,8 +141,8 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
-	targetRes, sourceRes, processType := r.FormValue("target_resolution"), r.FormValue("source_resolution"), r.FormValue("process_type")
-	if err := validateUploadFields(header.Filename, targetRes, sourceRes, processType); err != nil {
+	targetRes, processType := r.FormValue("target_resolution"), r.FormValue("process_type")
+	if err := validateUploadFields(header.Filename, targetRes, processType); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		v.logger.Error(err.Error())
 		return
@@ -166,15 +166,25 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := validateVideoFn(r.Context(), tmp.Name(), sourceRes, sourceRes, size); err != nil {
+	handleVideoErr := func(err error, failMsg string) {
 		var rejected *rejectError
 		if errors.As(err, &rejected) {
 			http.Error(w, rejected.reason, http.StatusUnprocessableEntity)
 			v.logger.Warn("rejected uploaded video", "reason", rejected.reason, "file", header.Filename)
 			return
 		}
-		http.Error(w, "failed to validate video", http.StatusInternalServerError)
-		v.logger.Error("failed to validate video", "err", err)
+		http.Error(w, failMsg, http.StatusInternalServerError)
+		v.logger.Error(failMsg, "err", err)
+	}
+
+	info, err := probeVideoFn(r.Context(), tmp.Name())
+	if err != nil {
+		handleVideoErr(err, "failed to extract video info")
+		return
+	}
+
+	if err := validateVideo(info, size); err != nil {
+		handleVideoErr(err, "failed to validate video")
 		return
 	}
 
@@ -206,7 +216,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	err = sJetstream.PublishJetstreamMsg(
 		v.js, handler.VideoJobMessage{
-			JobID: jobID, TargetResolution: targetRes, SourceResolution: sourceRes, StorageURL: url,
+			JobID: jobID, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height), StorageURL: url,
 		}, pubSubject,
 	)
 	if err != nil {
