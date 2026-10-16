@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "nats-py>=2.14.0",
     "pydantic-settings>=2.14.0",
-    "pytest-asyncio>=1.3.0",
     "structlog>=25.5.0",
 ]
 
@@ -16,7 +15,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["shared_core*", "shared_handler*", "shared_storage*"]
+include = ["shared_core*", "shared_handler*", "shared_storage*", "shared_util*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
@@ -44,6 +43,7 @@ combine-as-imports = true
 dev = [
     "pyrefly>=0.62.0",
     "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.11",
     "testcontainers[nats]>=4.14.2",
