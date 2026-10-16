@@ -123,6 +123,19 @@ func TestProbeVideo(t *testing.T) {
 		assert.Equal(t, int64(1), info.packets)
 	})
 
+	t.Run("swaps width and height of a video with 90 degree display rotation", func(t *testing.T) {
+		base := makeVideo(t, "base.mp4", small)
+		rotated := filepath.Join(t.TempDir(), "rotated.mp4")
+		out, err := exec.Command("ffmpeg", "-v", "error", "-y", "-display_rotation", "90", "-i", base, "-c", "copy", rotated).CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		info, err := probeVideo(context.Background(), rotated)
+
+		require.NoError(t, err)
+		assert.Equal(t, 48, info.width) // stored 64x48, displayed 48x64
+		assert.Equal(t, 64, info.height)
+	})
+
 	t.Run("reports the container so validateVideo can reject it", func(t *testing.T) {
 		path := makeVideo(t, "ok.flv", small)
 
