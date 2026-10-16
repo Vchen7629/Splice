@@ -335,13 +335,13 @@ func TestUploadVideoFlow(t *testing.T) {
 	js, nc := stest.SetupNats(t)
 	kv := stest.SetupJobMilestoneKV(t, js)
 	h := newUploadHandler(js, kv, sharedFilerUrl)
-	patchValidateVideo(t)
+	patchProbeVideo(t)
 
 	t.Run("Rejects uploads exceeding MaxUploadBytes", func(t *testing.T) {
 		h.maxUploadBytes = 100
 		defer func() { h.maxUploadBytes = 0 }()
 
-		req := NewUploadRequest(t, "/jobs", "big.mp4", bytes.Repeat([]byte("x"), 200), "1080p", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "big.mp4", bytes.Repeat([]byte("x"), 200), "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -351,7 +351,7 @@ func TestUploadVideoFlow(t *testing.T) {
 	})
 
 	t.Run("File is saved to SeaweedFS and is fetchable at the returned StorageURL", func(t *testing.T) {
-		req := NewUploadRequest(t, "/jobs", "clip.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "clip.mp4", testVideoBytes(t), "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -366,7 +366,7 @@ func TestUploadVideoFlow(t *testing.T) {
 
 	t.Run("Saved file contains the exact bytes that were uploaded", func(t *testing.T) {
 		content := testVideoBytes(t)
-		req := NewUploadRequest(t, "/jobs", "video.mp4", content, "720p", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "video.mp4", content, "720p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -394,7 +394,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		require.NoError(t, err)
 		defer sub.Unsubscribe() //nolint:errcheck
 
-		req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "720p", "720p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "720p", "Transcode")
 		rec := httptest.NewRecorder()
 		h.uploadVideoRoute(rec, req)
 		require.Equal(t, http.StatusCreated, rec.Code)
@@ -410,6 +410,7 @@ func TestUploadVideoFlow(t *testing.T) {
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, uploadResp.JobID, msg.JobID)
 			assert.Equal(t, "720p", msg.TargetResolution)
+			assert.Equal(t, "720p", msg.SourceResolution) // from probed height, not the client
 			assert.Equal(t, fmt.Sprintf("%s/%s/video.mp4", sharedFilerUrl, uploadResp.JobID), msg.StorageURL)
 		case <-time.After(5 * time.Second):
 			t.Fatal("timed out waiting for NATS message")
@@ -420,7 +421,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		seen := make(map[string]bool)
 
 		for range 3 {
-			req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
+			req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "1080p", "Transcode")
 			rec := httptest.NewRecorder()
 			h.uploadVideoRoute(rec, req)
 			require.Equal(t, http.StatusCreated, rec.Code)
@@ -436,7 +437,7 @@ func TestUploadVideoFlow(t *testing.T) {
 
 	t.Run("Large file (5 MB) is fully persisted to SeaweedFS", func(t *testing.T) {
 		content := bytes.Repeat([]byte("x"), 5*1024*1024)
-		req := NewUploadRequest(t, "/jobs", "big.mp4", content, "1080p", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "big.mp4", content, "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -458,7 +459,7 @@ func TestUploadVideoFlow(t *testing.T) {
 
 	t.Run("Returns 500 when NATS publish fails after successful storage save", func(t *testing.T) {
 		h := newUploadHandler(&MockJS{PublishErr: errors.New("nats unavailable")}, &MockKV{}, sharedFilerUrl)
-		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "Transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -529,7 +530,7 @@ func TestStartHttpApi(t *testing.T) {
 		{
 			name: "POST /jobs/upload is wired to the upload handler",
 			buildReq: func() *http.Request {
-				return NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
+				return NewUploadRequest(t, env.url+"/jobs/upload", "clip.mp4", testVideoBytes(t), "1080p", "Transcode")
 			},
 			wantStatus: http.StatusCreated,
 		},
@@ -566,7 +567,7 @@ func TestUploadPipeline(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "720p", "720p", "Transcode")
+		req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "720p", "Transcode")
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close() //nolint:errcheck
@@ -605,7 +606,7 @@ func TestUploadPipeline(t *testing.T) {
 		jobIDs := make([]string, 3)
 
 		for i := range jobIDs {
-			req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "1080p", "720p", "Transcode")
+			req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "1080p", "Transcode")
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			defer resp.Body.Close() //nolint:errcheck

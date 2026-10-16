@@ -35,9 +35,7 @@ export function useUploadQueue() {
                 const file = fileMap.get(video.id)
                 if (!file) return video
 
-                const sourceResolution = video.sourceHeight > 0 ? `${video.sourceHeight}p` : ""
-
-                const { promise, abort } = VideoService.upload(file, video.resolution, sourceResolution, processingType, (pct) => {
+                const { promise, abort } = VideoService.upload(file, video.resolution, processingType, (pct) => {
                     updateVideo(video.id, { uploadProgress: pct })
                 })
 
