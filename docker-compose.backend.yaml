@@ -1,0 +1,63 @@
+services:
+  video-upscaling:
+    image: video-upscaler:latest
+    ports:
+      - "9101:9101"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - BASE_STORAGE_URL=http://host.docker.internal:8888
+      - NATS_URL=nats://host.docker.internal:4222
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, video]
+  
+  scene-detector:
+    image: scene-detector:latest
+    ports:
+      - "9098:9098"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - BASE_STORAGE_URL=http://host.docker.internal:8888
+      - NATS_URL=nats://host.docker.internal:4222
+  
+  gateway:
+    image: gateway:latest
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - SCENE_DETECTOR_URL=http://scene-detector:9098
+      - TRANSCODER_URL=http://transcoder:9095
+      - RECOMBINER_URL=http://recombiner:9090
+      - VIDEO_UPSCALING_URL=http://video-upscaling:9101
+      - BASE_STORAGE_URL=http://host.docker.internal:8888
+      - NATS_URL=nats://host.docker.internal:4222
+  
+  transcoder:
+    image: transcoder:latest
+    ports:
+      - "9095:9095"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - BASE_STORAGE_URL=http://host.docker.internal:8888
+      - NATS_URL=nats://host.docker.internal:4222
+  
+  recombiner:
+    image: recombiner:latest
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - BASE_STORAGE_URL=http://host.docker.internal:8888
+      - NATS_URL=nats://host.docker.internal:4222
+  
+  
