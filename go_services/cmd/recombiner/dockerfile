@@ -1,0 +1,36 @@
+# build from go_services/:
+#   docker build -f cmd/recombiner/dockerfile -t recombiner .
+# probably need to override BaseStorageURL if running in seperate docker containers
+#   docker run \
+#   -p 9090:9090 \
+#   --add-host=host.docker.internal:host-gateway \
+#    -e BASE_STORAGE_URL=http://host.docker.internal:8888 \
+#    -e NATS_URL=nats://host.docker.internal:4222 \
+#    recombiner:latest
+# or just use the docker-compose.backend.yaml to run all services
+FROM golang:1.27.2-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY cmd/recombiner ./cmd/recombiner
+COPY internal ./internal
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+      CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/recombiner ./cmd/recombiner
+
+FROM alpine:3.24
+
+RUN apk add --no-cache ffmpeg 
+RUN adduser -D -u 1000 app
+
+COPY --from=builder /out/recombiner /usr/local/bin/recombiner
+
+USER app
+
+EXPOSE 8080
+
+CMD ["recombiner"]
