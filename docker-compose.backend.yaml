@@ -3,7 +3,7 @@ services:
     image: video-upscaler:latest
     pull_policy: never
     ports:
-      - "9101:9101"
+      - "127.0.0.1:9101:9101"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -21,7 +21,7 @@ services:
     image: scene-detector:latest
     pull_policy: never
     ports:
-      - "9098:9098"
+      - "127.0.0.1:9098:9098"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -47,7 +47,7 @@ services:
     image: transcoder:latest
     pull_policy: never
     ports:
-      - "9095:9095"
+      - "127.0.0.1:9095:9095"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -58,7 +58,7 @@ services:
     image: recombiner:latest
     pull_policy: never
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
