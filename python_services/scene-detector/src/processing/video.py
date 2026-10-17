@@ -2,8 +2,7 @@ import glob
 import os
 import shutil
 import subprocess
-import time
-from threading import Event, Thread
+from threading import Event
 from typing import Callable, Optional
 
 from scenedetect import (
