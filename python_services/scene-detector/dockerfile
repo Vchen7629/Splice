@@ -51,4 +51,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 RUN mkdir -p "$TEMP_ROOT" && chown -R app:app "$TEMP_ROOT"
 USER app
 
+# for gateway health checking
+EXPOSE 9098
+
 CMD ["python", "-m", "src.service"]
