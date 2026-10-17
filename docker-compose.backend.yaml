@@ -1,6 +1,7 @@
 services:
   video-upscaling:
     image: video-upscaler:latest
+    pull_policy: never
     ports:
       - "9101:9101"
     extra_hosts:
@@ -18,6 +19,7 @@ services:
   
   scene-detector:
     image: scene-detector:latest
+    pull_policy: never
     ports:
       - "9098:9098"
     extra_hosts:
@@ -28,6 +30,7 @@ services:
   
   gateway:
     image: gateway:latest
+    pull_policy: never
     ports:
       - "8080:8080"
     extra_hosts:
@@ -42,6 +45,7 @@ services:
   
   transcoder:
     image: transcoder:latest
+    pull_policy: never
     ports:
       - "9095:9095"
     extra_hosts:
@@ -52,6 +56,7 @@ services:
   
   recombiner:
     image: recombiner:latest
+    pull_policy: never
     ports:
       - "9090:9090"
     extra_hosts:
