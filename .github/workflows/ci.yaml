@@ -217,7 +217,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.15
           working-directory: ./go_services/cmd/gateway
 
       - name: run tests
@@ -250,7 +250,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.15
           working-directory: ./go_services/cmd/transcoder
 
       - name: run tests
@@ -283,7 +283,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.15
           working-directory: ./go_services/cmd/recombiner
 
       - name: run tests
@@ -311,7 +311,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.15
           working-directory: ./go_services/internal/shared
 
       - name: run tests
