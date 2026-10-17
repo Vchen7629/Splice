@@ -1,0 +1,59 @@
+# build from python_services/:
+#   docker build -f video-upscaling/dockerfile -t video-upscaler .
+# Running the docker container needs us to override the Base storage url
+#   docker run \
+#   -p 9101:9101 \
+#   --add-host=host.docker.internal:host-gateway \
+#   -e BASE_STORAGE_URL=http://host.docker.internal:8888 \
+#   -e NATS_URL=nats://host.docker.internal:4222 \
+#   video-upscaler:latest
+# or just use the docker-compose.backend.yaml to run all services
+FROM python:3.12-slim AS builder
+
+# install UV
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# build optimizations
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+COPY video-upscaling/pyproject.toml video-upscaling/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable --no-install-package shared_python
+
+# shared python package files
+COPY shared /shared
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable
+
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        libglib2.0-0 \
+        gcc \
+        libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+    
+RUN useradd --create-home --uid 1000 app
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+COPY video-upscaling/src ./src
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH=/app/src:/app \
+    PYTHONUNBUFFERED=1 \
+    TEMP_ROOT=/tmp/splice
+
+RUN mkdir -p "$TEMP_ROOT" && chown -R app:app "$TEMP_ROOT"
+USER app
+
+# for gateway health checking
+EXPOSE 9101
+
+CMD ["python", "-m", "src.service"]
