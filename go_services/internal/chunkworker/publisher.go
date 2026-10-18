@@ -34,7 +34,7 @@ func publishJetstreamProcessedMsg(
 	if err != nil {
 		logger.Error("failed to compute job progress", "job_id", payload.JobID, "err", err)
 	} else {
-		handler.NewProgressReporter(nc, payload.JobID, "transcoder", logger)(pct)
+		handler.NewProgressReporter(nc, payload.JobID, "chunk-worker", logger)(pct)
 	}
 
 	return nil

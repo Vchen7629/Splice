@@ -121,7 +121,7 @@ func TestGetMilestoneKV(t *testing.T) {
 	t.Run("returns revision and status for an existing entry", func(t *testing.T) {
 		mockKV := &test.MockKV{
 			GetFound:         true,
-			GetValue:         []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetValue:         []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
 			GetEntryRevision: 5,
 		}
 
@@ -129,7 +129,7 @@ func TestGetMilestoneKV(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, uint64(5), revision)
-		assert.Equal(t, JobStatus{State: "CANCELLED", Stage: "transcoder"}, status)
+		assert.Equal(t, JobStatus{State: "CANCELLED", Stage: "chunk-worker"}, status)
 	})
 }
 
@@ -185,37 +185,37 @@ func TestAdvanceMilestone(t *testing.T) {
 		{
 			name:      "creates entry when job has no milestone yet",
 			current:   &test.MockKV{},
-			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantWrite: true,
 		},
 		{
 			name:      "advances when new stage is ahead of current",
-			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
+			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`)},
 			newStatus: JobStatus{State: "PROCESSING", Stage: "video-recombiner"},
 			wantWrite: true,
 		},
 		{
 			name:      "no-ops when new stage is behind current",
 			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
-			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantWrite: false,
 		},
 		{
 			name:      "no-ops on terminal COMPLETE",
 			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
-			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantWrite: false,
 		},
 		{
 			name:      "no-ops on terminal FAILED",
 			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
-			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantWrite: false,
 		},
 		{
 			name:      "no-ops on terminal CANCELLED",
 			current:   &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
-			newStatus: JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus: JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantWrite: false,
 		},
 	}
@@ -234,7 +234,7 @@ func TestAdvanceMilestone(t *testing.T) {
 	t.Run("existing entry that decodes to an empty state must be updated at its revision", func(t *testing.T) {
 		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 3, GetValue: []byte(`{}`)}
 
-		err := AdvanceMilestone(mockKV, "job-1", JobStatus{State: "PROCESSING", Stage: "transcoder"})
+		err := AdvanceMilestone(mockKV, "job-1", JobStatus{State: "PROCESSING", Stage: "chunk-worker"})
 
 		require.NoError(t, err)
 		assert.Empty(t, mockKV.CreateKey)
@@ -242,7 +242,7 @@ func TestAdvanceMilestone(t *testing.T) {
 		assert.Equal(t, uint64(3), mockKV.UpdateRevision)
 	})
 
-	transcoderValue := []byte(`{"state":"PROCESSING","stage":"transcoder"}`)
+	chunkWorkerValue := []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`)
 
 	errorTests := []struct {
 		name   string
@@ -250,7 +250,7 @@ func TestAdvanceMilestone(t *testing.T) {
 	}{
 		{"Get fails", &test.MockKV{GetErr: errors.New("kv unavailable")}},
 		{"Create fails", &test.MockKV{CreateErr: errors.New("create failed")}},
-		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
+		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: chunkWorkerValue, UpdateErr: errors.New("update failed")}},
 	}
 
 	for _, tc := range errorTests {

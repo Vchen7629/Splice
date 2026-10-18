@@ -18,13 +18,13 @@ import (
 func TestStructuredLogger(t *testing.T) {
 
 	t.Run("prod mode set to false should enable debug level", func(t *testing.T) {
-		logger := StructuredLogger(false, "transcoder-worker")
+		logger := StructuredLogger(false, "chunk-worker")
 
 		assert.True(t, logger.Enabled(context.Background(), slog.LevelDebug))
 	})
 
 	t.Run("prod mode set to true should disable debug level", func(t *testing.T) {
-		logger := StructuredLogger(true, "transcoder-worker")
+		logger := StructuredLogger(true, "chunk-worker")
 
 		assert.False(t, logger.Enabled(context.Background(), slog.LevelDebug))
 		assert.True(t, logger.Enabled(context.Background(), slog.LevelInfo))

@@ -34,7 +34,7 @@ func TestListenJobCompleteU(t *testing.T) {
 			}(), NakErr: nakErr},
 			mockKV: func() *MockKV {
 				kv := NewMockKV()
-				kv.Seed("job-nak-kv", []byte(`{"state":"PROCESSING","stage":"transcoder"}`))
+				kv.Seed("job-nak-kv", []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`))
 				kv.UpdateErr = errors.New("kv unavailable")
 				return kv
 			}(),
@@ -60,7 +60,7 @@ func TestListenJobCompleteU(t *testing.T) {
 		js := &MockJS{JStream: &test.MockStream{Cons: cons}}
 
 		kv := NewMockKV()
-		kv.Seed("job-ack-err", []byte(`{"state":"PROCESSING","stage":"transcoder"}`))
+		kv.Seed("job-ack-err", []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`))
 
 		_, err := ListenJobComplete(js, kv, test.SilentLogger())
 

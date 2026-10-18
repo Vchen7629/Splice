@@ -169,7 +169,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		processedKV := &test.MockKV{}
 		jobMilestoneKV := &test.MockKV{
 			GetFound: true,
-			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
 		}
 		claimKV := &test.MockKV{}
 
@@ -189,7 +189,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		jobMilestoneKV := &test.MockKV{
 			GetFound: true,
-			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
 		}
 
 		_, err := ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, 15*time.Second, test.SilentLogger())

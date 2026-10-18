@@ -48,7 +48,7 @@ func assertNacked(t *testing.T, js jetstream.JetStream, msg string) {
 		if err != nil {
 			return false
 		}
-		cons, err := stream.Consumer(ctx, "transcoder-worker")
+		cons, err := stream.Consumer(ctx, "chunk-worker")
 		if err != nil {
 			return false
 		}
@@ -96,13 +96,13 @@ func TestConsumeVideoChunkI(t *testing.T) {
 
 		stream, err := js.Stream(ctx, "jobs")
 		require.NoError(t, err)
-		cons, err := stream.Consumer(ctx, "transcoder-worker")
+		cons, err := stream.Consumer(ctx, "chunk-worker")
 		require.NoError(t, err)
 		info, err := cons.Info(ctx)
 		require.NoError(t, err)
 
-		assert.Equal(t, "transcoder-worker", info.Config.Name)
-		assert.Equal(t, "transcoder-worker", info.Config.Durable)
+		assert.Equal(t, "chunk-worker", info.Config.Name)
+		assert.Equal(t, "chunk-worker", info.Config.Durable)
 		assert.Equal(t, "jobs.video.chunks", info.Config.FilterSubject)
 		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
 		assert.Equal(t, 10, info.Config.MaxAckPending)
@@ -214,8 +214,8 @@ func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
 		if json.Unmarshal(m.Data, &progress) != nil {
 			return
 		}
-		if progress.Stage != "transcoder" {
-			t.Errorf("expected stage transcoder, got %q", progress.Stage)
+		if progress.Stage != "chunk-worker" {
+			t.Errorf("expected stage chunk-worker, got %q", progress.Stage)
 		}
 		mu.Lock()
 		percents = append(percents, progress.Progress)
@@ -600,7 +600,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		const ackWait = 2 * time.Second // short ackWait so test doesnt take forever
 
-		// Two workers sharing same durable consumer to simulate two scaled out transcoder instances
+		// Two workers sharing same durable consumer to simulate two scaled out chunk-worker instances
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())
 		require.NoError(t, err)
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())

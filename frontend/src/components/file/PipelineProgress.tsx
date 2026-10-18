@@ -20,9 +20,9 @@ const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: str
         { key: 'video-recombiner', label: 'Recombine Audio' },
     ],
     Transcode: [
-        { key: 'scene-detector',   label: 'Detect' },
-        { key: 'transcoder',       label: 'Transcode' },
-        { key: 'video-recombiner', label: 'Recombine' },
+        { key: 'scene-detector',   label: 'Spliting Video' },
+        { key: 'chunk-worker',     label: 'Transcoding' },
+        { key: 'video-recombiner', label: 'Recombining' },
     ],
     Denoise: [
         { key: 'scene-detector',   label: 'Detect' },
@@ -51,7 +51,7 @@ function stageSegments(
         if (i > activeIdx) return { ...step, state: 'pending' as const, fill: 0 }
 
         const PROGRESS_REPORTING_STAGES = new Set([
-            'scene-detector', 'video-upscaling', 'video-recombiner', 'transcoder'
+            'scene-detector', 'video-upscaling', 'video-recombiner', 'chunk-worker'
         ])
         const fill = PROGRESS_REPORTING_STAGES.has(step.key) ? file.jobProgress ?? 0 : 50
 
