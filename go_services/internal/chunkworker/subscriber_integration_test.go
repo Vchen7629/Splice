@@ -20,6 +20,7 @@ import (
 	"time"
 
 	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
@@ -69,6 +70,20 @@ func trimVideo(t *testing.T, srcVideo string, seconds int) string {
 	require.NoError(t, err, "failed to trim fixture video: %s", output)
 
 	return out
+}
+
+func cleanupTestTempFolders(t *testing.T, jobID string) {
+	t.Helper()
+	dirs := []string{
+		storage.TempUnprocessedDir(jobID),
+		"/tmp/transcode/temp-processed-" + jobID,
+		"/tmp/denoise/temp-processed-" + jobID,
+	}
+	t.Cleanup(func() {
+		for _, d := range dirs {
+			_ = os.RemoveAll(d)
+		}
+	})
 }
 
 var sharedFilerURL string
@@ -140,10 +155,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		kv := test.SetupKV(t, js, "chunk-processed")
 
 		jobID := "job-full-flow"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
-		})
+		cleanupTestTempFolders(t, jobID)
 
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)
@@ -161,7 +173,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p",
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		select {
@@ -185,10 +197,7 @@ func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
 	jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 	jobID := "job-progress"
-	t.Cleanup(func() {
-		os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-		os.RemoveAll("/tmp/temp-processed-" + jobID)
-	})
+	cleanupTestTempFolders(t, jobID)
 
 	slowVideo := "../shared/test/testvideo.mp4"
 	fastVideo := trimVideo(t, slowVideo, 1)
@@ -229,11 +238,11 @@ func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
 
 	publishVideoChunk(t, js, VideoChunkMessage{
 		ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 2,
-		StorageURL: storageURL0, TargetResolution: "480p",
+		StorageURL: storageURL0, TargetResolution: "480p", Operation: "transcode",
 	})
 	publishVideoChunk(t, js, VideoChunkMessage{
 		ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 1}, TotalChunks: 2,
-		StorageURL: storageURL1, TargetResolution: "480p",
+		StorageURL: storageURL1, TargetResolution: "480p", Operation: "transcode",
 	})
 
 	select {
@@ -254,10 +263,7 @@ func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testin
 	jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 	jobID := "job-late-chunk-after-complete"
-	t.Cleanup(func() {
-		os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-		os.RemoveAll("/tmp/temp-processed-" + jobID)
-	})
+	cleanupTestTempFolders(t, jobID)
 
 	completeStatus, err := json.Marshal(struct {
 		State string `json:"state"`
@@ -273,7 +279,7 @@ func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testin
 
 	publishVideoChunk(t, js, VideoChunkMessage{
 		ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-		StorageURL: storageURL, TargetResolution: "480p",
+		StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 	})
 
 	assertNacked(t, js, "expected message to be nacked")
@@ -319,10 +325,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 			js, nc := test.SetupNats(t)
 			kv := test.SetupKV(t, js, "chunk-processed")
 			jobID := "job-nak-" + tc.fileName
-			t.Cleanup(func() {
-				os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-				os.RemoveAll("/tmp/temp-processed-" + jobID)
-			})
+			cleanupTestTempFolders(t, jobID)
 
 			storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, tc.fileName, tc.videoContent(t))
 			claimKV := test.SetupKV(t, js, "chunk-claims")
@@ -333,7 +336,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 
 			publishVideoChunk(t, js, VideoChunkMessage{
 				ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-				StorageURL: storageURL, TargetResolution: "480p",
+				StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 			})
 
 			assertNacked(t, js, "expected message to be nacked")
@@ -368,10 +371,7 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		kv := test.SetupKV(t, js, "chunk-processed")
 
 		jobID := "job-publish-fail"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
-		})
+		cleanupTestTempFolders(t, jobID)
 
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)
@@ -384,7 +384,7 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p",
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		assertNacked(t, js, "expected message to be nacked after publish failure")
@@ -413,7 +413,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p",
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		return js, received
@@ -426,6 +426,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 	}{
 		{"removeAll error on unprocessed dir logs warn and returns", "job-cleanup-unprocessed-err", 1},
 		{"removeAll error on processed dir logs warn and returns", "job-cleanup-processed-err", 2},
+		{"removeAll error on denoise processed dir logs warn and returns", "job-cleanup-denoise-err", 3},
 	}
 
 	for _, tc := range tests {
@@ -433,7 +434,8 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 			t.Cleanup(func() {
 				removeAll = os.RemoveAll
 				os.RemoveAll("/tmp/temp-unprocessed-" + tc.jobID)
-				os.RemoveAll("/tmp/temp-processed-" + tc.jobID)
+				os.RemoveAll("/tmp/transcode/temp-processed-" + tc.jobID)
+				os.RemoveAll("/tmp/denoise/temp-processed-" + tc.jobID)
 			})
 
 			calls := 0
@@ -456,7 +458,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 				t.Fatal("timed out waiting for chunk complete message")
 			}
 			time.Sleep(500 * time.Millisecond)
-			assert.Equal(t, 2, calls)
+			assert.Equal(t, 3, calls)
 		})
 	}
 }
@@ -484,7 +486,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: "http://storage/fake", TargetResolution: "480p",
+			StorageURL: "http://storage/fake", TargetResolution: "480p", Operation: "transcode",
 		})
 
 		select {
@@ -499,10 +501,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		kv := test.SetupKV(t, js, "chunk-processed")
 
 		jobID := "job-idempotency-write"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
-		})
+		cleanupTestTempFolders(t, jobID)
 
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)
@@ -515,7 +514,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p",
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		// Wait for processing to complete then verify KV entry exists.
@@ -530,10 +529,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		kv := test.SetupKV(t, js, "chunk-processed")
 
 		jobID := "job-idempotency-no-write-on-fail"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
-		})
+		cleanupTestTempFolders(t, jobID)
 
 		// Seed invalid video so transcoding fails.
 		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "bad.mp4", []byte("not a video"))
@@ -545,7 +541,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p",
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		time.Sleep(2 * time.Second)
@@ -561,10 +557,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 		jobID := "job-redelivery-race"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
-		})
+		cleanupTestTempFolders(t, jobID)
 
 		// block real ffmpeg call until test releases it, so first attempt is
 		// still "in progress" when AckWait fires and JetStream redelivers to 2nd worker
@@ -574,7 +567,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 			atomic.AddInt32(&calls, 1)
 			<-release
 
-			outDir := "/tmp/temp-processed-" + jobID
+			outDir := "/tmp/transcode/temp-processed-" + jobID
 			err := os.MkdirAll(outDir, 0755)
 			if err != nil {
 				return "", err
@@ -608,7 +601,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 		publishVideoChunk(t, js, VideoChunkMessage{
 			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p",
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		// Ackwait expires and triggers a redelivery to idle worker before releasing blocked transcode(s)

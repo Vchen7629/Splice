@@ -8,4 +8,5 @@ type VideoChunkMessage struct {
 	TotalChunks      int    `json:"total_chunks"`
 	StorageURL       string `json:"storage_url"`
 	TargetResolution string `json:"target_resolution"`
+	Operation        string `json:"operation"`
 }

@@ -16,7 +16,8 @@ import (
 
 func TestTranscodeVideo(t *testing.T) {
 	t.Run("mkdir failure returns create output dir error", func(t *testing.T) {
-		blockedDir := "/tmp/temp-processed-job-blocked"
+		blockedDir := "/tmp/transcode/temp-processed-job-blocked"
+		require.NoError(t, os.MkdirAll("/tmp/transcode", 0755))
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
@@ -28,7 +29,8 @@ func TestTranscodeVideo(t *testing.T) {
 	})
 
 	t.Run("mkdir failure wraps underlying OS error", func(t *testing.T) {
-		blockedDir := "/tmp/temp-processed-job-blocked2"
+		blockedDir := "/tmp/transcode/temp-processed-job-blocked2"
+		require.NoError(t, os.MkdirAll("/tmp/transcode", 0755))
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 

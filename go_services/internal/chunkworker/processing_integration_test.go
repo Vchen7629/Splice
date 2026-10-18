@@ -57,7 +57,7 @@ func TestChunkWorkerResolution(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			jobID := "job-resolution-" + tc.targetResolution
-			t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
+			t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
 
 			outputPath, err := transcodeVideo(testVideoPath, tc.targetResolution, jobID, test.SilentLogger())
 
@@ -71,32 +71,32 @@ func TestChunkWorkerResolution(t *testing.T) {
 func TestTranscodeOutput(t *testing.T) {
 	t.Run("output path follows expected structure", func(t *testing.T) {
 		jobID := "job-fmt"
-		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
+		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
 
 		outputPath, err := transcodeVideo(testVideoPath, "720p", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
-		assert.Equal(t, "/tmp/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
+		assert.Equal(t, "/tmp/transcode/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
 	})
 
 	t.Run("creates output directory", func(t *testing.T) {
 		jobID := "job-dir"
-		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
+		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
 
 		_, err := transcodeVideo(testVideoPath, "720p", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
-		assert.DirExists(t, "/tmp/temp-processed-"+jobID)
+		assert.DirExists(t, "/tmp/transcode/temp-processed-"+jobID)
 	})
 
 	t.Run("normalizes non-mp4 source extension to mp4 output", func(t *testing.T) {
 		jobID := "job-webm-src"
-		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
+		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
 
 		outputPath, err := transcodeVideo("../shared/test/testvideo.webm", "720p", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
-		assert.Equal(t, "/tmp/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
+		assert.Equal(t, "/tmp/transcode/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
 		assert.FileExists(t, outputPath)
 	})
 }
@@ -125,7 +125,7 @@ func TestTranscodeErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + tc.jobID) })
+			t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + tc.jobID) })
 
 			_, err := transcodeVideo(tc.filePath, "720p", tc.jobID, test.SilentLogger())
 

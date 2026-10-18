@@ -48,7 +48,8 @@ func TestChunkWorkerServiceI(t *testing.T) {
 		jobID := "job-full-flow"
 		t.Cleanup(func() {
 			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/temp-processed-" + jobID)
+			os.RemoveAll("/tmp/transcode/temp-processed-" + jobID)
+			os.RemoveAll("/tmp/denoise/temp-processed-" + jobID)
 		})
 
 		videoContent, err := os.ReadFile("../../internal/shared/test/testvideo.mp4")
@@ -79,6 +80,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 			TotalChunks:      1,
 			StorageURL:       storageURL,
 			TargetResolution: "240p",
+			Operation: 		  "transcode",
 		})
 		require.NoError(t, err)
 

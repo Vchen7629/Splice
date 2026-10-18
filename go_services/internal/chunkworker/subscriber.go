@@ -18,9 +18,7 @@ import (
 
 const subSubject = "jobs.video.chunks"
 
-// removeAll and transcodeVideo are variables for the tests to override to mock
 var removeAll = os.RemoveAll
-var transcodeVideoFn = transcodeVideo
 
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(
@@ -127,7 +125,10 @@ func cleanupTempFolders(chunkName string, logger *slog.Logger) {
 	if err := removeAll(storage.TempUnprocessedDir(chunkName)); err != nil {
 		logger.Warn("error removing the temp unprocessed folder", "chunk_name", chunkName, "err", err)
 	}
-	if err := removeAll("/tmp/temp-processed-" + chunkName); err != nil {
-		logger.Warn("error removing the temp processed folder", "chunk_name", chunkName, "err", err)
+	if err := removeAll("/tmp/transcode/temp-processed-" + chunkName); err != nil {
+		logger.Warn("error removing the temp transcode processed folder", "chunk_name", chunkName, "err", err)
+	}
+	if err := removeAll("/tmp/denoise/temp-processed-" + chunkName); err != nil {
+		logger.Warn("error removing the temp denoise processed folder", "chunk_name", chunkName, "err", err)
 	}
 }

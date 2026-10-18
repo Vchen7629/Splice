@@ -15,6 +15,8 @@ import (
 	"splice.com/go_services/internal/shared/storage"
 )
 
+var transcodeVideoFn = transcodeVideo
+
 // process a video chunk from nats msg. Includes Updating the job status to be chunk-worker stage -> fetching the chunk
 // -> transcoding it. returns the outputPath and the error
 func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, logger *slog.Logger) (string, error) {
@@ -32,9 +34,18 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 		return "", err
 	}
 
-	outputPath, err := transcodeVideoFn(filePath, payload.TargetResolution, chunkName, logger)
+	if payload.Operation == "transcode" {
+		outputPath, err := transcodeVideoFn(filePath, payload.TargetResolution, chunkName, logger)
+		if err != nil {
+			logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
+			return "", err
+		}
+		return outputPath, nil
+	}
+
+	outputPath, err := denoiseVideo(filePath, chunkName, logger)
 	if err != nil {
-		logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
+		logger.Error("error denoising chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 		return "", err
 	}
 
@@ -45,7 +56,7 @@ var ffmpegTimeout = 2 * time.Hour // TODO: in the future scale timeout with inpu
 
 // transcode by resizing the input video chunk to the specified value and output and return resulting video chunk.
 func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.Logger) (string, error) {
-	outDir := "/tmp/temp-processed-" + chunkName
+	outDir := "/tmp/transcode/temp-processed-" + chunkName
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
 		return "", fmt.Errorf("create output dir error: %w", err)
@@ -77,4 +88,9 @@ func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 	}
 
 	return outputPath, nil
+}
+
+// placeholder
+func denoiseVideo(filePath, chunkName string, logger *slog.Logger) (string, error) {
+	return "", nil
 }

@@ -24,7 +24,7 @@ func (m *mockPublisher) Publish(subj string, _ []byte) error {
 }
 
 func TestPublishJetstreamProcessedMsg(t *testing.T) {
-	payload := VideoChunkMessage{ChunkRef: handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2}, TotalChunks: 4}
+	payload := VideoChunkMessage{ChunkRef: handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2}, TotalChunks: 4, Operation: "transcode"}
 
 	t.Run("publish failure does not write kv or ack and err", func(t *testing.T) {
 		js := &test.MockJS{PublishErr: errors.New("nats unavailable")}
