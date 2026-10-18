@@ -68,8 +68,8 @@ jobs:
         working-directory: ./go_services/cmd/gateway
         run: make coverage
 
-      - name: Run transcoder coverage
-        working-directory: ./go_services/cmd/transcoder
+      - name: Run chunkworker coverage
+        working-directory: ./go_services/cmd/chunkworker
         run: make coverage
 
       - name: Run recombiner coverage
@@ -85,7 +85,7 @@ jobs:
         with:
           files: |
             ./go_services/cmd/gateway/coverage.out,
-            ./go_services/cmd/transcoder/coverage.out,
+            ./go_services/cmd/chunkworker/coverage.out,
             ./go_services/cmd/recombiner/coverage.out,
             ./go_services/cmd/shared/coverage.out,
             ./python_services/scene-detector/coverage.xml,
