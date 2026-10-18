@@ -194,10 +194,10 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 		wantErrContains string
 	}{
 		{
-			name:            "writes FAILED for transcoder-worker advisory",
+			name:            "writes FAILED for chunk-worker advisory",
 			subject:         "jobs.video.chunks",
-			consumer:        "transcoder-worker",
-			wantErrContains: "transcoder-worker",
+			consumer:        "chunk-worker",
+			wantErrContains: "chunk-worker",
 		},
 		{
 			name:            "writes FAILED for video-recombiner advisory",
@@ -248,7 +248,7 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			jobID: "job-bad-seq",
 			seed: func(t *testing.T) (string, string, uint64) {
 				seedStreamMessage(t, sharedJS, "jobs.video.chunks", mustMarshalJob(t, "irrelevant"))
-				return "jobs", "transcoder-worker", 99999
+				return "jobs", "chunk-worker", 99999
 			},
 		},
 		{
@@ -256,7 +256,7 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			jobID: "job-bad-payload",
 			seed: func(t *testing.T) (string, string, uint64) {
 				seq := seedStreamMessage(t, sharedJS, "jobs.video.chunks", []byte("not valid json{{"))
-				return "jobs", "transcoder-worker", seq
+				return "jobs", "chunk-worker", seq
 			},
 		},
 		{
@@ -264,7 +264,7 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			jobID: "job-advisory-unknown",
 			seed: func(t *testing.T) (string, string, uint64) {
 				seq := seedStreamMessage(t, sharedJS, "jobs.video.chunks", mustMarshalJob(t, "job-advisory-unknown"))
-				return "jobs", "transcoder-worker", seq
+				return "jobs", "chunk-worker", seq
 			},
 		},
 	}

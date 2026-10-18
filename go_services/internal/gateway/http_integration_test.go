@@ -78,25 +78,25 @@ func TestResponse(t *testing.T) {
 		{
 			name:      "COMPLETE job returns 200 with correct state",
 			jobID:     uuid.New().String(),
-			status:    sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "chunk-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "COMPLETE",
 		},
 		{
 			name:      "FAILED job returns 200 with error field populated",
 			jobID:     uuid.New().String(),
-			status:    sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "pipeline failed at stage: transcoder-worker"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "chunk-worker", Error: "pipeline failed at stage: chunk-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "FAILED",
-			wantErr:   "pipeline failed at stage: transcoder-worker",
+			wantErr:   "pipeline failed at stage: chunk-worker",
 		},
 		{
 			name:      "DEGRADED job returns 200 with error field and stage",
 			jobID:     uuid.New().String(),
-			status:    sJetstream.JobStatus{State: sJetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: chunk-worker"},
 			wantCode:  http.StatusOK,
 			wantState: "DEGRADED",
-			wantErr:   "service unavailable at stage: transcoder",
+			wantErr:   "service unavailable at stage: chunk-worker",
 		},
 	}
 
@@ -149,8 +149,8 @@ func TestConnectionDrop(t *testing.T) {
 		status sJetstream.JobStatus
 	}{
 		{"does not panic on dropped connection (PROCESSING)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (COMPLETE)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"}},
-		{"does not panic on dropped connection (FAILED)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
+		{"does not panic on dropped connection (COMPLETE)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "chunk-worker"}},
+		{"does not panic on dropped connection (FAILED)", uuid.New().String(), sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "chunk-worker", Error: "something broke"}},
 		{"does not panic on dropped connection (not found)", uuid.New().String(), sJetstream.JobStatus{}},
 	}
 
@@ -174,7 +174,7 @@ func TestConnectionDrop(t *testing.T) {
 func TestConcurrentRequests(t *testing.T) {
 	t.Run("concurrent requests for a completed job return consistent state", func(t *testing.T) {
 		jobID := uuid.New().String()
-		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "transcoder"})
+		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "chunk-worker"})
 		ts := newTestServer(t)
 
 		const goroutines = 20

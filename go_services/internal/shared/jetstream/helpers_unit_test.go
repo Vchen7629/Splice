@@ -93,7 +93,7 @@ func TestTerminateIfCancelled(t *testing.T) {
 	t.Run("Returns true when msg termination fails", func(t *testing.T) {
 		mockKV := &test.MockKV{
 			GetFound: true,
-			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
 		}
 		msg := &test.MockMsg{TermErr: errors.New("term failed")}
 
@@ -107,7 +107,7 @@ func TestTerminateIfCancelled(t *testing.T) {
 	t.Run("Returns true when msg Term is successful", func(t *testing.T) {
 		mockKV := &test.MockKV{
 			GetFound: true,
-			GetValue: []byte(`{"state":"CANCELLED","stage":"transcoder"}`),
+			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
 		}
 		msg := &test.MockMsg{}
 

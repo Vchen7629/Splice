@@ -129,37 +129,37 @@ func TestTryUpdateMilestone(t *testing.T) {
 		{
 			name:        "not found when job has no milestone yet",
 			current:     &test.MockKV{},
-			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantOutcome: milestoneNotFound,
 		},
 		{
 			name:        "writes when new stage is ahead of current",
-			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)},
+			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`)},
 			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"},
 			wantOutcome: milestoneWritten,
 		},
 		{
 			name:        "skips when new stage is behind current",
 			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`)},
-			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
 			name:        "skips on existing terminal COMPLETE",
 			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"COMPLETE","stage":""}`)},
-			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
 			name:        "skips on existing terminal FAILED",
 			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"FAILED","stage":"upload"}`)},
-			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
 			name:        "skips on existing terminal CANCELLED",
 			current:     &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"CANCELLED","stage":"upload"}`)},
-			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"},
+			newStatus:   sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"},
 			wantOutcome: milestoneSkipped,
 		},
 		{
@@ -187,7 +187,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 	t.Run("existing entry with empty state is updated, not reported as not found", func(t *testing.T) {
 		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 3, GetValue: []byte(`{}`)}
 
-		_, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"})
+		_, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"})
 
 		require.NoError(t, err)
 		assert.Equal(t, milestoneWritten, outcome)
@@ -195,17 +195,17 @@ func TestTryUpdateMilestone(t *testing.T) {
 	})
 
 	t.Run("inherits current stage when newStatus.Stage is empty", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`)}
 
 		result, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "COMPLETE"})
 
 		require.NoError(t, err)
 		assert.Equal(t, milestoneWritten, outcome)
-		assert.Equal(t, "transcoder", result.Stage)
+		assert.Equal(t, "chunk-worker", result.Stage)
 	})
 
 	t.Run("keeps explicit stage over the inherited current stage", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"transcoder"}`)}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`)}
 
 		result, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", sJetstream.JobStatus{State: "COMPLETE", Stage: "video-recombiner"})
 
@@ -216,14 +216,14 @@ func TestTryUpdateMilestone(t *testing.T) {
 
 	// error tests
 
-	transcoderValue := []byte(`{"state":"PROCESSING","stage":"transcoder"}`)
+	chunkWorkerValue := []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`)
 
 	errorTests := []struct {
 		name   string
 		mockKV *test.MockKV
 	}{
 		{"Get fails", &test.MockKV{GetErr: errors.New("kv unavailable")}},
-		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: errors.New("update failed")}},
+		{"Update fails", &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: chunkWorkerValue, UpdateErr: errors.New("update failed")}},
 	}
 
 	for _, tc := range errorTests {
@@ -238,7 +238,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 	}
 
 	t.Run("Persistent update conflict gives up after max attempts and surfaces ErrKeyExists", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue, UpdateErr: jetstream.ErrKeyExists}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: chunkWorkerValue, UpdateErr: jetstream.ErrKeyExists}
 		newStatus := sJetstream.JobStatus{State: "PROCESSING", Stage: "video-recombiner"}
 
 		_, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", newStatus)
@@ -250,9 +250,9 @@ func TestTryUpdateMilestone(t *testing.T) {
 
 	t.Run("Transient update conflict is retried and the write lands", func(t *testing.T) {
 		mockKV := NewMockKV()
-		mockKV.Seed("job-1", transcoderValue)
+		mockKV.Seed("job-1", chunkWorkerValue)
 		mockKV.UpdateErr = jetstream.ErrKeyExists // MockKV consumes this after the first Update call
-		failed := sJetstream.JobStatus{State: sJetstream.StateFailed, Error: "pipeline failed at stage: transcoder"}
+		failed := sJetstream.JobStatus{State: sJetstream.StateFailed, Error: "pipeline failed at stage: chunk-worker"}
 
 		result, outcome, err := tryUpdateMilestone(context.Background(), mockKV, "job-1", failed)
 
@@ -266,7 +266,7 @@ func TestTryUpdateMilestone(t *testing.T) {
 	})
 
 	t.Run("Cancelled context returns without attempting an update", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: transcoderValue}
+		mockKV := &test.MockKV{GetFound: true, GetEntryRevision: 1, GetValue: chunkWorkerValue}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -371,20 +371,20 @@ func TestPollJobStatus(t *testing.T) {
 		},
 		{
 			name:       "FAILED state includes error message",
-			status:     sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: transcoder-worker"},
+			status:     sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "scene-detector", Error: "pipeline failed at stage: chunk-worker"},
 			wantState:  sJetstream.StateFailed,
-			wantErrMsg: "pipeline failed at stage: transcoder-worker",
+			wantErrMsg: "pipeline failed at stage: chunk-worker",
 		},
 		{
 			name:      "FAILED with empty error field",
-			status:    sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder"},
+			status:    sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "chunk-worker"},
 			wantState: sJetstream.StateFailed,
 		},
 		{
 			name:       "DEGRADED state includes error message",
-			status:     sJetstream.JobStatus{State: sJetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: transcoder"},
+			status:     sJetstream.JobStatus{State: sJetstream.StateDegraded, Stage: "scene-detector", Error: "service unavailable at stage: chunk-worker"},
 			wantState:  sJetstream.StateDegraded,
-			wantErrMsg: "service unavailable at stage: transcoder",
+			wantErrMsg: "service unavailable at stage: chunk-worker",
 		},
 	}
 
@@ -446,7 +446,7 @@ func TestPollJobStatus(t *testing.T) {
 	}{
 		{"does not panic on dropped connection (PROCESSING)", sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "scene-detector"}},
 		{"does not panic on dropped connection (COMPLETE)", sJetstream.JobStatus{State: sJetstream.StateComplete, Stage: "scene-detector"}},
-		{"does not panic on dropped connection (FAILED)", sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "transcoder", Error: "something broke"}},
+		{"does not panic on dropped connection (FAILED)", sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "chunk-worker", Error: "something broke"}},
 	}
 
 	for _, tc := range droppedConnTests {

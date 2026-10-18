@@ -50,7 +50,7 @@ type StartConsumer func() (jetstream.ConsumeContext, error)
 
 // starts the service health http server, starts the processing loop
 // and handles cleanup when quit is reached
-// used by transcoder and recombiner
+// used by chunk-worker and recombiner
 func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, quit <-chan os.Signal) error {
 	logger.Debug("starting service")
 

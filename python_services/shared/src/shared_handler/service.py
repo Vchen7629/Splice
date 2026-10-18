@@ -31,7 +31,7 @@ async def run_service(
     process_job_msg: Callable[[ProcessJobMsgContext, Event], Awaitable[None]],
     cleanup_job: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
-    """Handles starting the service (transcoder and video-upscaling)
+    """Handles starting the service (scene-detector and video-upscaling)
     It starts the health server, connects to nats jetstream, connects to job-milestones kv and creates
     the processed kv and starts the consumer poll loop. ALso handles graceful shutdown
 

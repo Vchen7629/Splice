@@ -115,7 +115,7 @@ func GetMilestoneKV(kv jetstream.KeyValue, jobID string) (uint64, JobStatus, err
 // ranks pipeline stages so AdvanceMilestone can differentiate forward write from stale one
 var milestoneStageOrder = map[string]int{
 	"upload":           0,
-	"transcoder":       1,
+	"chunk-worker":     1,
 	"video-recombiner": 2,
 }
 

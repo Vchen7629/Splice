@@ -41,7 +41,7 @@ var configEnvKeys = []string{
 	"BASE_STORAGE_URL",
 	"HTTP_PORT",
 	"SCENE_DETECTOR_URL",
-	"TRANSCODER_URL",
+	"CHUNK_WORKER_URL",
 	"RECOMBINER_URL",
 }
 

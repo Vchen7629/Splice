@@ -1,4 +1,4 @@
-package transcoder
+package chunkworker
 
 import "splice.com/go_services/internal/shared/handler"
 

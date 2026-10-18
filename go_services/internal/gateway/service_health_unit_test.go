@@ -14,7 +14,7 @@ import (
 func TestForStage(t *testing.T) {
 	urls := ServiceURLs{
 		SceneDetector:  "http://scene:9098",
-		Transcoder:     "http://transcoder:9095",
+		ChunkWorker:    "http://chunkworker:9095",
 		Recombiner:     "http://recombiner:9090",
 		VideoUpscaling: "http://upscaling:9101",
 	}
@@ -25,7 +25,7 @@ func TestForStage(t *testing.T) {
 		wantOK  bool
 	}{
 		{"scene-detector", "http://scene:9098", true},
-		{"transcoder", "http://transcoder:9095", true},
+		{"chunk-worker", "http://chunkworker:9095", true},
 		{"video-recombiner", "http://recombiner:9090", true},
 		{"video-upscaling", "http://upscaling:9101", true},
 		{"upload", "", false},

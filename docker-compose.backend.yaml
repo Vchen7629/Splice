@@ -46,14 +46,14 @@ services:
       dockerfile: cmd/gateway/dockerfile
     environment:
       - SCENE_DETECTOR_URL=http://scene-detector:9098
-      - TRANSCODER_URL=http://transcoder:9095
+      - CHUNK_WORKER_URL=http://chunk-worker:9095
       - RECOMBINER_URL=http://recombiner:9090
       - VIDEO_UPSCALING_URL=http://video-upscaling:9101
       - BASE_STORAGE_URL=http://host.docker.internal:8888
       - NATS_URL=nats://host.docker.internal:4222
   
-  transcoder:
-    image: transcoder:latest
+  chunk-worker:
+    image: chunkworker:latest
     pull_policy: never
     ports:
       - "127.0.0.1:9095:9095"
@@ -61,7 +61,7 @@ services:
       - "host.docker.internal:host-gateway"
     build:
       context: ./go_services
-      dockerfile: cmd/transcoder/dockerfile
+      dockerfile: cmd/chunkworker/dockerfile
     environment:
       - BASE_STORAGE_URL=http://host.docker.internal:8888
       - NATS_URL=nats://host.docker.internal:4222

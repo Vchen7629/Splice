@@ -17,7 +17,7 @@ dev:
 	fi
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-scene-detector.pid; cd python_services/scene-detector && exec uv run -m src.service' > /tmp/splice-scene-detector.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-video-upscaling.pid; cd python_services/video-upscaling && PYTHONPATH=src exec uv run -m src.service' > /tmp/splice-video-upscaling.log 2>&1 &
-	setsid bash -c 'echo $$BASHPID > /tmp/splice-transcoder.pid; cd go_services/cmd/transcoder && exec go run .' > /tmp/splice-transcoder.log 2>&1 &
+	setsid bash -c 'echo $$BASHPID > /tmp/splice-chunk-worker.pid; cd go_services/cmd/chunkworker && exec go run .' > /tmp/splice-chunk-worker.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-recombiner.pid; cd go_services/cmd/recombiner && exec go run .' > /tmp/splice-recombiner.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-frontend.pid; cd frontend && exec npm run dev' > /tmp/splice-frontend.log 2>&1 &
 	@echo "All services started in background. Logs: /tmp/splice-*.log (run 'make logs' to tail). Run 'make reset' to stop everything."

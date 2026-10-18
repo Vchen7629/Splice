@@ -1,4 +1,4 @@
-package transcoder
+package chunkworker
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func ConsumeVideoChunk(
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
 	maxAckPending := 10
-	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "transcoder-worker", ackWait, maxAckPending)
+	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "chunk-worker", ackWait, maxAckPending)
 	if err != nil {
 		return nil, err
 	}
@@ -121,10 +121,10 @@ func ConsumeVideoChunk(
 	return consCtx, nil
 }
 
-// process (transcode) a video chunk from nats msg. Includes Updating the job status to be transcoder stage -> fetching the chunk
+// process (transcode) a video chunk from nats msg. Includes Updating the job status to be chunk-worker stage -> fetching the chunk
 // -> transcoding it. returns the outputPath and the error
 func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, logger *slog.Logger) (string, error) {
-	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "transcoder"})
+	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 		return "", err

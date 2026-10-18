@@ -17,7 +17,7 @@ jobs:
         video_upscaling: ${{ steps.changes.outputs.video_upscaling }}
         shared_python: ${{ steps.changes.outputs.shared_python }}
         gateway: ${{ steps.changes.outputs.gateway }}
-        transcoder: ${{ steps.changes.outputs.transcoder }}
+        chunkworker: ${{ steps.changes.outputs.chunkworker }}
         recombiner: ${{ steps.changes.outputs.recombiner }}
         shared_go: ${{ steps.changes.outputs.shared_go }}
     steps:
@@ -39,9 +39,9 @@ jobs:
               - 'go_services/internal/gateway/**'
               - 'go_services/go.mod'
               - 'go_services/go.sum'
-            transcoder:
-              - 'go_services/cmd/transcoder/**'
-              - 'go_services/internal/transcoder/**'
+            chunkworker:
+              - 'go_services/cmd/chunkworker/**'
+              - 'go_services/internal/chunkworker/**'
               - 'go_services/go.mod'
               - 'go_services/go.sum'
             recombiner:
@@ -224,9 +224,9 @@ jobs:
         working-directory: ./go_services/cmd/gateway
         run: make test_all
 
-  transcoder-ci:
+  chunkworker-ci:
     needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.transcoder == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.chunkworker == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -251,10 +251,10 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.15
-          working-directory: ./go_services/cmd/transcoder
+          working-directory: ./go_services/cmd/chunkworker
 
       - name: run tests
-        working-directory: ./go_services/cmd/transcoder
+        working-directory: ./go_services/cmd/chunkworker
         run: make test_all
 
   recombiner-ci:
