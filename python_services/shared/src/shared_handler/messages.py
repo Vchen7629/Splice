@@ -1,4 +1,5 @@
 import re
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -9,6 +10,7 @@ class VideoChunkMessage(BaseModel):
     total_chunks: int
     storage_url: str
     target_resolution: str
+    operation: Literal["transcode", "denoise", "upscale"]
 
 
 # job_id matching uuid.New().string() in go services
@@ -27,6 +29,7 @@ class ProcessJobMessage(BaseModel):
     storage_url: str
     source_resolution: str
     target_resolution: str
+    operation: Literal["transcode", "denoise", "upscale"]
 
     _validate_job_id = field_validator("job_id")(_validate_job_id)
 

@@ -2,8 +2,16 @@ import { Download } from 'lucide-react'
 import { VideoService } from '../../api/services/video'
 import { useState } from 'react';
 import { toast } from 'sonner';
+import type { ProcessingType } from '../../types/file';
 
-const DownloadButton = ({ file }: { file: { jobId: string | null; name: string; resolution: string } }) => {
+interface DownloadButtonProps {
+    jobId: string | null
+    name: string
+    resolution: string
+    processingType: ProcessingType
+}
+
+const DownloadButton = ({ file }: { file: DownloadButtonProps }) => {
     const [isDownloading, setIsDownloading] = useState(false)
 
     async function handleDownload() {
@@ -14,9 +22,12 @@ const DownloadButton = ({ file }: { file: { jobId: string | null; name: string; 
             const blob = await VideoService.download(file.jobId!, 'output.mp4')
             url = URL.createObjectURL(blob)
             const a = document.createElement('a')
+            const baseName = file.name.replace(/\.[^.]+$/, '')
 
             a.href = url
-            a.download = `${file.name.replace(/\.[^.]+$/, '')}_${file.resolution}.mp4`
+            a.download = file.processingType === 'Denoise'
+                ? `${baseName}.mp4`
+                : `${baseName}_${file.resolution}.mp4`
             a.click()
         } catch {
             toast.error(`Failed to download ${file.name}`)

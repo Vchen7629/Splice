@@ -17,6 +17,7 @@ def _make_payload(
     storage_url: str,
     source_resolution: str = "720p",
     target_resolution: str = "480p",
+    operation: str = "upscale",
 ) -> bytes:
     return json.dumps(
         {
@@ -24,6 +25,7 @@ def _make_payload(
             "storage_url": storage_url,
             "source_resolution": source_resolution,
             "target_resolution": target_resolution,
+            "operation": operation,
         }
     ).encode()
 

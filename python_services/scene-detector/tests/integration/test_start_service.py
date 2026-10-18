@@ -32,6 +32,7 @@ async def test_full_flow_publishes_chunks_downstream(
             total_chunks=2,
             storage_url="/fake/chunk-001.mp4",
             target_resolution="480p",
+            operation="transcode",
         ),
         VideoChunkMessage(
             job_id=job_id,
@@ -39,6 +40,7 @@ async def test_full_flow_publishes_chunks_downstream(
             total_chunks=2,
             storage_url="/fake/chunk-002.mp4",
             target_resolution="480p",
+            operation="transcode",
         ),
     ]
 
@@ -59,6 +61,7 @@ async def test_full_flow_publishes_chunks_downstream(
                     "storage_url": "/fake/video.mp4",
                     "source_resolution": "1080p",
                     "target_resolution": "480p",
+                    "operation": "transcode",
                 }
             ).encode(),
         )
@@ -76,6 +79,7 @@ async def test_full_flow_publishes_chunks_downstream(
         "total_chunks": 2,
         "storage_url": "/fake/chunk-001.mp4",
         "target_resolution": "480p",
+        "operation": "transcode",
     }
     assert nats_video_chunks_subscriber[1] == {
         "job_id": job_id,
@@ -83,6 +87,7 @@ async def test_full_flow_publishes_chunks_downstream(
         "total_chunks": 2,
         "storage_url": "/fake/chunk-002.mp4",
         "target_resolution": "480p",
+        "operation": "transcode",
     }
 
 
@@ -179,6 +184,7 @@ async def test_service_can_be_cancelled_while_process_job_is_running(
                 "storage_url": "/fake/video.mp4",
                 "source_resolution": "1080p",
                 "target_resolution": "480p",
+                "operation": "transcode",
             }
         ).encode()
         await nc.publish(settings.SUB_SUBJECT, payload)

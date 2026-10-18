@@ -39,6 +39,7 @@ def make_msg(
     storage_url: str = "http://storage/video.mp4",
     source_resolution: str = "480p",
     target_resolution: str = "1080p",
+    operation: str = "transcode",
 ) -> AsyncMock:
     """Build a mock NATS Msg with a valid ProcessJobMessage payload."""
     payload = ProcessJobMessage(
@@ -46,6 +47,7 @@ def make_msg(
         storage_url=storage_url,
         source_resolution=source_resolution,
         target_resolution=target_resolution,
+        operation=operation,
     )
     msg = AsyncMock()
     msg.data = payload.model_dump_json().encode()

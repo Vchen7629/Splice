@@ -13,6 +13,7 @@ METADATA = ProcessJobMessage(
     storage_url="http://fake:8888/test-123/video.mp4",
     source_resolution="280p",
     target_resolution="480p",
+    operation="transcode",
 )
 
 FAKE_LOCAL_PATH = "/tmp/test-123/video.mp4"

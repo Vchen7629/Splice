@@ -23,6 +23,7 @@ async def test_raises_on_publish_failure(exc: Any) -> None:
                 total_chunks=1,
                 storage_url="/fake/path.mp4",
                 target_resolution="480p",
+                operation="transcode",
             )
         ]
 
@@ -44,6 +45,7 @@ async def test_calls_publish_per_msg() -> None:
             total_chunks=2,
             storage_url="/fake/path.mp4",
             target_resolution="480p",
+            operation="transcode",
         ),
         VideoChunkMessage(
             job_id="1",
@@ -51,6 +53,7 @@ async def test_calls_publish_per_msg() -> None:
             total_chunks=2,
             storage_url="/fake/path.mp4",
             target_resolution="480p",
+            operation="transcode",
         ),
     ]
 

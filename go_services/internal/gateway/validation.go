@@ -28,8 +28,8 @@ const (
 
 var allowedContainers = []string{"mov", "mp4", "matroska", "webm", "avi"} // allowed video formats
 var allowedTargetRes = map[string][]string{
-	"Transcode": {"480p", "720p", "1080p"},
-	"Upscale":   {"720p", "1080p", "1440p", "4K"},
+	"transcode": {"480p", "720p", "1080p"},
+	"upscale":   {"720p", "1080p", "1440p", "4K"},
 }
 
 type rejectError struct{ reason string }
@@ -66,10 +66,10 @@ func validateVideo(info videoInfo, size int64) error {
 }
 
 var processSubjects = map[string]string{
-	"Transcode": "jobs.video.scene-split",
-	"Upscale":   "jobs.video.upscale",
-	"Denoise":   "jobs.video.denoise",
-	"Convert":   "jobs.video.convert",
+	"transcode": "jobs.video.scene-split",
+	"upscale":   "jobs.video.upscale",
+	"denoise":   "jobs.video.scene-split",
+	"convert":   "jobs.video.convert",
 }
 
 // validates that the request FormValues are non empty, filename is valid, and processType is valid

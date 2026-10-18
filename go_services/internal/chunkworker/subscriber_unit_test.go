@@ -28,6 +28,7 @@ func validPayload(t *testing.T, jobID string) []byte {
 		ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		StorageURL:       "http://localhost:1/job-1/chunk.mp4",
 		TargetResolution: "720p",
+		Operation:        "transcode",
 	})
 	require.NoError(t, err)
 	return data
@@ -41,9 +42,10 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		chunkName := fmt.Sprintf("%s-%d", jobID, chunkIndex)
 
 		t.Cleanup(func() {
-			transcodeVideo = TranscodeVideo
+			transcodeVideoFn = transcodeVideo
 			os.RemoveAll("/tmp/temp-unprocessed-" + chunkName)
-			os.RemoveAll("/tmp/temp-processed-" + chunkName)
+			os.RemoveAll("/tmp/transcode/temp-processed-" + chunkName)
+			os.RemoveAll("/tmp/denoise/temp-processed-" + chunkName)
 		})
 
 		storageSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,8 +56,8 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		}))
 		t.Cleanup(storageSrv.Close)
 
-		transcodeVideo = func(_, _, chunkName string, _ *slog.Logger) (string, error) {
-			outDir := "/tmp/temp-processed-" + chunkName
+		transcodeVideoFn = func(_, _, chunkName string, _ *slog.Logger) (string, error) {
+			outDir := "/tmp/transcode/temp-processed-" + chunkName
 			if err := os.MkdirAll(outDir, 0755); err != nil {
 				return "", err
 			}
@@ -71,6 +73,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 			TotalChunks:      1,
 			StorageURL:       storageSrv.URL + "/chunk.mp4",
 			TargetResolution: "480p",
+			Operation:        "transcode",
 		})
 		require.NoError(t, err)
 
@@ -147,6 +150,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 			ChunkRef:         handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2},
 			StorageURL:       "http://localhost:1/job-abc/chunk.mp4",
 			TargetResolution: "480p",
+			Operation:        "transcode",
 		})
 		require.NoError(t, err)
 

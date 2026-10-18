@@ -72,12 +72,12 @@ func TestValidateUploadFields(t *testing.T) {
 	tt := []struct {
 		name, targetRes, processType, filename string
 	}{
-		{"missing target_resolution field", "", "Transcode", "somefile"},
+		{"missing target_resolution field", "", "transcode", "somefile"},
 		{"missing process_type field", "1080p", "", "somefile"},
 		{"invalid process_type field", "1080p", "IDK", "somefile"},
-		{"invalid video filename", "1080p", "Transcode", "../etc/passwd"}, // path traversal
-		{"invalid video filename", "1080p", "Transcode", ""},
-		{"uploaded file target res not allowed", "9999p", "Transcode", "somefile"},
+		{"invalid video filename", "1080p", "transcode", "../etc/passwd"}, // path traversal
+		{"invalid video filename", "1080p", "transcode", ""},
+		{"uploaded file target res not allowed", "9999p", "transcode", "somefile"},
 	}
 
 	for _, tc := range tt {
@@ -90,12 +90,12 @@ func TestValidateUploadFields(t *testing.T) {
 	}
 
 	t.Run("denoise and convert ignore resolution fields", func(t *testing.T) {
-		assert.NoError(t, validateUploadFields("somefilename", "", "Denoise"))
-		assert.NoError(t, validateUploadFields("somefilename", "", "Convert"))
-		assert.NoError(t, validateUploadFields("somefilename", "1080p", "Denoise")) // ignored, not validated
+		assert.NoError(t, validateUploadFields("somefilename", "", "denoise"))
+		assert.NoError(t, validateUploadFields("somefilename", "", "convert"))
+		assert.NoError(t, validateUploadFields("somefilename", "1080p", "denoise")) // ignored, not validated
 	})
 
 	t.Run("valid fields returns no error", func(t *testing.T) {
-		assert.NoError(t, validateUploadFields("somefilename", "1080p", "Transcode"))
+		assert.NoError(t, validateUploadFields("somefilename", "1080p", "transcode"))
 	})
 }

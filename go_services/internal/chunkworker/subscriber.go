@@ -18,9 +18,7 @@ import (
 
 const subSubject = "jobs.video.chunks"
 
-// removeAll and transcodeVideo are variables for the tests to override to mock
 var removeAll = os.RemoveAll
-var transcodeVideo = TranscodeVideo
 
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(
@@ -121,39 +119,16 @@ func ConsumeVideoChunk(
 	return consCtx, nil
 }
 
-// process (transcode) a video chunk from nats msg. Includes Updating the job status to be chunk-worker stage -> fetching the chunk
-// -> transcoding it. returns the outputPath and the error
-func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, logger *slog.Logger) (string, error) {
-	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"})
-	if err != nil {
-		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
-		return "", err
-	}
-
-	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
-
-	filePath, err := storage.GetVideoChunk(payload.StorageURL, chunkName)
-	if err != nil {
-		logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
-		return "", err
-	}
-
-	outputPath, err := transcodeVideo(filePath, payload.TargetResolution, chunkName, logger)
-	if err != nil {
-		logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-		return "", err
-	}
-
-	return outputPath, nil
-}
-
 // cleanupTempFolders removes the unprocessed and processed temp dirs for a chunk.
 // Must run after the chunk's output file is no longer needed (i.e. after upload).
 func cleanupTempFolders(chunkName string, logger *slog.Logger) {
 	if err := removeAll(storage.TempUnprocessedDir(chunkName)); err != nil {
 		logger.Warn("error removing the temp unprocessed folder", "chunk_name", chunkName, "err", err)
 	}
-	if err := removeAll("/tmp/temp-processed-" + chunkName); err != nil {
-		logger.Warn("error removing the temp processed folder", "chunk_name", chunkName, "err", err)
+	if err := removeAll("/tmp/transcode/temp-processed-" + chunkName); err != nil {
+		logger.Warn("error removing the temp transcode processed folder", "chunk_name", chunkName, "err", err)
+	}
+	if err := removeAll("/tmp/denoise/temp-processed-" + chunkName); err != nil {
+		logger.Warn("error removing the temp denoise processed folder", "chunk_name", chunkName, "err", err)
 	}
 }
