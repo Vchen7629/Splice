@@ -1,6 +1,6 @@
 //go:build integration
 
-package transcoder_test
+package chunkworker_test
 
 import (
 	"os"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"splice.com/go_services/internal/chunkworker"
 	"splice.com/go_services/internal/shared/test"
-	"splice.com/go_services/internal/transcoder"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +37,7 @@ func videoHeight(t *testing.T, path string) int {
 
 const testVideoPath = "../shared/test/testvideo.mp4"
 
-func TestTranscodeResolution(t *testing.T) {
+func TestChunkWorkerResolution(t *testing.T) {
 	tests := []struct {
 		name             string
 		targetResolution string
@@ -60,7 +60,7 @@ func TestTranscodeResolution(t *testing.T) {
 			jobID := "job-resolution-" + tc.targetResolution
 			t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
 
-			outputPath, err := transcoder.TranscodeVideo(testVideoPath, tc.targetResolution, jobID, test.SilentLogger())
+			outputPath, err := chunkworker.TranscodeVideo(testVideoPath, tc.targetResolution, jobID, test.SilentLogger())
 
 			require.NoError(t, err)
 			assert.FileExists(t, outputPath)
@@ -74,7 +74,7 @@ func TestTranscodeOutput(t *testing.T) {
 		jobID := "job-fmt"
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
 
-		outputPath, err := transcoder.TranscodeVideo(testVideoPath, "720p", jobID, test.SilentLogger())
+		outputPath, err := chunkworker.TranscodeVideo(testVideoPath, "720p", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
@@ -84,7 +84,7 @@ func TestTranscodeOutput(t *testing.T) {
 		jobID := "job-dir"
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
 
-		_, err := transcoder.TranscodeVideo(testVideoPath, "720p", jobID, test.SilentLogger())
+		_, err := chunkworker.TranscodeVideo(testVideoPath, "720p", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.DirExists(t, "/tmp/temp-processed-"+jobID)
@@ -94,7 +94,7 @@ func TestTranscodeOutput(t *testing.T) {
 		jobID := "job-webm-src"
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + jobID) })
 
-		outputPath, err := transcoder.TranscodeVideo("../shared/test/testvideo.webm", "720p", jobID, test.SilentLogger())
+		outputPath, err := chunkworker.TranscodeVideo("../shared/test/testvideo.webm", "720p", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
@@ -128,7 +128,7 @@ func TestTranscodeErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Cleanup(func() { os.RemoveAll("/tmp/temp-processed-" + tc.jobID) })
 
-			_, err := transcoder.TranscodeVideo(tc.filePath, "720p", tc.jobID, test.SilentLogger())
+			_, err := chunkworker.TranscodeVideo(tc.filePath, "720p", tc.jobID, test.SilentLogger())
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "ffmpeg error")

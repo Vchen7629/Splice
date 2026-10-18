@@ -1,6 +1,6 @@
 //go:build unit
 
-package transcoder
+package chunkworker
 
 import (
 	"encoding/json"

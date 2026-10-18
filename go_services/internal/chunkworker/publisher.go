@@ -1,4 +1,4 @@
-package transcoder
+package chunkworker
 
 import (
 	"context"

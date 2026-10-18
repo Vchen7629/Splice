@@ -1,6 +1,6 @@
 //go:build integration
 
-package transcoder
+package chunkworker
 
 import (
 	"context"

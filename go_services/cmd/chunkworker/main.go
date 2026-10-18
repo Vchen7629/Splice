@@ -10,8 +10,8 @@ import (
 	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
+	"splice.com/go_services/internal/chunkworker"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/transcoder"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -56,7 +56,7 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	err = service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
-		return transcoder.ConsumeVideoChunk(cfg.BaseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
+		return chunkworker.ConsumeVideoChunk(cfg.BaseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
 	}, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)

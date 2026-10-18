@@ -7,7 +7,7 @@ import (
 
 type ServiceURLs struct {
 	SceneDetector  string
-	Transcoder     string
+	ChunkWorker    string
 	Recombiner     string
 	VideoUpscaling string
 }
@@ -15,7 +15,7 @@ type ServiceURLs struct {
 func (s ServiceURLs) forStage(stage string) (string, bool) {
 	urls := map[string]string{
 		"scene-detector":   s.SceneDetector,
-		"transcoder":       s.Transcoder,
+		"chunk-worker":     s.ChunkWorker,
 		"video-recombiner": s.Recombiner,
 		"video-upscaling":  s.VideoUpscaling,
 	}

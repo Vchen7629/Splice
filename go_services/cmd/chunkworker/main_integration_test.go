@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"splice.com/go_services/internal/chunkworker"
 	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/test"
-	"splice.com/go_services/internal/transcoder"
 	"syscall"
 	"testing"
 	"time"
@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestTranscoderServiceI(t *testing.T) {
+func TestChunkWorkerServiceI(t *testing.T) {
 	t.Run("full flow receives transcode message and publishes downstream", func(t *testing.T) {
 		if _, err := exec.LookPath("ffmpeg"); err != nil {
 			t.Skip("ffmpeg not available")
@@ -68,13 +68,13 @@ func TestTranscoderServiceI(t *testing.T) {
 
 		go func() {
 			done <- service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
-				return transcoder.ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, chunkAckWait, test.SilentLogger())
+				return chunkworker.ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, chunkAckWait, test.SilentLogger())
 			}, quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
 
-		payload, err := json.Marshal(transcoder.VideoChunkMessage{
+		payload, err := json.Marshal(chunkworker.VideoChunkMessage{
 			ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks:      1,
 			StorageURL:       storageURL,
@@ -127,7 +127,7 @@ func TestTranscoderServiceI(t *testing.T) {
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 		err = service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
-			return transcoder.ConsumeVideoChunk(sharedFilerURL, nc, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, chunkAckWait, test.SilentLogger())
+			return chunkworker.ConsumeVideoChunk(sharedFilerURL, nc, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, chunkAckWait, test.SilentLogger())
 		}, quit)
 
 		assert.Error(t, err)

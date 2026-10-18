@@ -1,6 +1,6 @@
 test_all: integration unit
 
-PKGS := . ../../internal/transcoder/...
+PKGS := . ../../internal/chunkworker/...
 
 format: 
 	go fmt ${PKGS} .

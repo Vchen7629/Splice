@@ -23,7 +23,7 @@ type Config struct {
 	HTTPPort             string `envconfig:"HTTP_PORT"          default:"8080"`
 	MaxConcurrentUploads int    `envconfig:"MAX_CONCURRENT_UPLOADS" default:"10" validate:"gt=0"`
 	SceneDetectorURL     string `envconfig:"SCENE_DETECTOR_URL" default:"http://localhost:9098"`
-	TranscoderURL        string `envconfig:"TRANSCODER_URL"     default:"http://localhost:9095"`
+	ChunkWorkerURL       string `envconfig:"CHUNK_WORKER_URL"     default:"http://localhost:9095"`
 	RecombinerURL        string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
 	VideoUpscalingURL    string `envconfig:"VIDEO_UPSCALING_URL" default:"http://localhost:9101"`
 }
@@ -79,7 +79,7 @@ func runGateway(
 		StorageURL:           cfg.BaseStorageURL,
 		URLs: gateway.ServiceURLs{
 			SceneDetector:  cfg.SceneDetectorURL,
-			Transcoder:     cfg.TranscoderURL,
+			ChunkWorker:    cfg.ChunkWorkerURL,
 			Recombiner:     cfg.RecombinerURL,
 			VideoUpscaling: cfg.VideoUpscalingURL,
 		},
