@@ -59,7 +59,7 @@ func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 	outDir := "/tmp/transcode/temp-processed-" + chunkName
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
-		return "", fmt.Errorf("create output dir error: %w", err)
+		return "", fmt.Errorf("create output transcode dir error: %w", err)
 	}
 	// output must always be mp4 since always re-encoded to h264
 	filename := filepath.Base(filePath)
@@ -90,7 +90,36 @@ func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 	return outputPath, nil
 }
 
-// placeholder
+// denoise the unprocessed video and return resulting video chunk
+// NOTE: in the future could give user option of different quality since there are multiple denoise flags
 func denoiseVideo(filePath, chunkName string, logger *slog.Logger) (string, error) {
-	return "", nil
+	outDir := "/tmp/denoise/temp-processed-" + chunkName
+	err := os.MkdirAll(outDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("create output denoise dir error: %w", err)
+	}
+	filename := filepath.Base(filePath)
+	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
+	outputPath := filepath.Join(outDir, stem+".mp4")
+
+	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(
+		ctx,
+		"ffmpeg",
+		"-protocol_whitelist", "file,pipe", "-i", filePath,
+		"-vf", "hqdn3d=luma_spatial=4.0:chroma_spatial=3.0:luma_tmp=6.0:chroma_tmp=4.5",
+		"-c:v", "libx264",
+		"-crf", "18",
+		outputPath,
+	).CombinedOutput()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("ffmpeg timed out after %s: %w", ffmpegTimeout, ctxErr)
+		}
+		return "", fmt.Errorf("ffmpeg error: %w\n%s", err, out)
+	}
+
+	return outputPath, nil
 }
