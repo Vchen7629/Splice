@@ -5,7 +5,7 @@
 #   -p 8080:8080 \
 #   --add-host=host.docker.internal:host-gateway \
 #    -e SCENE_DETECTOR_URL=http://scene-detector:9098 \
-#    -e TRANSCODER_URL=http://host.docker.internal:9095 \
+#    -e CHUNK_WORKER_URL=http://host.docker.internal:9095 \
 #    -e RECOMBINER_URL=http://host.docker.internal:9090
 #    -e VIDEO_UPSCALING_URL=http://host.docker.internal:9101 \
 #    -e BASE_STORAGE_URL=http://host.docker.internal:8888 \
