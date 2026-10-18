@@ -25,9 +25,9 @@ const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: str
         { key: 'video-recombiner', label: 'Recombining' },
     ],
     Denoise: [
-        { key: 'scene-detector',   label: 'Detect' },
-        { key: 'denoiser',         label: 'Denoise' },
-        { key: 'video-recombiner', label: 'Recombine' },
+        { key: 'scene-detector',   label: 'Splitting Video' },
+        { key: 'chunk-worker',     label: 'Denoising' },
+        { key: 'video-recombiner', label: 'Recombining' },
     ],
     Convert: [
         { key: 'converter',        label: 'Convert' },
