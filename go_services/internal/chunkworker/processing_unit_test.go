@@ -36,6 +36,14 @@ func videoHeight(t *testing.T, path string) int {
 
 const testVideoPath = "../shared/test/testvideo.mp4"
 
+func TestProcessChunkErrorsOnUnknownChunkOp(t *testing.T) {
+	outputPath, err := processChunk(&test.MockKV{}, VideoChunkMessage{Operation: "Unknown"}, test.SilentLogger())
+
+	require.Error(t, err)
+	assert.Equal(t, outputPath, "")
+	assert.Equal(t, "unsupported chunk operation: Unknown", err.Error())
+}
+
 func TestTranscodeVideo(t *testing.T) {
 	t.Run("mkdir failure returns create output dir error", func(t *testing.T) {
 		blockedDir := "/tmp/transcode/temp-processed-job-blocked"

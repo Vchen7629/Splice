@@ -28,6 +28,14 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 
 	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 
+	switch payload.Operation {
+	case "transcode", "denoise":
+	default:
+		err := fmt.Errorf("unsupported chunk operation: %s", payload.Operation)
+		logger.Error("unsupported chunk operation", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
+		return "", err
+	}
+
 	filePath, err := storage.GetVideoChunk(payload.StorageURL, chunkName)
 	if err != nil {
 		logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
@@ -77,8 +85,7 @@ func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 		"-vf", fmt.Sprintf("scale=-2:%s:flags=lanczos", height),
 		"-c:v", "libx264",
 		"-c:a", "copy",
-		"-y",
-		outputPath,
+		"-y", outputPath,
 	).CombinedOutput()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -112,7 +119,7 @@ func denoiseVideo(filePath, chunkName string, logger *slog.Logger) (string, erro
 		"-vf", "hqdn3d=luma_spatial=4.0:chroma_spatial=3.0:luma_tmp=6.0:chroma_tmp=4.5",
 		"-c:v", "libx264",
 		"-crf", "18",
-		outputPath,
+		"-y", outputPath,
 	).CombinedOutput()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
