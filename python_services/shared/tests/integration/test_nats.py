@@ -68,6 +68,7 @@ async def test_consumer_calls_process_job_msg_for_published_message(
                     "storage_url": "/fake/video.mp4",
                     "source_resolution": "1080p",
                     "target_resolution": "480p",
+                    "operation": "transcode",
                 }
             ).encode(),
         )

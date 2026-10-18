@@ -94,6 +94,7 @@ async def process_job(
             total_chunks=len(storage_urls),
             storage_url=url,
             target_resolution=metadata.target_resolution,
+            operation=metadata.operation,
         )
         for i, url in enumerate(storage_urls)
     ]

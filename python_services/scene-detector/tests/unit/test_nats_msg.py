@@ -21,6 +21,7 @@ def make_ctx(**overrides: Any) -> ProcessJobMsgContext:
             storage_url="/fake/idk.mp4",
             source_resolution="1080p",
             target_resolution="480p",
+            operation="transcode",
         ),
     )
     defaults: dict[str, Any] = dict(
@@ -42,6 +43,7 @@ async def test_passes_chunk_messages_to_publisher() -> None:
             total_chunks=1,
             storage_url="/tmp/chunk-001.mp4",
             target_resolution="480p",
+            operation="transcode",
         )
     ]
     mock_js = AsyncMock(spec=JetStreamContext)

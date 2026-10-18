@@ -25,6 +25,7 @@ def make_ctx(**overrides: Any) -> ProcessJobMsgContext:
             storage_url="http://storage/video.mp4",
             source_resolution="480p",
             target_resolution="1080p",
+            operation="upscale",
         ),
     )
     defaults: dict[str, Any] = dict(
@@ -59,6 +60,7 @@ async def test_upscale_removes_noaudio_temp_file(
             storage_url="http://storage/video.mp4",
             source_resolution="480p",
             target_resolution="1080p",
+            operation="upscale",
         )
     )
 
@@ -80,6 +82,7 @@ async def test_downscale_path_calls_video_downscale(
             storage_url="http://storage/video.mp4",
             source_resolution="1080p",
             target_resolution="480p",
+            operation="upscale",
         )
     )
 
@@ -100,6 +103,7 @@ async def test_upscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -> 
             storage_url="http://storage/video.mp4",
             source_resolution="480p",
             target_resolution="1080p",
+            operation="upscale",
         )
     )
 
@@ -126,6 +130,7 @@ async def test_downscale_passes_correct_args(nats_msg_patches: dict[str, Any]) -
             storage_url="http://storage/video.mp4",
             source_resolution="1080p",
             target_resolution="480p",
+            operation="upscale",
         )
     )
 
@@ -176,6 +181,7 @@ async def test_upscale_failure_still_cleans_up_noaudio_file(
             storage_url="http://storage/video.mp4",
             source_resolution="480p",
             target_resolution="1080p",
+            operation="upscale",
         )
     )
 
@@ -202,6 +208,7 @@ async def test_video_downscale_raises(nats_msg_patches: dict[str, Any]) -> None:
             storage_url="http://storage/video.mp4",
             source_resolution="1080p",
             target_resolution="480p",
+            operation="upscale",
         )
     )
 
@@ -244,6 +251,7 @@ async def test_uploads_to_correct_storage_url(nats_msg_patches: dict[str, Any]) 
             storage_url="http://storage/video.mp4",
             source_resolution="480p",
             target_resolution="1080p",
+            operation="upscale",
         )
     )
 
@@ -264,6 +272,7 @@ async def test_publishes_upscale_complete_msg(nats_msg_patches: dict[str, Any]) 
             storage_url="http://storage/video.mp4",
             source_resolution="480p",
             target_resolution="1080p",
+            operation="upscale",
         )
     )
 

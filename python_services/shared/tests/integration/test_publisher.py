@@ -20,6 +20,7 @@ async def test_publishes_all_messages_with_correct_payload(
             total_chunks=2,
             storage_url="/fake/chunk-001.mp4",
             target_resolution="480p",
+            operation="transcode",
         ),
         VideoChunkMessage(
             job_id="1",
@@ -27,6 +28,7 @@ async def test_publishes_all_messages_with_correct_payload(
             total_chunks=2,
             storage_url="/fake/chunk-002.mp4",
             target_resolution="480p",
+            operation="denoise",
         ),
     ]
 
@@ -46,6 +48,7 @@ async def test_publishes_all_messages_with_correct_payload(
         "total_chunks": 2,
         "storage_url": "/fake/chunk-001.mp4",
         "target_resolution": "480p",
+        "operation": "transcode",
     }
     assert nats_video_chunks_subscriber[1] == {
         "job_id": "1",
@@ -53,4 +56,5 @@ async def test_publishes_all_messages_with_correct_payload(
         "total_chunks": 2,
         "storage_url": "/fake/chunk-002.mp4",
         "target_resolution": "480p",
+        "operation": "denoise",
     }

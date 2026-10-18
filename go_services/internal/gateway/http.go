@@ -214,12 +214,11 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = sJetstream.PublishJetstreamMsg(
+	if err := sJetstream.PublishJetstreamMsg(
 		v.js, handler.VideoJobMessage{
-			JobID: jobID, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height), StorageURL: url,
+			JobID: jobID, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height), StorageURL: url, Operation: processType,
 		}, pubSubject,
-	)
-	if err != nil {
+	); err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)
 		kvErr := kh.updateJobStatusKV(r.Context(), jobID, sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "upload"})
 		if kvErr != nil {
