@@ -68,7 +68,7 @@ func validateVideo(info videoInfo, size int64) error {
 var processSubjects = map[string]string{
 	"Transcode": "jobs.video.scene-split",
 	"Upscale":   "jobs.video.upscale",
-	"Denoise":   "jobs.video.denoise",
+	"Denoise":   "jobs.video.scene-split",
 	"Convert":   "jobs.video.convert",
 }
 
