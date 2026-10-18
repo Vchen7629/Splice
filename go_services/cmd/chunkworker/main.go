@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "transcoder-worker")
+	logger := middleware.StructuredLogger(cfg.ProdMode, "chunk-worker")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
