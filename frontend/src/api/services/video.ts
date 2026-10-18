@@ -17,7 +17,7 @@ export const VideoService = {
             const formData = new FormData()
             formData.append("video", videoFile)
             formData.append("target_resolution", targetResolution)
-            formData.append("process_type", processingType)
+            formData.append("process_type", processingType.toLowerCase())
 
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))

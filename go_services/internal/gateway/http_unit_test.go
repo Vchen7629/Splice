@@ -234,7 +234,7 @@ func TestUploadVideo(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newVideoHandler("http://localhost:1", &MockJS{}, nil)
-			req := NewUploadRequest(t, "/jobs", tc.fileName, tc.content, tc.targetRes, "Transcode")
+			req := NewUploadRequest(t, "/jobs", tc.fileName, tc.content, tc.targetRes, "transcode")
 			rec := httptest.NewRecorder()
 
 			h.uploadVideoRoute(rec, req)
@@ -247,7 +247,7 @@ func TestUploadVideo(t *testing.T) {
 	t.Run("Returns 500 when saving the video file fails", func(t *testing.T) {
 		// Null byte in the storage URL makes the upload request fail to build.
 		h := newVideoHandler("\x00", &MockJS{}, nil)
-		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -279,7 +279,7 @@ func TestUploadVideo(t *testing.T) {
 			t.Cleanup(func() { probeVideoFn = orig })
 			js := &MockJS{}
 			h := newVideoHandler("http://localhost:1", js, nil)
-			req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "Transcode")
+			req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "transcode")
 			rec := httptest.NewRecorder()
 
 			h.uploadVideoRoute(rec, req)
@@ -297,7 +297,7 @@ func TestUploadVideo(t *testing.T) {
 		h := newVideoHandler(fakeStorage.URL, &MockJS{}, nil)
 		h.kv = &MockKV{PutErr: errors.New("kv unavailable")}
 
-		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "transcode")
 		w := httptest.NewRecorder()
 		h.uploadVideoRoute(w, req)
 
@@ -308,7 +308,7 @@ func TestUploadVideo(t *testing.T) {
 	t.Run("Does not publish to NATS when saving fails", func(t *testing.T) {
 		js := &MockJS{}
 		h := newVideoHandler("\x00", js, nil)
-		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -321,7 +321,7 @@ func TestUploadVideo(t *testing.T) {
 		sem := make(chan struct{}, 1)
 		sem <- struct{}{}
 		h := newVideoHandler("http://localhost:1", &MockJS{}, sem)
-		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "Transcode")
+		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "1080p", "transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
@@ -334,7 +334,7 @@ func TestUploadVideo(t *testing.T) {
 	t.Run("slot is released regardless", func(t *testing.T) {
 		sem := make(chan struct{}, 1)
 		h := newVideoHandler("http://localhost:1", &MockJS{}, sem)
-		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "", "Transcode")
+		req := NewUploadRequest(t, "/jobs/upload", "video.mp4", []byte("data"), "", "transcode")
 		rec := httptest.NewRecorder()
 
 		h.uploadVideoRoute(rec, req)
