@@ -150,7 +150,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 			ChunkRef:         handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2},
 			StorageURL:       "http://localhost:1/job-abc/chunk.mp4",
 			TargetResolution: "480p",
-			Operation: "transcode",
+			Operation:        "transcode",
 		})
 		require.NoError(t, err)
 

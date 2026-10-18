@@ -80,7 +80,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 			TotalChunks:      1,
 			StorageURL:       storageURL,
 			TargetResolution: "240p",
-			Operation: 		  "transcode",
+			Operation:        "transcode",
 		})
 		require.NoError(t, err)
 

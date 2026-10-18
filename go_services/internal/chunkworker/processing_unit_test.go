@@ -34,7 +34,6 @@ func videoHeight(t *testing.T, path string) int {
 	return height
 }
 
-
 const testVideoPath = "../shared/test/testvideo.mp4"
 
 func TestTranscodeVideo(t *testing.T) {
