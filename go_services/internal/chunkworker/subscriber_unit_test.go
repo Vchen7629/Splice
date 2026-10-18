@@ -41,7 +41,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		chunkName := fmt.Sprintf("%s-%d", jobID, chunkIndex)
 
 		t.Cleanup(func() {
-			transcodeVideo = TranscodeVideo
+			transcodeVideoFn = transcodeVideo
 			os.RemoveAll("/tmp/temp-unprocessed-" + chunkName)
 			os.RemoveAll("/tmp/temp-processed-" + chunkName)
 		})
@@ -54,7 +54,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		}))
 		t.Cleanup(storageSrv.Close)
 
-		transcodeVideo = func(_, _, chunkName string, _ *slog.Logger) (string, error) {
+		transcodeVideoFn = func(_, _, chunkName string, _ *slog.Logger) (string, error) {
 			outDir := "/tmp/temp-processed-" + chunkName
 			if err := os.MkdirAll(outDir, 0755); err != nil {
 				return "", err

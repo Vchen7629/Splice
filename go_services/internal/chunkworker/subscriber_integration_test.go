@@ -570,7 +570,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		// still "in progress" when AckWait fires and JetStream redelivers to 2nd worker
 		var calls int32
 		release := make(chan struct{})
-		transcodeVideo = func(filePath, targetResolution, jobID string, logger *slog.Logger) (string, error) {
+		transcodeVideoFn = func(filePath, targetResolution, jobID string, logger *slog.Logger) (string, error) {
 			atomic.AddInt32(&calls, 1)
 			<-release
 
@@ -587,7 +587,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 
 			return outputPath, nil
 		}
-		t.Cleanup(func() { transcodeVideo = TranscodeVideo })
+		t.Cleanup(func() { transcodeVideoFn = transcodeVideo })
 
 		videoContent, err := os.ReadFile("../shared/test/testvideo.mp4")
 		require.NoError(t, err)

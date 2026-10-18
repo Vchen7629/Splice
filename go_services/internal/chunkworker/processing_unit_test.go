@@ -20,7 +20,7 @@ func TestTranscodeVideo(t *testing.T) {
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		path, err := TranscodeVideo("/some/input.mp4", "720p", "job-blocked", test.SilentLogger())
+		path, err := transcodeVideo("/some/input.mp4", "720p", "job-blocked", test.SilentLogger())
 
 		require.Error(t, err)
 		assert.Empty(t, path)
@@ -32,7 +32,7 @@ func TestTranscodeVideo(t *testing.T) {
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		_, err := TranscodeVideo("/some/input.mp4", "720p", "job-blocked2", test.SilentLogger())
+		_, err := transcodeVideo("/some/input.mp4", "720p", "job-blocked2", test.SilentLogger())
 
 		require.Error(t, err)
 		var pathErr *os.PathError
