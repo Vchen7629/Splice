@@ -216,7 +216,9 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	if err := sJetstream.PublishJetstreamMsg(
 		v.js, handler.VideoJobMessage{
-			JobID: jobID, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height), StorageURL: url, Operation: processType,
+			JobID:          jobID,
+			DenoiseQuality: denoiseQuality, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height),
+			StorageURL: url, Operation: processType,
 		}, pubSubject,
 	); err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)
