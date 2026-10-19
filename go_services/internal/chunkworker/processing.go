@@ -29,7 +29,13 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 
 	switch payload.Operation {
-	case "transcode", "denoise":
+	case "transcode":
+	case "denoise":
+		switch payload.DenoiseQuality {
+		case "light", "medium":
+		default:
+			return "", fmt.Errorf("unsupported quality selected: %s", payload.DenoiseQuality)
+		}
 	default:
 		err := fmt.Errorf("unsupported chunk operation: %s", payload.Operation)
 		logger.Error("unsupported chunk operation", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
