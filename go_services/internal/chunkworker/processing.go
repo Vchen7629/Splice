@@ -43,7 +43,7 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 	}
 
 	if payload.Operation == "transcode" {
-		outputPath, err := transcodeVideoFn(filePath, payload.TargetResolution, chunkName, logger)
+		outputPath, err := transcodeVideoFn(filePath, payload.TargetResolution, chunkName)
 		if err != nil {
 			logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 			return "", err
@@ -51,7 +51,7 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 		return outputPath, nil
 	}
 
-	outputPath, err := denoiseVideo(filePath, payload.DenoiseQuality, chunkName, logger)
+	outputPath, err := denoiseVideo(filePath, payload.DenoiseQuality, chunkName)
 	if err != nil {
 		logger.Error("error denoising chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 		return "", err
@@ -63,7 +63,7 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 var ffmpegTimeout = 2 * time.Hour // TODO: in the future scale timeout with input video size via ffprobe
 
 // transcode by resizing the input video chunk to the specified value and output and return resulting video chunk.
-func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.Logger) (string, error) {
+func transcodeVideo(filePath, target_resolution, chunkName string) (string, error) {
 	outDir := "/tmp/transcode/temp-processed-" + chunkName
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
@@ -98,7 +98,7 @@ func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 }
 
 // denoise the unprocessed video and return resulting video chunk
-func denoiseVideo(filePath, denoiseQuality, chunkName string, logger *slog.Logger) (string, error) {
+func denoiseVideo(filePath, denoiseQuality, chunkName string) (string, error) {
 	outDir := "/tmp/denoise/temp-processed-" + chunkName
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
