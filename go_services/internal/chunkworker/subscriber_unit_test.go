@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -56,7 +55,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		}))
 		t.Cleanup(storageSrv.Close)
 
-		transcodeVideoFn = func(_, _, chunkName string, _ *slog.Logger) (string, error) {
+		transcodeVideoFn = func(_, _, chunkName string) (string, error) {
 			outDir := "/tmp/transcode/temp-processed-" + chunkName
 			if err := os.MkdirAll(outDir, 0755); err != nil {
 				return "", err

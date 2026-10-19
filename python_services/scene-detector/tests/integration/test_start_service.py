@@ -79,6 +79,7 @@ async def test_full_flow_publishes_chunks_downstream(
         "total_chunks": 2,
         "storage_url": "/fake/chunk-001.mp4",
         "target_resolution": "480p",
+        "denoise_quality": None,
         "operation": "transcode",
     }
     assert nats_video_chunks_subscriber[1] == {
@@ -87,6 +88,7 @@ async def test_full_flow_publishes_chunks_downstream(
         "total_chunks": 2,
         "storage_url": "/fake/chunk-002.mp4",
         "target_resolution": "480p",
+        "denoise_quality": None,
         "operation": "transcode",
     }
 

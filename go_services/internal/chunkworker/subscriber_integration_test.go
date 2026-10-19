@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -563,7 +562,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		// still "in progress" when AckWait fires and JetStream redelivers to 2nd worker
 		var calls int32
 		release := make(chan struct{})
-		transcodeVideoFn = func(filePath, targetResolution, jobID string, logger *slog.Logger) (string, error) {
+		transcodeVideoFn = func(filePath, targetResolution, jobID string) (string, error) {
 			atomic.AddInt32(&calls, 1)
 			<-release
 

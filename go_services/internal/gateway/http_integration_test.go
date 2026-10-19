@@ -386,7 +386,7 @@ func TestUploadVideoFlow(t *testing.T) {
 		assert.Equal(t, content, storedBytes)
 	})
 
-	t.Run("Published NATS message contains correct job_id, target_resolution, and storage_url", func(t *testing.T) {
+	t.Run("Published NATS message contains correct job_id, target_resolution, storage_url, and operation", func(t *testing.T) {
 		received := make(chan []byte, 1)
 		sub, err := nc.Subscribe("jobs.video.scene-split", func(msg *nats.Msg) {
 			received <- msg.Data
@@ -411,6 +411,7 @@ func TestUploadVideoFlow(t *testing.T) {
 			assert.Equal(t, uploadResp.JobID, msg.JobID)
 			assert.Equal(t, "720p", msg.TargetResolution)
 			assert.Equal(t, "720p", msg.SourceResolution) // from probed height, not the client
+			assert.Equal(t, "transcode", msg.Operation)
 			assert.Equal(t, fmt.Sprintf("%s/%s/video.mp4", sharedFilerUrl, uploadResp.JobID), msg.StorageURL)
 		case <-time.After(5 * time.Second):
 			t.Fatal("timed out waiting for NATS message")

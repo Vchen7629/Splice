@@ -3,7 +3,7 @@ import { Toaster } from 'sonner'
 import { useVideoQueueStore } from './state/videoQueue'
 import { useUploadQueue } from './hooks/useUploadQueue'
 import { useJobEvents } from './hooks/useJobEvents'
-import type { ProcessingType, UploadedFile } from './types/file'
+import type { DenoiseQuality, ProcessingType, UploadedFile } from './types/file'
 import { defaultResolution, getVideoResolution } from './utils/videoResolution'
 import { useTheme } from './hooks/useTheme'
 import { useFileDrop } from './hooks/useFileDrop'
@@ -17,7 +17,7 @@ import { useProcessedStore } from './state/processedVideos'
 import { fileMap, nextFileId } from './state/fileRegistry'
 
 function App() {
-  const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution } = useVideoQueueStore()
+  const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution, setDenoiseQuality } = useVideoQueueStore()
   const { processed, remove: removeProcessed} = useProcessedStore()
   const [ activeFeature, setActiveFeature] = useState<ProcessingType>('Transcode')
   const { mode, toggleMode } = useTheme()
@@ -28,7 +28,6 @@ function App() {
   const queue = videos.filter(v => v.processingType === activeFeature)
   const processedVideo = processed.filter(v => v.processingType === activeFeature)
   const cancelledVideo = cancelled.filter(v => v.processingType === activeFeature)
-  const showResolution = activeFeature !== 'Denoise'
 
   async function handleFiles(files: File[]) {
     const processingType = activeFeature
@@ -51,6 +50,7 @@ function App() {
         name: file.name,
         size: file.size,
         resolution: resolution,
+        denoiseQuality: processingType === 'Denoise' ? 'medium' : undefined,
         sourceHeight,
         status: 'pending' as const,
         uploadProgress: 0,
@@ -75,6 +75,11 @@ function App() {
   function handleSetResolution(id: number, resolution: string) {
       if (queue.find(v => v.id === id)?.status === 'error') resetVideo(id)
       setResolution(id, resolution)
+  }
+
+  function handleSetDenoiseQuality(id: number, quality: DenoiseQuality) {
+    if (queue.find(v => v.id === id)?.status === 'error') resetVideo(id)
+    setDenoiseQuality(id, quality)
   }
 
   return (
@@ -113,9 +118,9 @@ function App() {
               <UploadedFileQueueList 
                 queue={queue}
                 activeFeature={activeFeature}
-                showResolution={showResolution}
                 onRemove={handleRemove}
                 handleSetResolution={handleSetResolution}
+                handleSetDenoiseQuality={handleSetDenoiseQuality}
               />
             }
             processedContent={<ProcessedVideosList processedVideos={processedVideo} onRemove={removeProcessed}/>}

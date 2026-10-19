@@ -141,8 +141,8 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
-	targetRes, processType := r.FormValue("target_resolution"), r.FormValue("process_type")
-	if err := validateUploadFields(header.Filename, targetRes, processType); err != nil {
+	targetRes, denoiseQuality, processType := r.FormValue("target_resolution"), r.FormValue("denoise_quality"), r.FormValue("process_type")
+	if err := validateUploadFields(header.Filename, targetRes, processType, denoiseQuality); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		v.logger.Error(err.Error())
 		return
@@ -216,7 +216,9 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 
 	if err := sJetstream.PublishJetstreamMsg(
 		v.js, handler.VideoJobMessage{
-			JobID: jobID, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height), StorageURL: url, Operation: processType,
+			JobID:          jobID,
+			DenoiseQuality: denoiseQuality, TargetResolution: targetRes, SourceResolution: fmt.Sprintf("%dp", info.height),
+			StorageURL: url, Operation: processType,
 		}, pubSubject,
 	); err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)

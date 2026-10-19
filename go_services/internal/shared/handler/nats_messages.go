@@ -14,7 +14,8 @@ func (m *ChunkRef) ChunkKVKey() string {
 
 type VideoJobMessage struct {
 	JobID            string `json:"job_id"`
-	TargetResolution string `json:"target_resolution"`
+	DenoiseQuality   string `json:"denoise_quality,omitempty"`
+	TargetResolution string `json:"target_resolution,omitempty"`
 	SourceResolution string `json:"source_resolution"`
 	StorageURL       string `json:"storage_url"`
 	Operation		 string `json:"operation"`

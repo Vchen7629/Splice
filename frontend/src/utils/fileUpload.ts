@@ -1,4 +1,5 @@
 import type { DragEvent } from "react"
+import type { UploadedFile } from "../types/file"
 
 export const ALLOWED_EXTENSIONS = ['.mp4', '.mov', '.mkv', '.webm', '.avi']
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024 // 10 GB
@@ -13,6 +14,28 @@ interface fileRejection {
     file: File
     error: string
 }
+
+/**
+ * builds the FormData that the backend api gateway expects to know how to process
+ * @param file the video file to upload to backend
+ * @param video the upload video file with params to send
+ * @returns the fully built FormData
+ */
+export function buildUploadForm(file: File, video: UploadedFile): FormData {
+    const formData = new FormData()
+    formData.append("video", file)
+    formData.append("process_type", video.processingType.toLowerCase())
+
+    switch (video.processingType) {
+        case "Transcode":
+        case "Upscale": formData.append("target_resolution", video.resolution); break
+        case "Denoise": formData.append("denoise_quality", video.denoiseQuality ?? 'medium'); break
+        case "Convert": formData.append("target_format", "mp3"); break
+    }
+
+    return formData
+}
+
 
 /**
  * Extracts all files from a drag-and-drop event, including files inside dropped folders.
@@ -102,4 +125,3 @@ function validateFile(file: File): string | null {
     }
     return null
 }
-

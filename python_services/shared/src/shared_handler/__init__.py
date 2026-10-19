@@ -10,6 +10,8 @@ from .kv import (
     update_job_stage,
 )
 from .messages import (
+    DENOISE_QUALITY,
+    OPERATIONS,
     ProcessJobMessage,
     ProgressMessage,
     UpscaleCompleteMsg,
@@ -42,6 +44,8 @@ __all__ = [
     "update_job_stage",
     "update_job_failed",
     "VideoChunkMessage",
+    "OPERATIONS",
+    "DENOISE_QUALITY",
     "ProcessJobMessage",
     "UpscaleCompleteMsg",
     "ProgressMessage",
