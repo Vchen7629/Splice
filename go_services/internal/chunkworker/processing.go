@@ -51,7 +51,7 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 		return outputPath, nil
 	}
 
-	outputPath, err := denoiseVideo(filePath, chunkName, logger)
+	outputPath, err := denoiseVideo(filePath, payload.DenoiseQuality, chunkName, logger)
 	if err != nil {
 		logger.Error("error denoising chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 		return "", err
@@ -98,8 +98,7 @@ func transcodeVideo(filePath, target_resolution, chunkName string, logger *slog.
 }
 
 // denoise the unprocessed video and return resulting video chunk
-// NOTE: in the future could give user option of different quality since there are multiple denoise flags
-func denoiseVideo(filePath, chunkName string, logger *slog.Logger) (string, error) {
+func denoiseVideo(filePath, denoiseQuality, chunkName string, logger *slog.Logger) (string, error) {
 	outDir := "/tmp/denoise/temp-processed-" + chunkName
 	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
@@ -112,11 +111,22 @@ func denoiseVideo(filePath, chunkName string, logger *slog.Logger) (string, erro
 	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
 	defer cancel()
 
+	var filterStrength string
+	switch denoiseQuality {
+	case "light":
+		filterStrength = "hqdn3d=luma_spatial=4.0:chroma_spatial=3.0:luma_tmp=6.0:chroma_tmp=4.5"
+	case "medium":
+		filterStrength = "hqdn3d=luma_spatial=8.0:chroma_spatial=6.0:luma_tmp=12.0:chroma_tmp=9.0"
+	// in the future add strong filter option that uses nlmeans (potentially with gpu version instead of on cpu)
+	default:
+		return "", fmt.Errorf("unsupported quality selected: %s", denoiseQuality)
+	}
+
 	out, err := exec.CommandContext(
 		ctx,
 		"ffmpeg",
 		"-protocol_whitelist", "file,pipe", "-i", filePath,
-		"-vf", "hqdn3d=luma_spatial=4.0:chroma_spatial=3.0:luma_tmp=6.0:chroma_tmp=4.5",
+		"-vf", filterStrength,
 		"-c:v", "libx264",
 		"-crf", "18",
 		"-y", outputPath,

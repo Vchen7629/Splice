@@ -183,7 +183,7 @@ func TestDenoiseVideo(t *testing.T) {
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		path, err := denoiseVideo("/some/input.mp4", "job-blocked", test.SilentLogger())
+		path, err := denoiseVideo("/some/input.mp4", "light", "job-blocked", test.SilentLogger())
 
 		require.Error(t, err)
 		assert.Empty(t, path)
@@ -196,7 +196,7 @@ func TestDenoiseVideo(t *testing.T) {
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		_, err := denoiseVideo("/some/input.mp4", "job-blocked2", test.SilentLogger())
+		_, err := denoiseVideo("/some/input.mp4", "light", "job-blocked2", test.SilentLogger())
 
 		require.Error(t, err)
 		var pathErr *os.PathError
@@ -208,7 +208,7 @@ func TestDenoiseVideo(t *testing.T) {
 		ffmpegTimeout = time.Microsecond
 		t.Cleanup(func() { ffmpegTimeout = orig })
 
-		_, err := denoiseVideo("in.mp4", "job-timeout", test.SilentLogger())
+		_, err := denoiseVideo("in.mp4", "light", "job-timeout", test.SilentLogger())
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Contains(t, err.Error(), "timed out")
@@ -218,7 +218,7 @@ func TestDenoiseVideo(t *testing.T) {
 		jobID := "job-dir"
 		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
 
-		_, err := denoiseVideo(testVideoPath, jobID, test.SilentLogger())
+		_, err := denoiseVideo(testVideoPath, "light", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.DirExists(t, "/tmp/denoise/temp-processed-"+jobID)
@@ -228,7 +228,7 @@ func TestDenoiseVideo(t *testing.T) {
 		jobID := "job-fmt"
 		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
 
-		outputPath, err := denoiseVideo(testVideoPath, jobID, test.SilentLogger())
+		outputPath, err := denoiseVideo(testVideoPath, "light", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/denoise/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
@@ -238,7 +238,7 @@ func TestDenoiseVideo(t *testing.T) {
 		jobID := "job-webm-src"
 		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
 
-		outputPath, err := denoiseVideo("../shared/test/testvideo.webm", jobID, test.SilentLogger())
+		outputPath, err := denoiseVideo("../shared/test/testvideo.webm", "light", jobID, test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/denoise/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
@@ -270,10 +270,21 @@ func TestDenoiseVideo(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + tc.jobID) })
 
-			_, err := denoiseVideo(tc.filePath, tc.jobID, test.SilentLogger())
+			_, err := denoiseVideo(tc.filePath, "light", tc.jobID, test.SilentLogger())
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "ffmpeg error")
 		})
 	}
+
+	t.Run("unsupported quality returns error", func(t *testing.T) {
+		jobID := "job-bad-quality"
+		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
+
+		path, err := denoiseVideo(testVideoPath, "boom", jobID, test.SilentLogger())
+
+		require.Error(t, err)
+		assert.Empty(t, path)
+		assert.Equal(t, "unsupported quality selected: boom", err.Error())
+	})
 }
