@@ -1,3 +1,5 @@
+import type { ProcessingType } from "../types/file"
+
 export interface Resolution {
     label: string
     height: number
@@ -24,6 +26,13 @@ export function defaultResolution(processingType: string, sourceHeight: number):
         )
     }
     return '1080p'
+}
+
+export function resolutionOptions(processingType: ProcessingType, sourceHeight: number): Resolution[] {
+    if (processingType !== 'Upscale') return TRANSCODE_RESOLUTIONS
+
+    const larger = UPSCALE_RESOLUTIONS.filter(r => r.height > sourceHeight)
+    return larger.length > 0 ? larger : UPSCALE_RESOLUTIONS
 }
 
 /**

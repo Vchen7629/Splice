@@ -2,21 +2,19 @@ import { X } from "lucide-react";
 import type { ProcessedVideo, ProcessingType, UploadedFile } from "../../types/file";
 import { STATUS_BG } from "./StatusStyles";
 import { formatSize } from "../../utils/fileDisplay";
-import ResolutionSelect from "./ResolutionSelect";
 import PipelineLane from "./PipelineProgress";
 import DownloadButton from "./DownloadButton";
+import OptionDropdown from "../ui/OptionDropdown";
+import { resolutionOptions } from "../../utils/videoResolution";
 
 interface UploadedFilesQueueListProps {
     queue: UploadedFile[]
     activeFeature: ProcessingType
-    showResolution: boolean
     onRemove: (id: number) => void
     handleSetResolution: (id: number, resolution: string) => void
 }
 
-const UploadedFileQueueList = (
-    { queue, activeFeature, showResolution, onRemove, handleSetResolution }: UploadedFilesQueueListProps
-) => {
+const UploadedFileQueueList = ({ queue, activeFeature, onRemove, handleSetResolution }: UploadedFilesQueueListProps) => {
     if (queue.length === 0) {
         return (
             <div className="flex flex-col gap-1.5 px-5 py-6">
@@ -54,15 +52,18 @@ const UploadedFileQueueList = (
                         <span className="font-mono text-eyebrow text-fg-faint tabular-nums">
                             {formatSize(file.size)}
                         </span>
-                        {showResolution && (
-                            <span className="ml-auto">
-                                <ResolutionSelect 
-                                    processingType={activeFeature}
-                                    file={file}
-                                    handleSetResolution={handleSetResolution}
-                                />
-                            </span>
+                        <span className="ml-auto">
+                        {(file.processingType === 'Transcode' || file.processingType === 'Upscale') && (
+                            <OptionDropdown 
+                                options={
+                                    resolutionOptions(file.processingType, file.sourceHeight).map(r => ({ value: r.label, label: r.label }))
+                                }
+                                value={file.resolution}
+                                onChange={v => handleSetResolution(file.id, v)}
+                                ariaLabel={`Target resolution for ${file.name}`}
+                            />
                         )}
+                        </span>
                     </div>
                     
                     {/*NOTE: maybe rename this to be clearer */}
