@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from testcontainers.nats import NatsContainer
 
-from shared_handler import ProcessJobMessage
+from shared_handler import DENOISE_QUALITY, OPERATIONS, ProcessJobMessage
 
 
 @pytest.fixture(scope="session")
@@ -37,14 +37,16 @@ def milestone_entry(state: str, stage: str = "", revision: int = 1) -> MagicMock
 def make_msg(
     job_id: str = "job-123",
     storage_url: str = "http://storage/video.mp4",
+    denoise_quality: DENOISE_QUALITY | None = None,
     source_resolution: str = "480p",
-    target_resolution: str = "1080p",
-    operation: str = "transcode",
+    target_resolution: str | None = None,
+    operation: OPERATIONS = "transcode",
 ) -> AsyncMock:
     """Build a mock NATS Msg with a valid ProcessJobMessage payload."""
     payload = ProcessJobMessage(
         job_id=job_id,
         storage_url=storage_url,
+        denoise_quality=denoise_quality,
         source_resolution=source_resolution,
         target_resolution=target_resolution,
         operation=operation,

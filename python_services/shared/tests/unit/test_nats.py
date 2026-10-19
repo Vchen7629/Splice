@@ -240,7 +240,7 @@ async def test_consumer_job_id_empty_string_skips_is_job_cancelled(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_acks_on_success() -> None:
-    msg = make_msg()
+    msg = make_msg(target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
 
@@ -252,7 +252,7 @@ async def test_acks_on_success() -> None:
 
 @pytest.mark.asyncio
 async def test_acks_and_skips_when_job_already_processed() -> None:
-    msg = make_msg()
+    msg = make_msg(target_resolution="1080p")
     ctx = make_ctx()
     ctx.msg_processed_kv.get.side_effect = None
     ctx.msg_processed_kv.get.return_value = MagicMock()
@@ -267,7 +267,7 @@ async def test_acks_and_skips_when_job_already_processed() -> None:
 
 @pytest.mark.asyncio
 async def test_writes_msg_processed_kv_on_success() -> None:
-    msg = make_msg(job_id="abc-123")
+    msg = make_msg(job_id="abc-123", target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
 
@@ -278,7 +278,7 @@ async def test_writes_msg_processed_kv_on_success() -> None:
 
 @pytest.mark.asyncio
 async def test_stage_updated_before_process_job_msg_runs() -> None:
-    msg = make_msg(job_id="abc-123")
+    msg = make_msg(job_id="abc-123", target_resolution="1080p")
     ctx = make_ctx(service_name="scene-detector")
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     call_order: list[str] = []
@@ -301,7 +301,7 @@ async def test_stage_updated_before_process_job_msg_runs() -> None:
     "side_effect", [Exception("process failed")], ids=["process_job_msg_fails"]
 )
 async def test_updates_kv_and_acks_on_failure(side_effect: Exception) -> None:
-    msg = make_msg(job_id="1")
+    msg = make_msg(job_id="1", target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     mock_process_job_msg = AsyncMock(side_effect=side_effect)
@@ -317,7 +317,7 @@ async def test_updates_kv_and_acks_on_failure(side_effect: Exception) -> None:
 
 @pytest.mark.asyncio
 async def test_does_not_write_msg_processed_kv_on_failure() -> None:
-    msg = make_msg()
+    msg = make_msg(target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     mock_process_job_msg = AsyncMock(side_effect=Exception("boom"))
@@ -331,7 +331,7 @@ async def test_does_not_write_msg_processed_kv_on_failure() -> None:
 async def test_update_job_stage_error_records_failure_and_acks() -> None:
     """When job_milestone_kv.update fails for the stage write but succeeds for the
     failed-write fallback, the failure is durably recorded and the message is acked."""
-    msg = make_msg()
+    msg = make_msg(target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     ctx.job_milestone_kv.update.side_effect = [Exception("kv write failed"), None]
@@ -347,7 +347,7 @@ async def test_update_job_stage_error_records_failure_and_acks() -> None:
 async def test_update_job_stage_error_naks_when_failure_write_also_fails() -> None:
     """When job_milestone_kv.update fails for both the stage write and the failed-write
     fallback, nothing was durably recorded, so the message is nak'd for redelivery."""
-    msg = make_msg()
+    msg = make_msg(target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     ctx.job_milestone_kv.update.side_effect = Exception("kv write failed")
@@ -362,7 +362,7 @@ async def test_update_job_stage_error_naks_when_failure_write_also_fails() -> No
 async def test_acks_and_does_not_record_failure_when_job_cancelled() -> None:
     """When process_job_msg raises JobCancelledError, the msg should be acked and
     not recorded as failure in job_milestone_kv"""
-    msg = make_msg()
+    msg = make_msg(target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     mock_process_job_msg = AsyncMock(
@@ -378,7 +378,7 @@ async def test_acks_and_does_not_record_failure_when_job_cancelled() -> None:
 
 @pytest.mark.asyncio
 async def test_cleanup_job_called_on_success() -> None:
-    msg = make_msg(job_id="abc-123")
+    msg = make_msg(job_id="abc-123", target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     mock_cleanup_job = AsyncMock()
@@ -390,7 +390,7 @@ async def test_cleanup_job_called_on_success() -> None:
 
 @pytest.mark.asyncio
 async def test_cleanup_job_called_on_failure_before_nak() -> None:
-    msg = make_msg(job_id="abc-123")
+    msg = make_msg(job_id="abc-123", target_resolution="1080p")
     ctx = make_ctx()
     ctx.job_milestone_kv.get.return_value = milestone_entry("PROCESSING", "upload")
     ctx.job_milestone_kv.update.side_effect = Exception("kv write failed")
