@@ -11,6 +11,7 @@ from src.processing.job import TEMP_ROOT, logger, process_job
 METADATA = ProcessJobMessage(
     job_id="test-123",
     storage_url="http://fake:8888/test-123/video.mp4",
+    denoise_quality="light",
     source_resolution="280p",
     target_resolution="480p",
     operation="transcode",
@@ -87,6 +88,47 @@ async def test_process_job_returns_chunk_messages_on_success() -> None:
     assert result[1].storage_url == FAKE_STORAGE_URLS[1]
     assert result[0].total_chunks == 2
     assert result[1].total_chunks == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "operation, denoise_quality, target_resolution",
+    [
+        ("denoise", "medium", None),
+        ("transcode", None, "480p"),
+        ("upscale", None, "1080p"),
+    ],
+)
+async def test_process_job_forwards_operation_fields_to_chunk_messages(
+    operation: str, denoise_quality: str | None, target_resolution: str | None
+) -> None:
+    """Every chunk message carries the operation, denoise_quality and target_resolution from the job"""
+    metadata = ProcessJobMessage(
+        job_id="test-123",
+        storage_url="http://fake:8888/test-123/video.mp4",
+        source_resolution="280p",
+        operation=operation,
+        denoise_quality=denoise_quality,
+        target_resolution=target_resolution,
+    )
+    url_map = dict(zip(FAKE_CHUNK_PATHS, FAKE_STORAGE_URLS))
+
+    with (
+        patch("src.processing.job.fetch_video", return_value=FAKE_LOCAL_PATH),
+        patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
+        patch(
+            "src.processing.job.upload_video",
+            side_effect=lambda storage_url, job_id, path, service_name: url_map[path],
+        ),
+        patch("src.processing.job.cleanup_temp"),
+    ):
+        result = await process_job(MOCK_CANCEL_EVENT, metadata)
+
+    assert len(result) == 2
+    for chunk in result:
+        assert chunk.operation == operation
+        assert chunk.denoise_quality == denoise_quality
+        assert chunk.target_resolution == target_resolution
 
 
 @pytest.mark.asyncio

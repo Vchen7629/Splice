@@ -93,6 +93,7 @@ async def process_job(
             chunk_index=i,
             total_chunks=len(storage_urls),
             storage_url=url,
+            denoise_quality=metadata.denoise_quality,
             target_resolution=metadata.target_resolution,
             operation=metadata.operation,
         )
