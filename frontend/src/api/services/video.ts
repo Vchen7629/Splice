@@ -4,21 +4,13 @@ import { GatewayApi, GATEWAY_BASE_URL } from "../lib/basePath"
 export const VideoService = {
     // upload with XHR to show upload progress
     upload: (
-        videoFile: File,
-        targetResolution: string,
-        processingType: string,
+        formData: FormData,
         onProgress: (pct: number) => void
     ): { promise: Promise<{ job_id: string }>; abort: () => void} => {
         let xhr: XMLHttpRequest
 
         const promise = new Promise<{ job_id: string }>((resolve, reject) => {
             xhr = new XMLHttpRequest()
-
-            const formData = new FormData()
-            formData.append("video", videoFile)
-            formData.append("target_resolution", targetResolution)
-            formData.append("process_type", processingType.toLowerCase())
-
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
             })

@@ -28,7 +28,6 @@ function App() {
   const queue = videos.filter(v => v.processingType === activeFeature)
   const processedVideo = processed.filter(v => v.processingType === activeFeature)
   const cancelledVideo = cancelled.filter(v => v.processingType === activeFeature)
-  const showResolution = activeFeature !== 'Denoise'
 
   async function handleFiles(files: File[]) {
     const processingType = activeFeature
@@ -51,6 +50,7 @@ function App() {
         name: file.name,
         size: file.size,
         resolution: resolution,
+        denoiseQuality: processingType === 'Denoise' ? 'medium' : undefined,
         sourceHeight,
         status: 'pending' as const,
         uploadProgress: 0,
@@ -113,7 +113,6 @@ function App() {
               <UploadedFileQueueList 
                 queue={queue}
                 activeFeature={activeFeature}
-                showResolution={showResolution}
                 onRemove={handleRemove}
                 handleSetResolution={handleSetResolution}
               />

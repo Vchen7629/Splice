@@ -1,6 +1,7 @@
 import { toast } from "sonner"
 import { VideoService } from "../api/services/video"
 import { useVideoQueueStore } from "../state/videoQueue"
+import { buildUploadForm } from "../utils/fileUpload"
 import type { ProcessingType, UploadedFile } from "../types/file"
 import { abortRefs, fileMap } from "../state/fileRegistry"
 
@@ -35,7 +36,7 @@ export function useUploadQueue() {
                 const file = fileMap.get(video.id)
                 if (!file) return video
 
-                const { promise, abort } = VideoService.upload(file, video.resolution, processingType, (pct) => {
+                const { promise, abort } = VideoService.upload(buildUploadForm(file, video), (pct) => {
                     updateVideo(video.id, { uploadProgress: pct })
                 })
 
