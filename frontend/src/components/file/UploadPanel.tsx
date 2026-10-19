@@ -29,7 +29,6 @@ const FileUploadPanel = ({ activeFeature, queue, processedCount, dropzone, onSta
     return (
         <section
             {...dropHandlers}
-            onClick={browse}
             className={`relative flex flex-col items-center justify-center flex-1 min-w-0 gap-9 cursor-pointer
                   transition-colors duration-200 ${isDragging ? 'bg-accent-soft' : ''}`}
         >

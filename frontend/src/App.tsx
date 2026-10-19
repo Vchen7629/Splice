@@ -3,7 +3,7 @@ import { Toaster } from 'sonner'
 import { useVideoQueueStore } from './state/videoQueue'
 import { useUploadQueue } from './hooks/useUploadQueue'
 import { useJobEvents } from './hooks/useJobEvents'
-import type { ProcessingType, UploadedFile } from './types/file'
+import type { DenoiseQuality, ProcessingType, UploadedFile } from './types/file'
 import { defaultResolution, getVideoResolution } from './utils/videoResolution'
 import { useTheme } from './hooks/useTheme'
 import { useFileDrop } from './hooks/useFileDrop'
@@ -17,7 +17,7 @@ import { useProcessedStore } from './state/processedVideos'
 import { fileMap, nextFileId } from './state/fileRegistry'
 
 function App() {
-  const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution } = useVideoQueueStore()
+  const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution, setDenoiseQuality } = useVideoQueueStore()
   const { processed, remove: removeProcessed} = useProcessedStore()
   const [ activeFeature, setActiveFeature] = useState<ProcessingType>('Transcode')
   const { mode, toggleMode } = useTheme()
@@ -77,6 +77,11 @@ function App() {
       setResolution(id, resolution)
   }
 
+  function handleSetDenoiseQuality(id: number, quality: DenoiseQuality) {
+    if (queue.find(v => v.id === id)?.status === 'error') resetVideo(id)
+    setDenoiseQuality(id, quality)
+  }
+
   return (
     <>
       <Toaster
@@ -115,6 +120,7 @@ function App() {
                 activeFeature={activeFeature}
                 onRemove={handleRemove}
                 handleSetResolution={handleSetResolution}
+                handleSetDenoiseQuality={handleSetDenoiseQuality}
               />
             }
             processedContent={<ProcessedVideosList processedVideos={processedVideo} onRemove={removeProcessed}/>}

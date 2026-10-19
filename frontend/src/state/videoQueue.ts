@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { UploadedFile } from "../types/file"
+import type { DenoiseQuality, UploadedFile } from "../types/file"
 import { useProcessedStore } from "./processedVideos"
 import { releaseFile } from "./fileRegistry"
 
@@ -9,6 +9,7 @@ interface VideoQueueStore {
     addVideos: (videos: UploadedFile[]) => void
     updateVideo: (id: number, patch: Partial<UploadedFile>) => void
     setResolution: (id: number, resolution: string) => void
+    setDenoiseQuality: (id: number, quality: DenoiseQuality) => void
     removeVideo: (id: number) => void
     removeCancelled: (id: number) => void
     markComplete: (id: number) => void
@@ -29,6 +30,8 @@ export const useVideoQueueStore = create<VideoQueueStore>((set, get) => ({
         })),
 
     setResolution: (id, resolution) => get().updateVideo(id, { resolution }),
+
+    setDenoiseQuality: (id, quality) => get().updateVideo(id, { denoiseQuality: quality }),
 
     removeVideo: (id) => set(state => ({ videos: state.videos.filter(v => v.id !== id) })),
 
