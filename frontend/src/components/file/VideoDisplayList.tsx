@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import type { DenoiseQuality, ProcessedVideo, ProcessingType, UploadedFile } from "../../types/file";
+import { DENOISE_QUALITIES, type DenoiseQuality, type ProcessedVideo, type ProcessingType, type UploadedFile } from "../../types/file";
 import { STATUS_BG } from "./StatusStyles";
 import { formatSize } from "../../utils/fileDisplay";
 import PipelineLane from "./PipelineProgress";
@@ -16,8 +16,6 @@ interface UploadedFilesQueueListProps {
 }
 
 const UploadedFileQueueList = ({ queue, activeFeature, onRemove, handleSetResolution, handleSetDenoiseQuality }: UploadedFilesQueueListProps) => {
-    const DENOISE_OPTIONS: DenoiseQuality[] = ['light', 'medium']
-    
     if (queue.length === 0) {
         return (
             <div className="flex flex-col gap-1.5 px-5 py-6">
@@ -68,7 +66,7 @@ const UploadedFileQueueList = ({ queue, activeFeature, onRemove, handleSetResolu
                         )}
                         {file.processingType === 'Denoise' && (
                             <OptionDropdown 
-                                options={DENOISE_OPTIONS.map(o => ({ value: o, label: o}))}
+                                options={DENOISE_QUALITIES.map(o => ({ value: o, label: o}))}
                                 value={file.denoiseQuality ?? 'medium'}
                                 onChange={v => handleSetDenoiseQuality(file.id, v)}
                                 ariaLabel={`Selected denoise quality for ${file.name}`}

@@ -1,7 +1,7 @@
 export type JobStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'error' | 'degraded' | 'cancelling' | 'cancelled'
 export type ProcessingType = 'Transcode' | 'Upscale' | 'Denoise' | 'Convert'
 
-export const DENOISE_QUALITIES = ['light', 'medium']
+export const DENOISE_QUALITIES = ['light', 'medium'] as const
 export type DenoiseQuality = typeof DENOISE_QUALITIES[number]
 
 interface baseFile {
