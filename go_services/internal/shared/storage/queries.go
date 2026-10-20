@@ -17,7 +17,7 @@ var httpClient = &http.Client{Timeout: 30 * time.Second}
 // uploads (PUT) body to the storage url
 func Upload(ctx context.Context, url string, body io.Reader, timeout time.Duration) error {
 	client := &http.Client{Timeout: timeout} // 0 = no timeout
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, io.NopCloser(body))
 	if err != nil {
 		return fmt.Errorf("error creating upload request: %w", err)
 	}
