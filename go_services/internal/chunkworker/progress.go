@@ -21,13 +21,8 @@ func jobProgressPct(ctx context.Context, processedKV jetstream.KeyValue, jobID s
 	if err != nil {
 		return 0, fmt.Errorf("failed to list processed chunk keys: %w", err)
 	}
-	defer func() {
-		stopErr := lister.Stop()
-		if stopErr != nil {
-			logger.Warn("failed to stop lister at the end", "err", stopErr)
-		}
-	}()
 
+	// lister stops its own watcher once all keys are delivered, so no Stop() needed after draining
 	completed := 0
 	for key := range lister.Keys() {
 		if strings.HasPrefix(key, prefix) {
