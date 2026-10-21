@@ -21,6 +21,9 @@ func Upload(ctx context.Context, url string, body io.Reader, timeout time.Durati
 	if err != nil {
 		return fmt.Errorf("error creating upload request: %w", err)
 	}
+	if _, ok := body.(io.ReadCloser); ok {
+		req.Body = io.NopCloser(body)
+	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 
 	resp, err := client.Do(req)
