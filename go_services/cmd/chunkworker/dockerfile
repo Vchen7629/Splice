@@ -8,7 +8,7 @@
 #    -e NATS_URL=nats://host.docker.internal:4222 \
 #    chunkworker:latest
 # or just use the docker-compose.backend.yaml to run all services
-FROM golang:1.27.2-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 
 WORKDIR /app
 
