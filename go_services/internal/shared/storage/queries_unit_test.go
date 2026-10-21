@@ -121,12 +121,13 @@ func TestUpload(t *testing.T) {
 		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
 	})
 
-	t.Run("sends a PUT with the body, path and content type", func(t *testing.T) {
+	t.Run("sends a PUT with the body, path, content type and length", func(t *testing.T) {
 		var method, path, contentType string
+		var contentLength int64
 		var body []byte
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			method, path, contentType = r.Method, r.URL.Path, r.Header.Get("Content-Type")
+			method, path, contentType, contentLength = r.Method, r.URL.Path, r.Header.Get("Content-Type"), r.ContentLength
 			body, _ = io.ReadAll(r.Body)
 			w.WriteHeader(http.StatusCreated)
 		}))
@@ -138,6 +139,7 @@ func TestUpload(t *testing.T) {
 		assert.Equal(t, http.MethodPut, method)
 		assert.Equal(t, "/job-1/video.mp4", path)
 		assert.Equal(t, "application/octet-stream", contentType)
+		assert.Equal(t, int64(len("fake video")), contentLength)
 		assert.Equal(t, "fake video", string(body))
 	})
 
