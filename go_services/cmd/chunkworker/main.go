@@ -48,9 +48,9 @@ func main() {
 		return
 	}
 
-	processedKV := sJetstream.CreateKV("transcode-chunk-job-processed", js, 3*time.Hour, logger)
+	processedKV := sJetstream.CreateKV("chunk-worker-job-processed", js, 3*time.Hour, logger)
 	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
-	claimKV := sJetstream.CreateKV("transcode-chunk-claims", js, chunkClaimTTL, logger)
+	claimKV := sJetstream.CreateKV("chunk-worker-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
