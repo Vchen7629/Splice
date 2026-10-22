@@ -18,7 +18,7 @@ type VideoJobMessage struct {
 	TargetResolution string `json:"target_resolution,omitempty"`
 	SourceResolution string `json:"source_resolution"`
 	StorageURL       string `json:"storage_url"`
-	Operation		 string `json:"operation"`
+	Operation        string `json:"operation"`
 }
 
 type ChunkCompleteMessage struct {
