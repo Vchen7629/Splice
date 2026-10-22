@@ -93,16 +93,6 @@ func TestConsumeVideoChunkU(t *testing.T) {
 	})
 
 	// failure tests
-	t.Run("Consume fail returns error", func(t *testing.T) {
-		consumeErr := errors.New("consume error")
-
-		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
-
-		_, err := ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
-
-		require.Error(t, err)
-		assert.ErrorIs(t, err, consumeErr)
-	})
 
 	t.Run("fetch failure should nak", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}

@@ -54,7 +54,7 @@ func listJobChunkKeysKV(ctx context.Context, kv jetstream.KeyValue, jobID string
 	if err != nil {
 		return nil, fmt.Errorf("failed: %w", err)
 	}
-	
+
 	// lister stops its own watcher once all keys are delivered, so no Stop() needed after draining
 	var keys []string
 	for key := range lister.Keys() {

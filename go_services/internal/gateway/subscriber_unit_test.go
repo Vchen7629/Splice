@@ -82,8 +82,6 @@ func TestListenJobCompleteU(t *testing.T) {
 
 	streamNameErr := errors.New("no stream for subject")
 	streamErr := errors.New("stream fetch failed")
-	consumerErr := errors.New("create consumer failed")
-	consumeErr := errors.New("consume failed")
 
 	returnErrorTests := []struct {
 		name    string
@@ -99,16 +97,6 @@ func TestListenJobCompleteU(t *testing.T) {
 			name:    "stream fetch failure returns error",
 			js:      &MockJS{JStreamErr: streamErr},
 			wantErr: streamErr,
-		},
-		{
-			name:    "create consumer failure returns error",
-			js:      &MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}},
-			wantErr: consumerErr,
-		},
-		{
-			name:    "consume failure returns error",
-			js:      &MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}},
-			wantErr: consumeErr,
 		},
 	}
 

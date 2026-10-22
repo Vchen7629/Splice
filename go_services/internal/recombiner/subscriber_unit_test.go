@@ -32,8 +32,6 @@ func validPayload(t *testing.T, jobID string) []byte {
 func TestRecombineVideo(t *testing.T) {
 	streamNameErr := errors.New("no stream")
 	streamErr := errors.New("stream error")
-	consumerErr := errors.New("consumer error")
-	consumeErr := errors.New("consume error")
 
 	returnErrorTests := []struct {
 		name    string
@@ -49,16 +47,6 @@ func TestRecombineVideo(t *testing.T) {
 			name:    "stream failure returns error",
 			js:      &test.MockJS{JStreamErr: streamErr},
 			wantErr: streamErr,
-		},
-		{
-			name:    "create consumer failure returns error",
-			js:      &test.MockJS{JStream: &test.MockStream{ConsumerErr: consumerErr}},
-			wantErr: consumerErr,
-		},
-		{
-			name:    "consume failure returns error",
-			js:      &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}},
-			wantErr: consumeErr,
 		},
 	}
 

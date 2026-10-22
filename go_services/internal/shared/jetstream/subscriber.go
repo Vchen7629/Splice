@@ -8,8 +8,24 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+type ConsumerConfig struct {
+	Subject, ServiceName string
+	AckWait              time.Duration
+	MaxAckPending        int
+}
+
+// creates a durable consumer on Subject and starts consuming messages with handler
+func ConsumeDurable(js jetstream.JetStream, cfg ConsumerConfig, handler jetstream.MessageHandler) (jetstream.ConsumeContext, error) {
+	cons, err := createDurableConsumer(js, cfg.Subject, cfg.ServiceName, cfg.AckWait, cfg.MaxAckPending)
+	if err != nil {
+		return nil, err
+	}
+
+	return cons.Consume(handler)
+}
+
 // creates a durable consumer to listen to nats subject to consume messages
-func CreateDurableConsumer(
+func createDurableConsumer(
 	js jetstream.JetStream, subSubject, consName string, ackWait time.Duration, maxAckPending int,
 ) (jetstream.Consumer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

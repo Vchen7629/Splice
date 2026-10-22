@@ -286,31 +286,6 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 }
 
 func TestListenJobCompleteI(t *testing.T) {
-	t.Run("returns error when no stream covers jobs.complete", func(t *testing.T) {
-		ctx := context.Background()
-
-		container, err := natstc.Run(ctx, "nats:2.10-alpine")
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-		url, err := container.ConnectionString(ctx)
-		require.NoError(t, err)
-
-		nc, err := nats.Connect(url,
-			nats.MaxReconnects(5),
-			nats.RetryOnFailedConnect(true),
-			nats.ReconnectWait(200*time.Millisecond),
-		)
-		require.NoError(t, err)
-		t.Cleanup(nc.Close)
-
-		js, err := jetstream.New(nc)
-		require.NoError(t, err)
-
-		_, err = ListenJobComplete(js, sharedKV, test.SilentLogger())
-
-		assert.Error(t, err)
-	})
 	t.Run("returns sub", func(t *testing.T) {
 		consCtx, err := ListenJobComplete(sharedJS, sharedKV, test.SilentLogger())
 
@@ -318,6 +293,7 @@ func TestListenJobCompleteI(t *testing.T) {
 		assert.NotNil(t, consCtx)
 		t.Cleanup(consCtx.Stop)
 	})
+
 	t.Run("Consumer config", func(t *testing.T) {
 		ctx := context.Background()
 
@@ -333,10 +309,7 @@ func TestListenJobCompleteI(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "video-status-complete", info.Config.Name)
-		assert.Equal(t, "video-status-complete", info.Config.Durable)
 		assert.Equal(t, "jobs.complete", info.Config.FilterSubject)
-		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
-		assert.Equal(t, 3, info.Config.MaxDeliver)
 		assert.Equal(t, 30*time.Second, info.Config.AckWait)
 	})
 

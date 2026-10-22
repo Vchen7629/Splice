@@ -23,13 +23,12 @@ func RecombineVideo(
 	msgRecievedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
-	maxAckPending := 10
-	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "video-recombiner", ackWait, maxAckPending)
-	if err != nil {
-		return nil, err
-	}
-
-	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
+	return sJetstream.ConsumeDurable(js, sJetstream.ConsumerConfig{
+		Subject:       subSubject,
+		ServiceName:   "video-recombiner",
+		AckWait:       ackWait,
+		MaxAckPending: 10,
+	}, func(msg jetstream.Msg) {
 		payload, ok := sJetstream.UnmarshalJetstreamMsg[handler.ChunkCompleteMessage](msg, logger)
 		if !ok {
 			return
@@ -110,11 +109,6 @@ func RecombineVideo(
 			return
 		}
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return consCtx, nil
 }
 
 // records this video chunk and returns whether all chunks for a single jobID is recieved and good for processing
