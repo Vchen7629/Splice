@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -66,29 +65,4 @@ func TestCreateDurableConsumer(t *testing.T) {
 			assert.ErrorIs(t, err, tc.wantErr)
 		})
 	}
-}
-
-func TestUnmarshalJetstreamMsg(t *testing.T) {
-	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
-		msg := &test.MockMsg{Payload: []byte("not valid json")}
-
-		payload, ok := UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
-
-		require.False(t, ok)
-		assert.NotNil(t, payload)
-		assert.True(t, msg.NakCalled)
-		assert.False(t, msg.AckCalled)
-	})
-
-	t.Run("invalid JSON with nak error logs and returns", func(t *testing.T) {
-		nakErr := errors.New("nak failed")
-		msg := &test.MockMsg{Payload: []byte("not valid json"), NakErr: nakErr}
-
-		payload, ok := UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
-
-		require.False(t, ok)
-		assert.NotNil(t, payload)
-		assert.True(t, msg.NakCalled)
-	})
-
 }

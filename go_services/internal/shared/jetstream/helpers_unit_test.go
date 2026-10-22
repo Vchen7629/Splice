@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
@@ -48,6 +49,31 @@ func TestNakWithErrHandling(t *testing.T) {
 		// Should not panic even when Nak returns an error
 		sJetstream.NakWithErrHandling(test.SilentLogger(), msg)
 	})
+}
+
+func TestUnmarshalJetstreamMsg(t *testing.T) {
+	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
+		msg := &test.MockMsg{Payload: []byte("not valid json")}
+
+		payload, ok := sJetstream.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+
+		require.False(t, ok)
+		assert.NotNil(t, payload)
+		assert.True(t, msg.NakCalled)
+		assert.False(t, msg.AckCalled)
+	})
+
+	t.Run("invalid JSON with nak error logs and returns", func(t *testing.T) {
+		nakErr := errors.New("nak failed")
+		msg := &test.MockMsg{Payload: []byte("not valid json"), NakErr: nakErr}
+
+		payload, ok := sJetstream.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+
+		require.False(t, ok)
+		assert.NotNil(t, payload)
+		assert.True(t, msg.NakCalled)
+	})
+
 }
 
 func TestPublishChunkComplete(t *testing.T) {
