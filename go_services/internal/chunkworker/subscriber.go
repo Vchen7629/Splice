@@ -26,13 +26,12 @@ func ConsumeVideoChunk(
 	js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
-	maxAckPending := 10
-	cons, err := sJetstream.CreateDurableConsumer(js, subSubject, "chunk-worker", ackWait, maxAckPending)
-	if err != nil {
-		return nil, err
-	}
-
-	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
+	return sJetstream.ConsumeDurable(js, sJetstream.ConsumerConfig{
+		Subject:       subSubject,
+		ServiceName:   "chunk-worker",
+		AckWait:       ackWait,
+		MaxAckPending: 10,
+	}, func(msg jetstream.Msg) {
 		payload, ok := sJetstream.UnmarshalJetstreamMsg[VideoChunkMessage](msg, logger)
 		if !ok {
 			return
@@ -112,11 +111,6 @@ func ConsumeVideoChunk(
 			return
 		}
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return consCtx, nil
 }
 
 // cleanupTempFolders removes the unprocessed and processed temp dirs for a chunk.

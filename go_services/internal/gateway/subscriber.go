@@ -83,13 +83,12 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 
 // subs to jobs.complete (from video-recombiner service) via jetstream consumer and writes COMPLETE to KV
 func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue, logger *slog.Logger) (jetstream.ConsumeContext, error) {
-	maxAckPending := -1 // set to -1 for infinite
-	cons, err := sJetstream.CreateDurableConsumer(js, "jobs.complete", "video-status-complete", 30*time.Second, maxAckPending)
-	if err != nil {
-		return nil, err
-	}
-
-	consCtx, err := cons.Consume(func(msg jetstream.Msg) {
+	return sJetstream.ConsumeDurable(js, sJetstream.ConsumerConfig{
+		Subject:       "jobs.complete",
+		ServiceName:   "video-status-complete",
+		AckWait:       30 * time.Second,
+		MaxAckPending: -1, // set to -1 for infinite
+	}, func(msg jetstream.Msg) {
 		payload, ok := sJetstream.UnmarshalJetstreamMsg[jobIDPayload](msg, logger)
 		if !ok {
 			return
@@ -117,6 +116,4 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 		logger.Debug("job marked as complete", "job_id", payload.JobID)
 		sJetstream.AckWithErrHandling(logger, msg)
 	})
-
-	return consCtx, err
 }
