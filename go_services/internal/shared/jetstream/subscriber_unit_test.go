@@ -1,6 +1,6 @@
 //go:build unit
 
-package jetstream_test
+package jetstream
 
 import (
 	"errors"
@@ -8,14 +8,30 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestReturnError(t *testing.T) {
+func TestConsumeDurable(t *testing.T) {
+	t.Run("Consume fail returns error", func(t *testing.T) {
+		consumeErr := errors.New("consume error")
+		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumer{ConsumeErr: consumeErr}}}
+
+		_, err := ConsumeDurable(js, ConsumerConfig{
+			Subject:       "idk",
+			ServiceName:   "idk",
+			AckWait:       30 * time.Second,
+			MaxAckPending: 10,
+		}, nil)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, consumeErr)
+	})
+}
+
+func TestCreateDurableConsumer(t *testing.T) {
 	streamNameErr := errors.New("no stream")
 	streamErr := errors.New("stream error")
 	consumerErr := errors.New("consumer error")
@@ -44,7 +60,7 @@ func TestReturnError(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := jetstream.CreateDurableConsumer(tc.js, "idk", "idk", 30*time.Second, 10)
+			_, err := createDurableConsumer(tc.js, "idk", "idk", 30*time.Second, 10)
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
@@ -56,7 +72,7 @@ func TestUnmarshalJetstreamMsg(t *testing.T) {
 	t.Run("invalid JSON naks and does not ack", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: []byte("not valid json")}
 
-		payload, ok := jetstream.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+		payload, ok := UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
 
 		require.False(t, ok)
 		assert.NotNil(t, payload)
@@ -68,7 +84,7 @@ func TestUnmarshalJetstreamMsg(t *testing.T) {
 		nakErr := errors.New("nak failed")
 		msg := &test.MockMsg{Payload: []byte("not valid json"), NakErr: nakErr}
 
-		payload, ok := jetstream.UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
+		payload, ok := UnmarshalJetstreamMsg[handler.VideoJobMessage](msg, test.SilentLogger())
 
 		require.False(t, ok)
 		assert.NotNil(t, payload)
