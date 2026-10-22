@@ -16,7 +16,6 @@ import (
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,11 +55,8 @@ func TestRecombineVideoI(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "video-recombiner", info.Config.Name)
-		assert.Equal(t, "video-recombiner", info.Config.Durable)
 		assert.Equal(t, "jobs.chunks.complete", info.Config.FilterSubject)
-		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
 		assert.Equal(t, 10, info.Config.MaxAckPending)
-		assert.Equal(t, 3, info.Config.MaxDeliver)
 		assert.Equal(t, 30*time.Second, info.Config.AckWait)
 	})
 

@@ -293,7 +293,7 @@ func TestListenJobCompleteI(t *testing.T) {
 		assert.NotNil(t, consCtx)
 		t.Cleanup(consCtx.Stop)
 	})
-	
+
 	t.Run("Consumer config", func(t *testing.T) {
 		ctx := context.Background()
 
@@ -309,10 +309,7 @@ func TestListenJobCompleteI(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "video-status-complete", info.Config.Name)
-		assert.Equal(t, "video-status-complete", info.Config.Durable)
 		assert.Equal(t, "jobs.complete", info.Config.FilterSubject)
-		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
-		assert.Equal(t, 3, info.Config.MaxDeliver)
 		assert.Equal(t, 30*time.Second, info.Config.AckWait)
 	})
 

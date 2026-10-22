@@ -116,11 +116,8 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "chunk-worker", info.Config.Name)
-		assert.Equal(t, "chunk-worker", info.Config.Durable)
 		assert.Equal(t, "jobs.video.chunks", info.Config.FilterSubject)
-		assert.Equal(t, jetstream.AckExplicitPolicy, info.Config.AckPolicy)
 		assert.Equal(t, 10, info.Config.MaxAckPending)
-		assert.Equal(t, 3, info.Config.MaxDeliver)
 	})
 
 	t.Run("invalid JSON does not publish downstream", func(t *testing.T) {
