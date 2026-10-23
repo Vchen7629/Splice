@@ -167,8 +167,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	}
 
 	handleVideoErr := func(err error, failMsg string) {
-		var rejected *rejectError
-		if errors.As(err, &rejected) {
+		if rejected, ok := errors.AsType[*rejectError](err); ok {
 			http.Error(w, rejected.reason, http.StatusUnprocessableEntity)
 			v.logger.Warn("rejected uploaded video", "reason", rejected.reason, "file", header.Filename)
 			return
