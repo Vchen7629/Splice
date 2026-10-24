@@ -173,7 +173,7 @@ func TestUpload(t *testing.T) {
 	})
 }
 
-func TestGetVideoChunkHTTPErrors(t *testing.T) {
+func TestDownloadVideoHTTPErrors(t *testing.T) {
 	tests := []struct {
 		name        string
 		status      int
@@ -204,7 +204,7 @@ func TestGetVideoChunkHTTPErrors(t *testing.T) {
 			t.Cleanup(srv.Close)
 
 			jobID := "job-123"
-			filePath, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
+			filePath, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 			require.Error(t, err)
 			assert.Empty(t, filePath)
@@ -215,7 +215,7 @@ func TestGetVideoChunkHTTPErrors(t *testing.T) {
 	}
 }
 
-func TestGetVideoChunkWritesFile(t *testing.T) {
+func TestDownloadVideoWritesFile(t *testing.T) {
 	videoContent := []byte("fake video content")
 	jobID := "job-write"
 	filename := "chunk_001.mp4"
@@ -229,7 +229,7 @@ func TestGetVideoChunkWritesFile(t *testing.T) {
 
 	storageURL := srv.URL + "/" + jobID + "/processed/" + filename
 
-	filePath, err := GetVideoChunk(storageURL, jobID)
+	filePath, err := DownloadVideo(storageURL, jobID)
 
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(filePath, filename), "filePath %q should end with %q", filePath, filename)
@@ -241,7 +241,7 @@ func TestGetVideoChunkWritesFile(t *testing.T) {
 	assert.Equal(t, videoContent, got)
 }
 
-func TestGetVideoChunkIoCopyError(t *testing.T) {
+func TestDownloadVideoIoCopyError(t *testing.T) {
 	t.Run("io.Copy failure cleans up job dir and returns error", func(t *testing.T) {
 		jobID := "job-copy-err"
 		t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
@@ -257,7 +257,7 @@ func TestGetVideoChunkIoCopyError(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
+		_, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error writing video to file")
@@ -284,7 +284,7 @@ func TestGetVideoChunkIoCopyError(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := GetVideoChunk(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
+		_, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error writing video to file")
