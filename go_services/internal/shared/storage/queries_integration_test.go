@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetVideoChunkIntegration(t *testing.T) {
+func TestDownloadVideoIntegration(t *testing.T) {
 	t.Run("fetches video and writes to correct local path with matching content", func(t *testing.T) {
 		jobID := "job-fetch"
 		filename := "testvideo.mp4"
@@ -27,7 +27,7 @@ func TestGetVideoChunkIntegration(t *testing.T) {
 		storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerUrl, jobID, filename)
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
-		filePath, err := storage.GetVideoChunk(storageURL, jobID)
+		filePath, err := storage.DownloadVideo(storageURL, jobID)
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/temp-unprocessed-"+jobID+"/"+filename, filePath)
@@ -43,7 +43,7 @@ func TestGetVideoChunkIntegration(t *testing.T) {
 		storageURL := fmt.Sprintf("%s/%s/processed/nonexistent.mp4", sharedFilerUrl, jobID)
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
-		filePath, err := storage.GetVideoChunk(storageURL, jobID)
+		filePath, err := storage.DownloadVideo(storageURL, jobID)
 
 		require.Error(t, err)
 		assert.Empty(t, filePath)

@@ -84,9 +84,9 @@ func TempUnprocessedDir(chunkName string) string {
 	return filepath.Join("/tmp/temp-unprocessed-" + chunkName)
 }
 
-// fetch the video chunk seaweedfs storage
-func GetVideoChunk(storageURL, chunkName string) (string, error) {
-	err := ValidatePathSegment(chunkName)
+// down the video from seaweedfs storage and save it to a temp directory with dirName
+func DownloadVideo(storageURL, dirName string) (string, error) {
+	err := ValidatePathSegment(dirName)
 	if err != nil {
 		return "", err
 	}
@@ -120,7 +120,7 @@ func GetVideoChunk(storageURL, chunkName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jobDir := TempUnprocessedDir(chunkName)
+	jobDir := TempUnprocessedDir(dirName)
 
 	err = os.MkdirAll(jobDir, 0755)
 	if err != nil {

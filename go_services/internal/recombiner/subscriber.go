@@ -145,9 +145,9 @@ func recombineVideoChunks(
 	for idx, storageURL := range chunks {
 		fileName := fmt.Sprintf("processed_chunk-%s", payload.JobID)
 
-		localPath, err := storage.GetVideoChunk(storageURL, fileName)
+		localPath, err := storage.DownloadVideo(storageURL, fileName)
 		if err != nil {
-			logger.Error("failed to download chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
+			logger.Error("failed to download video chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
 			downloadErr = err
 			break
 		}
