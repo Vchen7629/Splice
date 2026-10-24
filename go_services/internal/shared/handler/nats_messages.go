@@ -16,6 +16,7 @@ type VideoJobMessage struct {
 	JobID            string `json:"job_id"`
 	DenoiseQuality   string `json:"denoise_quality,omitempty"`
 	TargetResolution string `json:"target_resolution,omitempty"`
+	TargetFormat     string `json:"target_format,omitempty"`
 	SourceResolution string `json:"source_resolution"`
 	StorageURL       string `json:"storage_url"`
 	Operation        string `json:"operation"`
