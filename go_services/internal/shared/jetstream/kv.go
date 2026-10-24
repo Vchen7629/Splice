@@ -48,12 +48,12 @@ func ConnectKV(js jetstream.JetStream, bucketName string, logger *slog.Logger) j
 	return kv
 }
 
-// check if a key exists in the KV
-func CheckKeyExist(kv jetstream.KeyValue, key string) (bool, error) {
+// check if the incoming job jetstream msg is processed by checking if the key exists in the KV
+func IsMsgProcessed(processedKV jetstream.KeyValue, key string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err := kv.Get(ctx, key)
+	_, err := processedKV.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, jetstream.ErrKeyNotFound) {
 			return false, nil
@@ -64,11 +64,11 @@ func CheckKeyExist(kv jetstream.KeyValue, key string) (bool, error) {
 	return true, nil
 }
 
-// updates the KV with processed so chunk is marked and doesnt reprocess
-func MarkChunkProcessed(processedKV jetstream.KeyValue, chunkKVKey string, logger *slog.Logger) error {
-	err := PutKeyKV(processedKV, chunkKVKey, []byte("processed"))
+// updates the KV with processed so job msg is marked and doesnt reprocess
+func MarkMsgProcessed(processedKV jetstream.KeyValue, key string, logger *slog.Logger) error {
+	err := PutKeyKV(processedKV, key, []byte("processed"))
 	if err != nil {
-		logger.Error("failed to mark job chunk as processed", "err", err)
+		logger.Error("failed to mark job msg as processed", "err", err)
 		return err
 	}
 

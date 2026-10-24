@@ -37,7 +37,7 @@ func ConsumeVideoChunk(
 			return
 		}
 
-		processed, err := sJetstream.CheckKeyExist(processedKV, payload.ChunkKVKey())
+		processed, err := sJetstream.IsMsgProcessed(processedKV, payload.ChunkKVKey())
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
 			return

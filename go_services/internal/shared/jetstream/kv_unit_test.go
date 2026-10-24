@@ -13,29 +13,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCheckKeyExists(t *testing.T) {
+func TestIsMsgProcesseds(t *testing.T) {
 	t.Run("returns false when key not found", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: false}
+		mockProcessedKV := &test.MockKV{GetFound: false}
 
-		processed, err := CheckKeyExist(mockKV, "job-1.0")
+		processed, err := IsMsgProcessed(mockProcessedKV, "job-1.0")
 
 		require.NoError(t, err)
 		assert.False(t, processed)
 	})
 
 	t.Run("returns true when key exists", func(t *testing.T) {
-		mockKV := &test.MockKV{GetFound: true}
+		mockProcessedKV := &test.MockKV{GetFound: true}
 
-		processed, err := CheckKeyExist(mockKV, "job-1.0")
+		processed, err := IsMsgProcessed(mockProcessedKV, "job-1.0")
 
 		require.NoError(t, err)
 		assert.True(t, processed)
 	})
 
 	t.Run("returns error on unexpected kv failure", func(t *testing.T) {
-		mockKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
+		mockProcessedKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := CheckKeyExist(mockKV, "job-1.0")
+		_, err := IsMsgProcessed(mockProcessedKV, "job-1.0")
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "failed")
@@ -62,11 +62,11 @@ func TestPutKeyKV(t *testing.T) {
 	})
 }
 
-func TestMarkChunkProcessed(t *testing.T) {
+func TestMarkMsgProcessed(t *testing.T) {
 	t.Run("writes under the given key", func(t *testing.T) {
 		mockKV := &test.MockKV{}
 
-		err := MarkChunkProcessed(mockKV, "job-abc.2", test.SilentLogger())
+		err := MarkMsgProcessed(mockKV, "job-abc.2", test.SilentLogger())
 
 		require.NoError(t, err)
 		assert.Equal(t, "job-abc.2", mockKV.PutKey)
@@ -75,7 +75,7 @@ func TestMarkChunkProcessed(t *testing.T) {
 	t.Run("returns error on kv failure", func(t *testing.T) {
 		mockKV := &test.MockKV{PutErr: errors.New("put failed")}
 
-		err := MarkChunkProcessed(mockKV, "job-abc.2", test.SilentLogger())
+		err := MarkMsgProcessed(mockKV, "job-abc.2", test.SilentLogger())
 
 		require.Error(t, err)
 	})
