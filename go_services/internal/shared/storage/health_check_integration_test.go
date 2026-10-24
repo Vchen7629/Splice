@@ -4,9 +4,11 @@ package storage_test
 
 import (
 	"os"
+	"testing"
+	"time"
+
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -25,13 +27,13 @@ func TestMain(m *testing.M) {
 
 func TestCheckHealth(t *testing.T) {
 	t.Run("storage health check fails when seedweedfs is unreachable", func(t *testing.T) {
-		err := storage.CheckHealth("http://localhost:1", test.SilentLogger())
+		err := storage.CheckHealth("http://localhost:1", test.SilentLogger(), 30*time.Second)
 
 		assert.Error(t, err)
 	})
 
 	t.Run("storage health check passes when seedweedfs is reachable", func(t *testing.T) {
-		err := storage.CheckHealth(sharedFilerUrl, test.SilentLogger())
+		err := storage.CheckHealth(sharedFilerUrl, test.SilentLogger(), 30*time.Second)
 
 		assert.NoError(t, err)
 	})

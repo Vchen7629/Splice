@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 // send an http request to shared to storage to see if its reachable
-func CheckHealth(storageURL string, logger *slog.Logger) error {
+func CheckHealth(storageURL string, logger *slog.Logger, timeout time.Duration) error {
+	httpClient := &http.Client{Timeout: timeout}
 	resp, err := httpClient.Get(storageURL + "/")
 
 	if err != nil {
