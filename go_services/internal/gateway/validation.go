@@ -31,6 +31,7 @@ var allowedTargetRes = map[string][]string{
 	"transcode": {"480p", "720p", "1080p"},
 	"upscale":   {"720p", "1080p", "1440p", "4K"},
 }
+var allowedTargetFormat = []string{"mp4", "mov", "mkv", "webm", "gif"}
 var allowedDenoiseQualities = []string{"light", "medium"}
 
 type rejectError struct{ reason string }
@@ -74,7 +75,7 @@ var processSubjects = map[string]string{
 }
 
 // validates that the request FormValues are non empty, filename is valid, and processType is valid
-func validateUploadFields(filename, targetRes, processType, denoiseQuality string) error {
+func validateUploadFields(filename, targetRes, targetFormat, processType, denoiseQuality string) error {
 	allowedRes, takesResolution := allowedTargetRes[processType]
 	_, processTypeKnown := processSubjects[processType]
 
@@ -89,6 +90,7 @@ func validateUploadFields(filename, targetRes, processType, denoiseQuality strin
 		{!takesResolution || targetRes != "", "missing target_resolution field"},
 		{!takesResolution || slices.Contains(allowedRes, targetRes), "uploaded file target res not allowed"},
 		{processType != "denoise" || slices.Contains(allowedDenoiseQualities, denoiseQuality), "specified denoise quality not allowed"},
+		{processType != "convert" || slices.Contains(allowedTargetFormat, targetFormat), "specified target format not allowed"},
 		{storage.ValidatePathSegment(filename) == nil, "invalid video filename"},
 	}
 	for _, c := range checks {
