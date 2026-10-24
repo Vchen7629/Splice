@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadVideoChunkFileErrors(t *testing.T) {
+func TestUploadProcessedVideoFileErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -42,7 +42,7 @@ func TestUploadVideoChunkFileErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := UploadVideoChunk(srv.URL, tc.filePath)
+			url, err := UploadProcessedVideo(srv.URL, tc.filePath)
 
 			require.Error(t, err)
 			assert.Empty(t, url)
@@ -51,7 +51,7 @@ func TestUploadVideoChunkFileErrors(t *testing.T) {
 	}
 }
 
-func TestUploadVideoChunk(t *testing.T) {
+func TestUploadProcessedVideo(t *testing.T) {
 	validFile := filepath.Join(t.TempDir(), "chunk.mp4")
 	require.NoError(t, os.WriteFile(validFile, []byte("fake video"), 0644))
 
@@ -61,7 +61,7 @@ func TestUploadVideoChunk(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		url, err := UploadVideoChunk(srv.URL, validFile)
+		url, err := UploadProcessedVideo(srv.URL, validFile)
 
 		require.NoError(t, err)
 		assert.Equal(t, srv.URL, url)
@@ -73,7 +73,7 @@ func TestUploadVideoChunk(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		url, err := UploadVideoChunk(srv.URL, validFile)
+		url, err := UploadProcessedVideo(srv.URL, validFile)
 
 		require.Error(t, err)
 		assert.Empty(t, url)

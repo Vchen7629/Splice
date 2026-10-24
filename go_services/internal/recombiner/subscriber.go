@@ -80,7 +80,7 @@ func RecombineVideo(
 			fileName := filepath.Base(outputPath)
 			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
 
-			if _, err := storage.UploadVideoChunk(url, outputPath); err != nil {
+			if _, err := storage.UploadProcessedVideo(url, outputPath); err != nil {
 				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
