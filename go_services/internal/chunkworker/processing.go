@@ -42,9 +42,9 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 		return "", err
 	}
 
-	filePath, err := storage.GetVideoChunk(payload.StorageURL, chunkName)
+	filePath, err := storage.DownloadVideo(payload.StorageURL, chunkName)
 	if err != nil {
-		logger.Error("error fetching unprocessed video chunk", "job_id", payload.JobID, "err", err)
+		logger.Error("error downloading unprocessed video chunk", "job_id", payload.JobID, "err", err)
 		return "", err
 	}
 
