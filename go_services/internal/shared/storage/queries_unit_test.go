@@ -42,7 +42,7 @@ func TestUploadProcessedVideoFileErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := UploadProcessedVideo(srv.URL, tc.filePath)
+			url, err := UploadProcessedVideo(srv.URL, tc.filePath, 30*time.Second)
 
 			require.Error(t, err)
 			assert.Empty(t, url)
@@ -61,7 +61,7 @@ func TestUploadProcessedVideo(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		url, err := UploadProcessedVideo(srv.URL, validFile)
+		url, err := UploadProcessedVideo(srv.URL, validFile, 30*time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, srv.URL, url)
@@ -73,7 +73,7 @@ func TestUploadProcessedVideo(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		url, err := UploadProcessedVideo(srv.URL, validFile)
+		url, err := UploadProcessedVideo(srv.URL, validFile, 30*time.Second)
 
 		require.Error(t, err)
 		assert.Empty(t, url)
@@ -204,7 +204,7 @@ func TestDownloadVideoHTTPErrors(t *testing.T) {
 			t.Cleanup(srv.Close)
 
 			jobID := "job-123"
-			filePath, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
+			filePath, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID, 30*time.Second)
 
 			require.Error(t, err)
 			assert.Empty(t, filePath)
@@ -229,7 +229,7 @@ func TestDownloadVideoWritesFile(t *testing.T) {
 
 	storageURL := srv.URL + "/" + jobID + "/processed/" + filename
 
-	filePath, err := DownloadVideo(storageURL, jobID)
+	filePath, err := DownloadVideo(storageURL, jobID, 30*time.Second)
 
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(filePath, filename), "filePath %q should end with %q", filePath, filename)
@@ -257,7 +257,7 @@ func TestDownloadVideoIoCopyError(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
+		_, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID, 30*time.Second)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error writing video to file")
@@ -284,7 +284,7 @@ func TestDownloadVideoIoCopyError(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID)
+		_, err := DownloadVideo(srv.URL+"/"+jobID+"/processed/chunk.mp4", jobID, 30*time.Second)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error writing video to file")

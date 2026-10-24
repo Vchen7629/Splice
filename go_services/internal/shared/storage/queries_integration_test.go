@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"testing"
+	"time"
+
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +29,7 @@ func TestDownloadVideoIntegration(t *testing.T) {
 		storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerUrl, jobID, filename)
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
-		filePath, err := storage.DownloadVideo(storageURL, jobID)
+		filePath, err := storage.DownloadVideo(storageURL, jobID, 30*time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/temp-unprocessed-"+jobID+"/"+filename, filePath)
@@ -43,7 +45,7 @@ func TestDownloadVideoIntegration(t *testing.T) {
 		storageURL := fmt.Sprintf("%s/%s/processed/nonexistent.mp4", sharedFilerUrl, jobID)
 		t.Cleanup(func() { os.RemoveAll("/tmp/temp-unprocessed-" + jobID) })
 
-		filePath, err := storage.DownloadVideo(storageURL, jobID)
+		filePath, err := storage.DownloadVideo(storageURL, jobID, 30*time.Second)
 
 		require.Error(t, err)
 		assert.Empty(t, filePath)
@@ -56,7 +58,7 @@ func TestUploadProcessedVideo(t *testing.T) {
 		fileName := filepath.Base(videoFile.Name())
 		uploadURL := fmt.Sprintf("%s/job-upload/processed/%s", sharedFilerUrl, fileName)
 
-		url, err := storage.UploadProcessedVideo(uploadURL, videoFile.Name())
+		url, err := storage.UploadProcessedVideo(uploadURL, videoFile.Name(), 30*time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, uploadURL, url)
