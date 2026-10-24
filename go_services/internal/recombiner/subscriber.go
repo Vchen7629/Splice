@@ -34,13 +34,13 @@ func RecombineVideo(
 			return
 		}
 
-		recieved, err := sJetstream.CheckKeyExist(msgRecievedKV, payload.ChunkKVKey())
+		chunkProcessed, err := sJetstream.IsMsgProcessed(msgRecievedKV, payload.ChunkKVKey())
 		if err != nil {
-			logger.Error("failed to check chunk recieved", "err", err)
+			logger.Error("failed to check chunk processed", "err", err)
 			return
 		}
-		if recieved {
-			logger.Debug("message already recieved, skipping")
+		if chunkProcessed {
+			logger.Debug("chunk already, skipping")
 			sJetstream.AckWithErrHandling(logger, msg)
 			return
 		}
@@ -120,7 +120,7 @@ func recordVideoChunkArrival(msgRecievedKV jetstream.KeyValue, payload handler.C
 		return false, nil, err
 	}
 	if !ready {
-		if err := sJetstream.MarkChunkProcessed(msgRecievedKV, payload.ChunkKVKey(), logger); err != nil {
+		if err := sJetstream.MarkMsgProcessed(msgRecievedKV, payload.ChunkKVKey(), logger); err != nil {
 			return false, nil, err
 		}
 		return false, nil, nil

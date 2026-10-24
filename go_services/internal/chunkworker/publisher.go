@@ -26,7 +26,7 @@ func publishJetstreamProcessedMsg(
 		return err
 	}
 
-	if err := sJetstream.MarkChunkProcessed(processedKV, payload.ChunkKVKey(), logger); err != nil {
+	if err := sJetstream.MarkMsgProcessed(processedKV, payload.ChunkKVKey(), logger); err != nil {
 		return err
 	}
 
