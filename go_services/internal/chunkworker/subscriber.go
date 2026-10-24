@@ -17,6 +17,7 @@ import (
 )
 
 const subSubject = "jobs.video.chunks"
+const uploadTimeout = 30 * time.Second
 
 var removeAll = os.RemoveAll
 
@@ -77,7 +78,7 @@ func ConsumeVideoChunk(
 			outFileName := filepath.Base(outputPath)
 			url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, outFileName)
 
-			storageURL, err := storage.UploadProcessedVideo(url, outputPath)
+			storageURL, err := storage.UploadProcessedVideo(url, outputPath, uploadTimeout)
 			if err != nil {
 				logger.Error(
 					"error saving transcoded video chunk to seaweedfs storage",

@@ -16,6 +16,7 @@ import (
 )
 
 const subSubject = "jobs.chunks.complete"
+const uploadTimeout, downloadTimeout = 30 * time.Second, 30 * time.Second
 
 // recombines video chunks back into one video
 func RecombineVideo(
@@ -80,7 +81,7 @@ func RecombineVideo(
 			fileName := filepath.Base(outputPath)
 			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
 
-			if _, err := storage.UploadProcessedVideo(url, outputPath); err != nil {
+			if _, err := storage.UploadProcessedVideo(url, outputPath, uploadTimeout); err != nil {
 				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				sJetstream.NakWithErrHandling(logger, msg)
 				return false
@@ -145,7 +146,7 @@ func recombineVideoChunks(
 	for idx, storageURL := range chunks {
 		fileName := fmt.Sprintf("processed_chunk-%s", payload.JobID)
 
-		localPath, err := storage.DownloadVideo(storageURL, fileName)
+		localPath, err := storage.DownloadVideo(storageURL, fileName, downloadTimeout)
 		if err != nil {
 			logger.Error("failed to download video chunk", "job_id", payload.JobID, "chunk_index", idx, "err", err)
 			downloadErr = err

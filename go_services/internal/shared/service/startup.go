@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -20,7 +21,7 @@ type BaseConfig struct {
 // loads the service config from .env file, checks storage health (connectivity)
 // before connecting to nats and jetstream
 func Connect(logger *slog.Logger, cfg BaseConfig) (*nats.Conn, jetstream.JetStream, error) {
-	err := storage.CheckHealth(cfg.BaseStorageURL, logger)
+	err := storage.CheckHealth(cfg.BaseStorageURL, logger, 30*time.Second)
 	if err != nil {
 		logger.Error("storage seedweedfs unreachable", "url", cfg.BaseStorageURL, "err", err)
 		return nil, nil, err

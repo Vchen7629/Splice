@@ -15,6 +15,8 @@ import (
 	"splice.com/go_services/internal/shared/storage"
 )
 
+const downloadTimeout = 30 * time.Second
+
 var transcodeVideoFn = transcodeVideo
 
 // process a video chunk from nats msg. Includes Updating the job status to be chunk-worker stage -> fetching the chunk
@@ -42,7 +44,7 @@ func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, 
 		return "", err
 	}
 
-	filePath, err := storage.DownloadVideo(payload.StorageURL, chunkName)
+	filePath, err := storage.DownloadVideo(payload.StorageURL, chunkName, downloadTimeout)
 	if err != nil {
 		logger.Error("error downloading unprocessed video chunk", "job_id", payload.JobID, "err", err)
 		return "", err
