@@ -81,6 +81,7 @@ const UploadedFileQueueList = (
                                 value={file.targetFormat ?? 'mp4'}
                                 onChange={v => handleSetTargetFormat(file.id, v)}
                                 ariaLabel={`Target format for ${file.name}`}
+                                disabled={file.status !== 'pending'}
                             />
                         )}
                         </span>
