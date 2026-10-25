@@ -49,6 +49,7 @@ services:
       - CHUNK_WORKER_URL=http://chunk-worker:9095
       - RECOMBINER_URL=http://recombiner:9090
       - VIDEO_UPSCALING_URL=http://video-upscaling:9101
+      - FORMAT_CONVERTER_URL=http://format-converter:9099
       - BASE_STORAGE_URL=http://host.docker.internal:8888
       - NATS_URL=nats://host.docker.internal:4222
   
@@ -76,6 +77,20 @@ services:
     build:
       context: ./go_services
       dockerfile: cmd/recombiner/dockerfile
+    environment:
+      - BASE_STORAGE_URL=http://host.docker.internal:8888
+      - NATS_URL=nats://host.docker.internal:4222
+    
+  format-converter:
+    image: converter:latest
+    pull_policy: never
+    ports:
+      - "127.0.0.1:9099:9099"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    build:
+      context: ./go_services
+      dockerfile: cmd/converter/dockerfile
     environment:
       - BASE_STORAGE_URL=http://host.docker.internal:8888
       - NATS_URL=nats://host.docker.internal:4222
