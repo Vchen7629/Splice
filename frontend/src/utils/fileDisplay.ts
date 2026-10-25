@@ -13,7 +13,7 @@ export function formatSize(bytes: number): string {
 export function outputFileName(file: OutputNameFields): string {
     const baseName = file.name.replace(/\.[^.]+$/, '')
     const takesResolution = file.processingType === 'Transcode' || file.processingType === 'Upscale'
-    const suffix = takesResolution ? `_${file.resolution}` : ''
+    const suffix = takesResolution ? `_${file.processingType.toLowerCase()}d_${file.resolution}` : ''
     
     return `${baseName}${suffix}.mp4`
 }
