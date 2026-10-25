@@ -13,10 +13,11 @@ import (
 
 func TestForStage(t *testing.T) {
 	urls := ServiceURLs{
-		SceneDetector:  "http://scene:9098",
-		ChunkWorker:    "http://chunkworker:9095",
-		Recombiner:     "http://recombiner:9090",
-		VideoUpscaling: "http://upscaling:9101",
+		SceneDetector:   "http://scene:9098",
+		ChunkWorker:     "http://chunkworker:9095",
+		Recombiner:      "http://recombiner:9090",
+		VideoUpscaling:  "http://upscaling:9101",
+		FormatConverter: "http://formatconverter:9099",
 	}
 
 	tests := []struct {
@@ -28,6 +29,7 @@ func TestForStage(t *testing.T) {
 		{"chunk-worker", "http://chunkworker:9095", true},
 		{"video-recombiner", "http://recombiner:9090", true},
 		{"video-upscaling", "http://upscaling:9101", true},
+		{"format-converter", "http://formatconverter:9099", true},
 		{"upload", "", false},
 		{"unknown", "", false},
 	}
