@@ -26,6 +26,7 @@ type Config struct {
 	ChunkWorkerURL       string `envconfig:"CHUNK_WORKER_URL"     default:"http://localhost:9095"`
 	RecombinerURL        string `envconfig:"RECOMBINER_URL"     default:"http://localhost:9090"`
 	VideoUpscalingURL    string `envconfig:"VIDEO_UPSCALING_URL" default:"http://localhost:9101"`
+	FormatConverterURL   string `envconfig:"FORMAT_CONVERTER_URL" default:"http://localhost:9099"`
 }
 
 func main() {
@@ -78,10 +79,11 @@ func runGateway(
 		MaxConcurrentUploads: cfg.MaxConcurrentUploads,
 		StorageURL:           cfg.BaseStorageURL,
 		URLs: gateway.ServiceURLs{
-			SceneDetector:  cfg.SceneDetectorURL,
-			ChunkWorker:    cfg.ChunkWorkerURL,
-			Recombiner:     cfg.RecombinerURL,
-			VideoUpscaling: cfg.VideoUpscalingURL,
+			SceneDetector:   cfg.SceneDetectorURL,
+			ChunkWorker:     cfg.ChunkWorkerURL,
+			Recombiner:      cfg.RecombinerURL,
+			VideoUpscaling:  cfg.VideoUpscalingURL,
+			FormatConverter: cfg.FormatConverterURL,
 		},
 	})
 

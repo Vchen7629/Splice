@@ -6,10 +6,11 @@ import (
 )
 
 type ServiceURLs struct {
-	SceneDetector  string
-	ChunkWorker    string
-	Recombiner     string
-	VideoUpscaling string
+	SceneDetector   string
+	ChunkWorker     string
+	Recombiner      string
+	VideoUpscaling  string
+	FormatConverter string
 }
 
 func (s ServiceURLs) forStage(stage string) (string, bool) {
@@ -18,6 +19,7 @@ func (s ServiceURLs) forStage(stage string) (string, bool) {
 		"chunk-worker":     s.ChunkWorker,
 		"video-recombiner": s.Recombiner,
 		"video-upscaling":  s.VideoUpscaling,
+		"format-converter": s.FormatConverter,
 	}
 
 	url, ok := urls[stage]
