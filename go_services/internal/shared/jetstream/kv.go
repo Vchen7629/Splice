@@ -116,6 +116,7 @@ func GetMilestoneKV(kv jetstream.KeyValue, jobID string) (uint64, JobStatus, err
 var milestoneStageOrder = map[string]int{
 	"upload":           0,
 	"chunk-worker":     1,
+	"format-converter": 1,
 	"video-recombiner": 2,
 }
 
