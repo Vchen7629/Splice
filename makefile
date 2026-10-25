@@ -17,6 +17,7 @@ dev:
 	fi
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-scene-detector.pid; cd python_services/scene-detector && exec uv run -m src.service' > /tmp/splice-scene-detector.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-video-upscaling.pid; cd python_services/video-upscaling && PYTHONPATH=src exec uv run -m src.service' > /tmp/splice-video-upscaling.log 2>&1 &
+	setsid bash -c 'echo $$BASHPID > /tmp/splice-converter.pid; cd go_services/cmd/converter && exec go run .' > /tmp/splice-converter.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-chunk-worker.pid; cd go_services/cmd/chunkworker && exec go run .' > /tmp/splice-chunk-worker.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-recombiner.pid; cd go_services/cmd/recombiner && exec go run .' > /tmp/splice-recombiner.log 2>&1 &
 	setsid bash -c 'echo $$BASHPID > /tmp/splice-frontend.pid; cd frontend && exec npm run dev' > /tmp/splice-frontend.log 2>&1 &
@@ -35,6 +36,6 @@ reset:
 		fi; \
 	done
 	rm -f /tmp/splice-*.log
-	for port in 8080 9090 9095 9098 9101 5173 5174; do \
+	for port in 8080 9090 9095 9098 9099 9101 5173 5174; do \
 		fuser -k $$port/tcp 2>/dev/null || true; \
 	done
