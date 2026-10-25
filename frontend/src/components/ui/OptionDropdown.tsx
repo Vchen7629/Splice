@@ -4,7 +4,7 @@ interface OptionDropdownProps<T extends string> {
     value: T,
     onChange: (value: T) => void
     ariaLabel: string
-    disabled?: boolean
+    disabled: boolean
 }
 
 /**

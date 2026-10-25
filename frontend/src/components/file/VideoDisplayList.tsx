@@ -65,6 +65,7 @@ const UploadedFileQueueList = (
                                 value={file.resolution}
                                 onChange={v => handleSetResolution(file.id, v)}
                                 ariaLabel={`Target resolution for ${file.name}`}
+                                disabled={file.status !== 'pending'}
                             />
                         )}
                         {file.processingType === 'Denoise' && (
@@ -73,6 +74,7 @@ const UploadedFileQueueList = (
                                 value={file.denoiseQuality ?? 'medium'}
                                 onChange={v => handleSetDenoiseQuality(file.id, v)}
                                 ariaLabel={`Selected denoise quality for ${file.name}`}
+                                disabled={file.status !== 'pending'}
                             />
                         )}
                         {file.processingType === 'Convert' && (
