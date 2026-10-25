@@ -18,6 +18,7 @@ jobs:
         shared_python: ${{ steps.changes.outputs.shared_python }}
         gateway: ${{ steps.changes.outputs.gateway }}
         chunkworker: ${{ steps.changes.outputs.chunkworker }}
+        converter: ${{ steps.changes.outputs.converter }}
         recombiner: ${{ steps.changes.outputs.recombiner }}
         shared_go: ${{ steps.changes.outputs.shared_go }}
     steps:
@@ -42,6 +43,11 @@ jobs:
             chunkworker:
               - 'go_services/cmd/chunkworker/**'
               - 'go_services/internal/chunkworker/**'
+              - 'go_services/go.mod'
+              - 'go_services/go.sum'
+            converter:
+              - 'go_services/cmd/converter/**'
+              - 'go_services/internal/converter/**'
               - 'go_services/go.mod'
               - 'go_services/go.sum'
             recombiner:
@@ -255,6 +261,39 @@ jobs:
 
       - name: run tests
         working-directory: ./go_services/cmd/chunkworker
+        run: make test_all
+
+  converter-ci:
+    needs: path-filter
+    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.converter == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Install ffmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download Go modules
+        working-directory: ./go_services
+        run: go mod download
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15
+          working-directory: ./go_services/cmd/converter
+
+      - name: run tests
+        working-directory: ./go_services/cmd/converter
         run: make test_all
 
   recombiner-ci:
