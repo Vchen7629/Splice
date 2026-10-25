@@ -8,6 +8,7 @@
 #    -e CHUNK_WORKER_URL=http://host.docker.internal:9095 \
 #    -e RECOMBINER_URL=http://host.docker.internal:9090
 #    -e VIDEO_UPSCALING_URL=http://host.docker.internal:9101 \
+#    -e FORMAT_CONVERTER_URL=http://host.docker.internal:9099 \
 #    -e BASE_STORAGE_URL=http://host.docker.internal:8888 \
 #    -e NATS_URL=nats://host.docker.internal:4222 \
 #    gateway:latest
