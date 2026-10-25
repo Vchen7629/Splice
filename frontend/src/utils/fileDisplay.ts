@@ -1,6 +1,6 @@
 import type { ProcessedVideo } from "../types/file"
 
-type OutputNameFields = Pick<ProcessedVideo, 'name' | 'processingType' | 'resolution'>
+type OutputNameFields = Pick<ProcessedVideo, 'name' | 'processingType' | 'resolution' | 'targetFormat'>
 
 // convert the file size byte count to correct type
 export function formatSize(bytes: number): string {
@@ -15,5 +15,5 @@ export function outputFileName(file: OutputNameFields): string {
     const takesResolution = file.processingType === 'Transcode' || file.processingType === 'Upscale'
     const suffix = takesResolution ? `_${file.processingType.toLowerCase()}d_${file.resolution}` : ''
     
-    return `${baseName}${suffix}.mp4`
+    return `${baseName}${suffix}.${file.targetFormat ?? 'mp4'}`
 }
