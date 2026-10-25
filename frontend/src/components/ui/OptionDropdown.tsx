@@ -4,6 +4,7 @@ interface OptionDropdownProps<T extends string> {
     value: T,
     onChange: (value: T) => void
     ariaLabel: string
+    disabled?: boolean
 }
 
 /**
@@ -12,12 +13,14 @@ interface OptionDropdownProps<T extends string> {
  * @param value - 
  * @param onChange - the handler to invoke when a resolution/denoise quality is selected
  * @param ariaLabel - for accessibility
+ * @param disabled - param passed so users cant select a new value after the job request is submitted
  */
-const OptionDropdown = <T extends string>({ options, value, onChange, ariaLabel }: OptionDropdownProps<T>) => (
+const OptionDropdown = <T extends string>({ options, value, onChange, ariaLabel, disabled }: OptionDropdownProps<T>) => (
     <div className="relative flex items-center">
         <select
             value={value}
             onChange={e => onChange(e.target.value as T)}
+            disabled={disabled}
             aria-label={ariaLabel}
             className="resolution-select font-mono text-meta text-fg bg-input-bg border border-line rounded px-1.5 h-[22px] w-[68px] outline-none cursor-pointer hover:border-line-strong transition-colors duration-100"
         >

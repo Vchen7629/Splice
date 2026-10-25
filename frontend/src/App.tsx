@@ -3,7 +3,7 @@ import { Toaster } from 'sonner'
 import { useVideoQueueStore } from './state/videoQueue'
 import { useUploadQueue } from './hooks/useUploadQueue'
 import { useJobEvents } from './hooks/useJobEvents'
-import type { DenoiseQuality, ProcessingType, UploadedFile } from './types/file'
+import type { DenoiseQuality, ProcessingType, TargetFormat, UploadedFile } from './types/file'
 import { defaultResolution, getVideoResolution } from './utils/videoResolution'
 import { useTheme } from './hooks/useTheme'
 import { useFileDrop } from './hooks/useFileDrop'
@@ -17,7 +17,7 @@ import { useProcessedStore } from './state/processedVideos'
 import { fileMap, nextFileId } from './state/fileRegistry'
 
 function App() {
-  const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution, setDenoiseQuality } = useVideoQueueStore()
+  const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution, setDenoiseQuality, setTargetFormat } = useVideoQueueStore()
   const { processed, remove: removeProcessed} = useProcessedStore()
   const [ activeFeature, setActiveFeature] = useState<ProcessingType>('Transcode')
   const { mode, toggleMode } = useTheme()
@@ -51,6 +51,7 @@ function App() {
         size: file.size,
         resolution: resolution,
         denoiseQuality: processingType === 'Denoise' ? 'medium' : undefined,
+        targetFormat: processingType === 'Convert' ? 'mp4' : undefined,
         sourceHeight,
         status: 'pending' as const,
         uploadProgress: 0,
@@ -80,6 +81,11 @@ function App() {
   function handleSetDenoiseQuality(id: number, quality: DenoiseQuality) {
     if (queue.find(v => v.id === id)?.status === 'error') resetVideo(id)
     setDenoiseQuality(id, quality)
+  }
+
+  function handleSetTargetFormat(id: number, targetFormat: TargetFormat) {
+    if (queue.find(v => v.id === id)?.status === 'error') resetVideo(id)
+    setTargetFormat(id, targetFormat)
   }
 
   return (
@@ -121,6 +127,7 @@ function App() {
                 onRemove={handleRemove}
                 handleSetResolution={handleSetResolution}
                 handleSetDenoiseQuality={handleSetDenoiseQuality}
+                handleSetTargetFormat={handleSetTargetFormat}
               />
             }
             processedContent={<ProcessedVideosList processedVideos={processedVideo} onRemove={removeProcessed}/>}

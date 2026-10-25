@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { DENOISE_QUALITIES, type DenoiseQuality, type ProcessedVideo, type ProcessingType, type UploadedFile } from "../../types/file";
+import { DENOISE_QUALITIES, TARGET_FORMATS, type DenoiseQuality, type ProcessedVideo, type ProcessingType, type TargetFormat, type UploadedFile } from "../../types/file";
 import { STATUS_BG } from "./StatusStyles";
 import { formatSize, outputFileName } from "../../utils/fileDisplay";
 import PipelineLane from "./PipelineProgress";
@@ -13,10 +13,11 @@ interface UploadedFilesQueueListProps {
     onRemove: (id: number) => void
     handleSetResolution: (id: number, resolution: string) => void
     handleSetDenoiseQuality: (id: number, quality: DenoiseQuality) => void
+    handleSetTargetFormat: (id: number, targetFormat: TargetFormat) => void
 }
 
 const UploadedFileQueueList = (
-    { queue, activeFeature, onRemove, handleSetResolution, handleSetDenoiseQuality }: UploadedFilesQueueListProps
+    { queue, activeFeature, onRemove, handleSetResolution, handleSetDenoiseQuality, handleSetTargetFormat }: UploadedFilesQueueListProps
 ) => {
     if (queue.length === 0) {
         return (
@@ -72,6 +73,15 @@ const UploadedFileQueueList = (
                                 value={file.denoiseQuality ?? 'medium'}
                                 onChange={v => handleSetDenoiseQuality(file.id, v)}
                                 ariaLabel={`Selected denoise quality for ${file.name}`}
+                            />
+                        )}
+                        {file.processingType === 'Convert' && (
+                            <OptionDropdown 
+                                options={TARGET_FORMATS.map(o => ({ value: o, label: o}))}
+                                value={file.targetFormat ?? 'mp4'}
+                                onChange={v => handleSetTargetFormat(file.id, v)}
+                                ariaLabel={`Target format for ${file.name}`}
+                                disabled={file.status !== 'pending'}
                             />
                         )}
                         </span>

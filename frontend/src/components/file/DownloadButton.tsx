@@ -2,7 +2,7 @@ import { Download } from 'lucide-react'
 import { VideoService } from '../../api/services/video'
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { ProcessingType } from '../../types/file';
+import type { ProcessingType, TargetFormat } from '../../types/file';
 import { outputFileName } from '../../utils/fileDisplay';
 
 interface DownloadButtonProps {
@@ -10,6 +10,7 @@ interface DownloadButtonProps {
     name: string
     resolution: string
     processingType: ProcessingType
+    targetFormat?: TargetFormat
 }
 
 const DownloadButton = ({ file }: { file: DownloadButtonProps }) => {
@@ -20,7 +21,7 @@ const DownloadButton = ({ file }: { file: DownloadButtonProps }) => {
         let url: string | undefined
 
         try {
-            const blob = await VideoService.download(file.jobId!, "output.mp4")
+            const blob = await VideoService.download(file.jobId!, `output.${file.targetFormat ?? 'mp4'}`)
             url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             

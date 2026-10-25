@@ -30,7 +30,7 @@ export function buildUploadForm(file: File, video: UploadedFile): FormData {
         case "Transcode":
         case "Upscale": formData.append("target_resolution", video.resolution); break
         case "Denoise": formData.append("denoise_quality", video.denoiseQuality ?? 'medium'); break
-        case "Convert": formData.append("target_format", "mp3"); break
+        case "Convert": formData.append("target_format", video.targetFormat ?? 'mp4'); break
     }
 
     return formData

@@ -30,7 +30,7 @@ const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: str
         { key: 'video-recombiner', label: 'Recombining' },
     ],
     Convert: [
-        { key: 'converter',        label: 'Convert' },
+        { key: 'format-converter',        label: 'Convert' },
     ],
 }
 
