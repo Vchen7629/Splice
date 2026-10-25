@@ -78,6 +78,19 @@ func TestConvertVideo(t *testing.T) {
 		})
 	}
 
+	t.Run("odd source dimensions convert without error", func(t *testing.T) {
+		jobID := "job-odd-dims"
+		t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
+		// ffv1 since libx264 can't encode odd dimensions to make the source either
+		src := filepath.Join(t.TempDir(), "odd.mkv")
+		out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=d=1:s=321x241", "-c:v", "ffv1", "-y", src).CombinedOutput()
+		require.NoError(t, err, "failed to generate odd-sized clip: %s", out)
+
+		_, err = convertVideo(src, handler.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+
+		require.NoError(t, err)
+	})
+
 	t.Run("mkdir failure returns create output dir error", func(t *testing.T) {
 		jobID := "job-blocked"
 		require.NoError(t, os.MkdirAll("/tmp/convert", 0755))

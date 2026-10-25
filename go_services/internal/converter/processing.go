@@ -24,7 +24,7 @@ func convertVideo(filePath string, payload handler.VideoJobMessage) (string, err
 	var formatArgs []string
 	switch payload.TargetFormat {
 	case "mp4", "mov", "mkv":
-		formatArgs = []string{"-map", "0:a:0?", "-pix_fmt", "yuv420p"}
+		formatArgs = []string{"-map", "0:a:0?", "-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2", "-pix_fmt", "yuv420p"}
 	case "webm":
 		formatArgs = []string{"-map", "0:a:0?", "-crf", "32", "-b:v", "0"}
 	case "gif":
