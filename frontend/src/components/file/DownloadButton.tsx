@@ -3,6 +3,7 @@ import { VideoService } from '../../api/services/video'
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { ProcessingType } from '../../types/file';
+import { outputFileName } from '../../utils/fileDisplay';
 
 interface DownloadButtonProps {
     jobId: string | null
@@ -19,15 +20,12 @@ const DownloadButton = ({ file }: { file: DownloadButtonProps }) => {
         let url: string | undefined
 
         try {
-            const blob = await VideoService.download(file.jobId!, 'output.mp4')
+            const blob = await VideoService.download(file.jobId!, "output.mp4")
             url = URL.createObjectURL(blob)
             const a = document.createElement('a')
-            const baseName = file.name.replace(/\.[^.]+$/, '')
-
+            
             a.href = url
-            a.download = file.processingType === 'Denoise'
-                ? `${baseName}.mp4`
-                : `${baseName}_${file.resolution}.mp4`
+            a.download = outputFileName(file)
             a.click()
         } catch {
             toast.error(`Failed to download ${file.name}`)
