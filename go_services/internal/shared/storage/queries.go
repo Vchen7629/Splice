@@ -77,9 +77,9 @@ func ValidatePathSegment(name string) error {
 
 var removeAll = os.RemoveAll
 
-// returns local directory GetVideoChunk downloads chunkName into
-func TempUnprocessedDir(chunkName string) string {
-	return filepath.Join("/tmp/temp-unprocessed-" + chunkName)
+// returns local directory DownloadVideo downloads into
+func TempUnprocessedDir(videoID string) string {
+	return filepath.Join("/tmp/temp-unprocessed-" + videoID)
 }
 
 // down the video from seaweedfs storage and save it to a temp directory with dirName
