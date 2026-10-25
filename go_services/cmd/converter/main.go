@@ -48,5 +48,6 @@ func main() {
 		return converter.ConsumeAndProcessVideo(cfg.BaseStorageURL, js, processedKV, jobMilestoneKV, logger)
 	}, quit); err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
+		osExit(1)
 	}
 }

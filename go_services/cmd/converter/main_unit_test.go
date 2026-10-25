@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMainFunc(t *testing.T) {
+func TestMainFuncU(t *testing.T) {
 	t.Run("exits on storage health check failure", func(t *testing.T) {
 		code := test.PatchExit(t, &osExit)
 		test.WriteEnvFile(t, "BASE_STORAGE_URL=http://localhost:1\n")
