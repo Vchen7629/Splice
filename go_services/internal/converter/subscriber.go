@@ -33,6 +33,7 @@ func ConsumeAndProcessVideo(
 		processed, err := sJetstream.IsMsgProcessed(processedKV, payload.JobID)
 		if err != nil {
 			logger.Error("failed to check convert job processed", "err", err)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return
 		}
 		if processed {

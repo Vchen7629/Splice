@@ -30,7 +30,7 @@ func TestConsumeAndProcessVideo(t *testing.T) {
 	}{
 		{name: "invalid json naks", payload: "{not json", wantNak: true},
 		{name: "already processed job acks", processedKV: &test.MockKV{GetFound: true}, wantAck: true},
-		{name: "processed check error neither acks nor naks", processedKV: &test.MockKV{GetErr: errors.New("kv down")}},
+		{name: "processed check error naks", processedKV: &test.MockKV{GetErr: errors.New("kv down")}, wantNak: true},
 		{name: "cancelled job terminates", milestoneKV: &test.MockKV{GetFound: true, GetValue: []byte(`{"state":"CANCELLED"}`)}, wantTerm: true},
 		{name: "milestone update failure naks", milestoneKV: &test.MockKV{CreateErr: errors.New("kv down")}, wantNak: true},
 		{name: "download failure naks", wantNak: true},
