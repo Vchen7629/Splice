@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { DENOISE_QUALITIES, type DenoiseQuality, type ProcessedVideo, type ProcessingType, type UploadedFile } from "../../types/file";
 import { STATUS_BG } from "./StatusStyles";
-import { formatSize } from "../../utils/fileDisplay";
+import { formatSize, outputFileName } from "../../utils/fileDisplay";
 import PipelineLane from "./PipelineProgress";
 import DownloadButton from "./DownloadButton";
 import OptionDropdown from "../ui/OptionDropdown";
@@ -15,7 +15,9 @@ interface UploadedFilesQueueListProps {
     handleSetDenoiseQuality: (id: number, quality: DenoiseQuality) => void
 }
 
-const UploadedFileQueueList = ({ queue, activeFeature, onRemove, handleSetResolution, handleSetDenoiseQuality }: UploadedFilesQueueListProps) => {
+const UploadedFileQueueList = (
+    { queue, activeFeature, onRemove, handleSetResolution, handleSetDenoiseQuality }: UploadedFilesQueueListProps
+) => {
     if (queue.length === 0) {
         return (
             <div className="flex flex-col gap-1.5 px-5 py-6">
@@ -108,11 +110,8 @@ const ProcessedVideosList = ({ processedVideos, onRemove }: ProcessedVideosListP
                 >
                     <span className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full bg-status-done"/>
                     <span className="flex flex-col gap-0.5 flex-1 min-w-0">
-                        <span className="truncate font-mono text-meta text-fg-strong" title={file.name}>
-                            {file.name}
-                        </span>
-                        <span className="font-mono text-eyebrow text-fg-faint tabular-nums">
-                            {file.resolution}
+                        <span className="truncate font-mono text-meta text-fg-strong" title={outputFileName(file)}>
+                            {outputFileName(file)}
                         </span>
                     </span>
                     <DownloadButton file={file}/>
