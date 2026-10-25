@@ -1,0 +1,37 @@
+# build from go_services/:
+#   docker build -f cmd/converter/dockerfile -t converter .
+# probably need to override BaseStorageURL if running in seperate docker containers
+#   docker run \
+#   -p 9099:9099 \
+#   --add-host=host.docker.internal:host-gateway \
+#    -e BASE_STORAGE_URL=http://host.docker.internal:8888 \
+#    -e NATS_URL=nats://host.docker.internal:4222 \
+#    converter:latest
+# or just use the docker-compose.backend.yaml to run all services
+FROM golang:1.27.3-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY cmd/converter ./cmd/converter
+COPY internal ./internal
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+      CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/converter ./cmd/converter
+
+FROM alpine:3.24
+
+RUN apk add --no-cache ffmpeg 
+RUN adduser -D -u 1000 app
+
+COPY --from=builder /out/converter /usr/local/bin/converter
+
+USER app
+
+# for gateway health checking
+EXPOSE 9099
+
+CMD ["converter"]
