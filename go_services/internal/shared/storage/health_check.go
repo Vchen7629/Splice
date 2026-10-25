@@ -23,7 +23,8 @@ func CheckHealth(storageURL string, logger *slog.Logger, timeout time.Duration) 
 		}
 	}()
 
-	if resp.StatusCode != http.StatusOK {
+	// an empty filer can return 404 on "/", any non-5xx response means it's reachable
+	if resp.StatusCode >= http.StatusInternalServerError {
 		return fmt.Errorf("seedweedfs returned status %d", resp.StatusCode)
 	}
 
