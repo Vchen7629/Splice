@@ -38,6 +38,7 @@ func RecombineVideo(
 		chunkProcessed, err := sJetstream.IsMsgProcessed(msgRecievedKV, payload.ChunkKVKey())
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
+			sJetstream.NakWithErrHandling(logger, msg)
 			return
 		}
 		if chunkProcessed {

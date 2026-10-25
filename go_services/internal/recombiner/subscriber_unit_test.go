@@ -147,17 +147,16 @@ func TestRecombineVideo(t *testing.T) {
 		assert.Empty(t, kv.PutKey)
 	})
 
-	t.Run("kv check error does not ack or nak", func(t *testing.T) {
+	t.Run("processed kv check error naks", func(t *testing.T) {
 		msg := &test.MockMsg{Payload: validPayload(t, "job-1")}
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
-		kv := &test.MockKV{GetErr: errors.New("kv unavailable")}
+		processedKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, processedKV, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
 
 		require.NoError(t, err)
-		assert.False(t, msg.AckCalled)
-		assert.False(t, msg.NakCalled)
+		assert.True(t, msg.NakCalled)
 	})
 
 	// Cancelled Cases
