@@ -1,14 +1,15 @@
 //go:build unit
 
-package handler_test
+package service_test
 
 import (
 	"encoding/json"
 	"net/http"
-	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/test"
 	"testing"
 	"time"
+
+	"splice.com/go_services/internal/shared/service"
+	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,8 +18,8 @@ import (
 // health endpoint returns healthy status
 func TestStartHealthHttpServer(t *testing.T) {
 	port := test.FreePort(t)
-	server := handler.StartHealthHttpServer(test.SilentLogger(), port)
-	t.Cleanup(func() { handler.ShutdownHttpServer(server, test.SilentLogger()) })
+	server := service.StartHealthHttpServer(test.SilentLogger(), port)
+	t.Cleanup(func() { service.ShutdownHttpServer(server, test.SilentLogger()) })
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -37,10 +38,10 @@ func TestStartHealthHttpServer(t *testing.T) {
 func TestShutdownHttpServer(t *testing.T) {
 	t.Skip()
 	port := test.FreePort(t)
-	server := handler.StartHealthHttpServer(test.SilentLogger(), port)
+	server := service.StartHealthHttpServer(test.SilentLogger(), port)
 	time.Sleep(50 * time.Millisecond)
 
-	handler.ShutdownHttpServer(server, test.SilentLogger())
+	service.ShutdownHttpServer(server, test.SilentLogger())
 
 	_, err := http.Get("http://localhost:" + port + "/health")
 	assert.Error(t, err, "server should no longer accept connections after shutdown")

@@ -12,7 +12,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/gateway"
-	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
 	"splice.com/go_services/internal/shared/service"
 )
@@ -94,7 +93,7 @@ func runGateway(
 	}
 	jobCompleteSub.Stop()
 
-	handler.ShutdownHttpServer(server, logger)
+	service.ShutdownHttpServer(server, logger)
 
 	return nc.Drain()
 }

@@ -55,17 +55,17 @@ type StartConsumer func() (jetstream.ConsumeContext, error)
 func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, quit <-chan os.Signal) error {
 	logger.Debug("starting service")
 
-	server := handler.StartHealthHttpServer(logger, httpPort)
+	server := StartHealthHttpServer(logger, httpPort)
 
 	consCtx, err := start()
 	if err != nil {
-		handler.ShutdownHttpServer(server, logger)
+		ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
 
 	<-quit
 
-	handler.ShutdownHttpServer(server, logger)
+	ShutdownHttpServer(server, logger)
 	consCtx.Stop() // stop recieving new msgs from jetstream
 	return nc.Drain()
 }
