@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
@@ -54,7 +54,7 @@ func publishConvertJob(t *testing.T, js jetstream.JetStream, jobID, targetFormat
 	})
 	storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "clip.mp4", content)
 
-	data, err := json.Marshal(handler.VideoJobMessage{JobID: jobID, StorageURL: storageURL, TargetFormat: targetFormat})
+	data, err := json.Marshal(pipeline.VideoJobMessage{JobID: jobID, StorageURL: storageURL, TargetFormat: targetFormat})
 	require.NoError(t, err)
 	_, err = js.Publish(context.Background(), "jobs.video.convert", data)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestConsumeAndProcessVideoI(t *testing.T) {
 
 		select {
 		case data := <-completes:
-			var msg handler.JobCompleteMessage
+			var msg pipeline.JobCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, "job-full-flow", msg.JobID)
 		case <-time.After(60 * time.Second):

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"splice.com/go_services/internal/shared/handler"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/msgbus"
+	"splice.com/go_services/internal/shared/pipeline"
 )
 
 const chunkKeyPrefix = "chunk."
@@ -19,9 +19,9 @@ const chunkKeyPrefix = "chunk."
 // chunks for the job has been recieved so the subscriber can trigger combiner.go and pass in the mapping to combine all.
 // chunk records are left in KV once read so retry of a triggering chunk after a failed combine can still see every chunk's
 // storage URL. cleanup is handled eventually by bucket TTL
-func Add(kv jetstream.KeyValue, payload handler.ChunkCompleteMessage, logger *slog.Logger) (bool, map[int]string, error) {
+func Add(kv jetstream.KeyValue, payload pipeline.ChunkCompleteMessage, logger *slog.Logger) (bool, map[int]string, error) {
 	key := fmt.Sprintf("%s%s.%d", chunkKeyPrefix, payload.JobID, payload.ChunkIndex)
-	err := sJetstream.PutKeyKV(kv, key, []byte(payload.StorageURL))
+	err := msgbus.PutKeyKV(kv, key, []byte(payload.StorageURL))
 	if err != nil {
 		return false, nil, err
 	}

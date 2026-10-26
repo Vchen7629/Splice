@@ -12,9 +12,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/gateway"
-	shandler "splice.com/go_services/internal/shared/handler"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/middleware"
+	"splice.com/go_services/internal/shared/msgbus"
 	"splice.com/go_services/internal/shared/service"
 )
 
@@ -35,7 +33,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "gateway")
+	logger := service.StructuredLogger(cfg.ProdMode, "gateway")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -56,7 +54,7 @@ func main() {
 func runGateway(
 	cfg *Config, nc *nats.Conn, js jetstream.JetStream, logger *slog.Logger, quit <-chan os.Signal,
 ) error {
-	jobMilestoneKV := sJetstream.CreateKV("job-milestones", js, 24*time.Hour, logger)
+	jobMilestoneKV := msgbus.CreateKV("job-milestones", js, 24*time.Hour, logger)
 
 	advisorySub, err := gateway.ListenAdvisoriesFailure(nc, js, jobMilestoneKV, logger)
 	if err != nil {
@@ -95,7 +93,7 @@ func runGateway(
 	}
 	jobCompleteSub.Stop()
 
-	shandler.ShutdownHttpServer(server, logger)
+	service.ShutdownHttpServer(server, logger)
 
 	return nc.Drain()
 }

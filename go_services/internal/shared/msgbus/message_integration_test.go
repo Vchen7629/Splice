@@ -1,14 +1,16 @@
 //go:build integration
 
-package jetstream
+package msgbus_test
 
 import (
 	"context"
 	"encoding/json"
-	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/test"
 	"testing"
 	"time"
+
+	"splice.com/go_services/internal/shared/msgbus"
+	"splice.com/go_services/internal/shared/pipeline"
+	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -17,7 +19,7 @@ import (
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
-func TestPublishChunkCompleteI(t *testing.T) {
+func TestPublishI(t *testing.T) {
 	t.Run("publishes correct payload to downstream subject", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 
@@ -28,18 +30,18 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		msg := handler.ChunkCompleteMessage{
-			ChunkRef:    handler.ChunkRef{JobID: "job-1", ChunkIndex: 2},
+		msg := pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 2},
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-2.mp4",
 		}
 
-		err = PublishJetstreamMsg(js, msg, "jobs.chunks.complete")
+		err = msgbus.Publish(js, msg, "jobs.chunks.complete")
 		require.NoError(t, err)
 
 		select {
 		case data := <-received:
-			var got handler.ChunkCompleteMessage
+			var got pipeline.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &got))
 			assert.Equal(t, msg, got)
 		case <-time.After(3 * time.Second):
@@ -69,8 +71,8 @@ func TestPublishChunkCompleteI(t *testing.T) {
 		js, err := jetstream.New(nc)
 		require.NoError(t, err)
 
-		err = PublishJetstreamMsg(js, handler.ChunkCompleteMessage{
-			ChunkRef:    handler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
+		err = msgbus.Publish(js, pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "/output/chunk-0.mp4",
 		}, "jobs.chunks.complete")

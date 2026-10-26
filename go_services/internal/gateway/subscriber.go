@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"time"
 
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
-
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"splice.com/go_services/internal/shared/msgbus"
+	"splice.com/go_services/internal/shared/pipeline"
 )
 
 const advisorySubject = "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.>"
@@ -61,8 +61,8 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 			return
 		}
 
-		_, outcome, err := tryUpdateMilestone(ctx, jobMilestoneKV, payload.JobID, sJetstream.JobStatus{
-			State: sJetstream.StateFailed,
+		_, outcome, err := tryUpdateMilestone(ctx, jobMilestoneKV, payload.JobID, pipeline.JobStatus{
+			State: pipeline.StateFailed,
 			Error: fmt.Sprintf("pipeline failed at stage: %s", advisory.Consumer),
 		})
 		switch outcome {
@@ -83,13 +83,13 @@ func ListenAdvisoriesFailure(nc *nats.Conn, js jetstream.JetStream, jobMilestone
 
 // subs to jobs.complete (from video-recombiner service) via jetstream consumer and writes COMPLETE to KV
 func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue, logger *slog.Logger) (jetstream.ConsumeContext, error) {
-	return sJetstream.ConsumeDurable(js, sJetstream.ConsumerConfig{
+	return msgbus.ConsumeDurable(js, msgbus.ConsumerConfig{
 		Subject:       "jobs.complete",
 		ServiceName:   "video-status-complete",
 		AckWait:       30 * time.Second,
 		MaxAckPending: -1, // set to -1 for infinite
 	}, func(msg jetstream.Msg) {
-		payload, ok := sJetstream.UnmarshalJetstreamMsg[jobIDPayload](msg, logger)
+		payload, ok := msgbus.Decode[jobIDPayload](msg, logger)
 		if !ok {
 			return
 		}
@@ -97,23 +97,23 @@ func ListenJobComplete(js jetstream.JetStream, jobMilestoneKV jetstream.KeyValue
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		_, outcome, err := tryUpdateMilestone(ctx, jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: sJetstream.StateComplete})
+		_, outcome, err := tryUpdateMilestone(ctx, jobMilestoneKV, payload.JobID, pipeline.JobStatus{State: pipeline.StateComplete})
 		switch outcome {
 		case milestoneSkipped:
 			logger.Debug("job is already marked as terminal, skipping marking job as COMPLETE", "job_id", payload.JobID)
-			sJetstream.AckWithErrHandling(logger, msg)
+			msgbus.AckWithErrHandling(logger, msg)
 			return
 		case milestoneNotFound:
 			logger.Error("milestone entry not found for job, cannot mark COMPLETE", "job_id", payload.JobID)
-			sJetstream.NakWithErrHandling(logger, msg)
+			msgbus.NakWithErrHandling(logger, msg)
 			return
 		case milestoneError:
 			logger.Error("failed to write complete status to kv", "job_id", payload.JobID, "err", err)
-			sJetstream.NakWithErrHandling(logger, msg)
+			msgbus.NakWithErrHandling(logger, msg)
 			return
 		}
 
 		logger.Debug("job marked as complete", "job_id", payload.JobID)
-		sJetstream.AckWithErrHandling(logger, msg)
+		msgbus.AckWithErrHandling(logger, msg)
 	})
 }

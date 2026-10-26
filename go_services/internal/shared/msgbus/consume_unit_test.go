@@ -1,6 +1,6 @@
 //go:build unit
 
-package jetstream
+package msgbus
 
 import (
 	"errors"

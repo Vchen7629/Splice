@@ -8,14 +8,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 )
 
 var ffmpegTimeout = 30 * time.Minute // TODO: in the future scale timeout with input video size via ffprobe
 
 // convert the source video to target format (mp4/mov/mkv/webm/gif) using ffmpeg and return the converted video
 // local filepath so it can be uploaded to seaweedfs storage so the user can download it later
-func convertVideo(filePath string, payload handler.VideoJobMessage) (string, error) {
+func convertVideo(filePath string, payload pipeline.VideoJobMessage) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
 	defer cancel()
 

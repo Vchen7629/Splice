@@ -8,7 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 )
 
@@ -44,7 +44,7 @@ func Connect(logger *slog.Logger, cfg BaseConfig) (*nats.Conn, jetstream.JetStre
 
 type ncDrainer interface {
 	Drain() error
-	handler.Publisher
+	pipeline.Publisher
 }
 
 type StartConsumer func() (jetstream.ConsumeContext, error)
@@ -55,17 +55,17 @@ type StartConsumer func() (jetstream.ConsumeContext, error)
 func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, quit <-chan os.Signal) error {
 	logger.Debug("starting service")
 
-	server := handler.StartHealthHttpServer(logger, httpPort)
+	server := StartHealthHttpServer(logger, httpPort)
 
 	consCtx, err := start()
 	if err != nil {
-		handler.ShutdownHttpServer(server, logger)
+		ShutdownHttpServer(server, logger)
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
 
 	<-quit
 
-	handler.ShutdownHttpServer(server, logger)
+	ShutdownHttpServer(server, logger)
 	consCtx.Stop() // stop recieving new msgs from jetstream
 	return nc.Drain()
 }

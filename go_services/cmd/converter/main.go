@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/converter"
-	"splice.com/go_services/internal/shared/middleware"
+	"splice.com/go_services/internal/shared/msgbus"
 	"splice.com/go_services/internal/shared/service"
-
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -30,7 +28,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "format-converter")
+	logger := service.StructuredLogger(cfg.ProdMode, "format-converter")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -38,8 +36,8 @@ func main() {
 		return
 	}
 
-	processedKV := sJetstream.CreateKV("converter-job-processed", js, 3*time.Hour, logger)
-	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
+	processedKV := msgbus.CreateKV("converter-job-processed", js, 3*time.Hour, logger)
+	jobMilestoneKV := msgbus.ConnectKV(js, "job-milestones", logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

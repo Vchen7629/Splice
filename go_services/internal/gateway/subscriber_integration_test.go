@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 )
 
@@ -214,7 +214,7 @@ func TestListenAdvisoriesFailureI(t *testing.T) {
 			t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 			jobID := "job-" + tc.consumer
-			seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
+			seedStatus(t, jobID, pipeline.JobStatus{State: pipeline.StateProcessing, Stage: "upload"})
 
 			seq := seedStreamMessage(t, sharedJS, tc.subject, mustMarshalJob(t, jobID))
 			publishAdvisory(t, sharedNC, "jobs", tc.consumer, seq)
@@ -322,7 +322,7 @@ func TestListenJobCompleteI(t *testing.T) {
 		// a real job always has a milestone entry from upload before any downstream
 		// stage publishes, tryUpdateMilestone deliberately never originates one
 		// from nothing, so this must exist for the completion write to land.
-		seedStatus(t, jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "video-recombiner"})
+		seedStatus(t, jobID, pipeline.JobStatus{State: pipeline.StateProcessing, Stage: "video-recombiner"})
 
 		_, err = sharedJS.Publish(context.Background(), "jobs.complete", mustMarshalJob(t, jobID))
 		require.NoError(t, err)

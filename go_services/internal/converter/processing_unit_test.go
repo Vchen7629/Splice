@@ -11,10 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"splice.com/go_services/internal/shared/pipeline"
 )
 
 // returns each stream in the file as "codec,type" e.g. "h264,video"
@@ -47,7 +46,7 @@ func TestConvertVideo(t *testing.T) {
 			jobID := "job-format-" + tc.format
 			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-			outputPath, err := convertVideo(audioTestVid, handler.VideoJobMessage{JobID: jobID, TargetFormat: tc.format})
+			outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: tc.format})
 
 			require.NoError(t, err)
 			assert.Equal(t, "/tmp/convert/"+jobID+"/output."+tc.format, outputPath)
@@ -59,7 +58,7 @@ func TestConvertVideo(t *testing.T) {
 		jobID := "job-no-audio"
 		t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-		outputPath, err := convertVideo(noAudioTestVid, handler.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+		outputPath, err := convertVideo(noAudioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
 
 		require.NoError(t, err)
 		assert.Equal(t, []string{"h264,video"}, probeStreams(t, outputPath))
@@ -70,7 +69,7 @@ func TestConvertVideo(t *testing.T) {
 			jobID := "job-unsupported"
 			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-			outputPath, err := convertVideo(audioTestVid, handler.VideoJobMessage{JobID: jobID, TargetFormat: format})
+			outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: format})
 
 			require.ErrorContains(t, err, "unsupported target format")
 			assert.Empty(t, outputPath)
@@ -86,7 +85,7 @@ func TestConvertVideo(t *testing.T) {
 		out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=d=1:s=321x241", "-c:v", "ffv1", "-y", src).CombinedOutput()
 		require.NoError(t, err, "failed to generate odd-sized clip: %s", out)
 
-		_, err = convertVideo(src, handler.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+		_, err = convertVideo(src, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
 
 		require.NoError(t, err)
 	})
@@ -97,7 +96,7 @@ func TestConvertVideo(t *testing.T) {
 		require.NoError(t, os.WriteFile("/tmp/convert/"+jobID, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove("/tmp/convert/" + jobID) })
 
-		outputPath, err := convertVideo(audioTestVid, handler.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+		outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
 
 		require.ErrorContains(t, err, "create output convert dir error")
 		assert.Empty(t, outputPath)
@@ -111,7 +110,7 @@ func TestConvertVideo(t *testing.T) {
 			os.RemoveAll("/tmp/convert/job-timeout")
 		})
 
-		_, err := convertVideo(audioTestVid, handler.VideoJobMessage{JobID: "job-timeout", TargetFormat: "mp4"})
+		_, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: "job-timeout", TargetFormat: "mp4"})
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Contains(t, err.Error(), "timed out")
@@ -133,7 +132,7 @@ func TestConvertVideo(t *testing.T) {
 			jobID := "job-ffmpeg-error"
 			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-			_, err := convertVideo(tc.src, handler.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+			_, err := convertVideo(tc.src, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
 
 			require.ErrorContains(t, err, "ffmpeg error")
 		})

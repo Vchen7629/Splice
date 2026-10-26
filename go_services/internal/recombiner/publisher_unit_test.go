@@ -6,14 +6,14 @@ import (
 	"errors"
 	"testing"
 
-	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPublishJetstreamCompleteMsg(t *testing.T) {
-	payload := handler.ChunkCompleteMessage{ChunkRef: handler.ChunkRef{JobID: "job-1", ChunkIndex: 0}}
+	payload := pipeline.ChunkCompleteMessage{ChunkRef: pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0}}
 
 	t.Run("publish failure returns the err", func(t *testing.T) {
 		js := &test.MockJS{PublishErr: errors.New("nats unavailable")}

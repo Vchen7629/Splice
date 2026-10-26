@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/middleware"
+	"splice.com/go_services/internal/shared/msgbus"
+	"splice.com/go_services/internal/shared/pipeline"
+	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/storage"
 
 	"github.com/go-playground/validator/v10"
@@ -84,14 +84,14 @@ func StartHttpApi(
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           Cors(middleware.ApiRequestLogging(router)),
+		Handler:           Cors(service.ApiRequestLogging(router)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		ReadTimeout:       15 * time.Minute,
 		WriteTimeout:      15 * time.Minute,
 	}
 
-	handler.StartHttpServer(server, logger, osExit)
+	service.StartHttpServer(server, logger, osExit)
 
 	return server
 }
@@ -207,21 +207,21 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	v.logger.Debug("pubsubject called", "subject", pubSubject)
 
 	kh := KVHandler{logger: v.logger, kv: v.kv}
-	err = kh.updateJobStatusKV(r.Context(), jobID, sJetstream.JobStatus{State: sJetstream.StateProcessing, Stage: "upload"})
+	err = kh.updateJobStatusKV(r.Context(), jobID, pipeline.JobStatus{State: pipeline.StateProcessing, Stage: "upload"})
 	if err != nil {
 		http.Error(w, "failed to record job status", http.StatusInternalServerError)
 		return
 	}
 
-	if err := sJetstream.PublishJetstreamMsg(
-		v.js, handler.VideoJobMessage{
+	if err := msgbus.Publish(
+		v.js, pipeline.VideoJobMessage{
 			JobID:          jobID,
 			DenoiseQuality: denoiseQuality, TargetResolution: targetRes, TargetFormat: targetFormat, SourceResolution: fmt.Sprintf("%dp", info.height),
 			StorageURL: url, Operation: processType,
 		}, pubSubject,
 	); err != nil {
 		v.logger.Error("error publishing request to nats", "err", err)
-		kvErr := kh.updateJobStatusKV(r.Context(), jobID, sJetstream.JobStatus{State: sJetstream.StateFailed, Stage: "upload"})
+		kvErr := kh.updateJobStatusKV(r.Context(), jobID, pipeline.JobStatus{State: pipeline.StateFailed, Stage: "upload"})
 		if kvErr != nil {
 			v.logger.Error("failed to mark job failed after publish error", "err", kvErr)
 		}
@@ -339,10 +339,10 @@ func (c *cancelHandler) cancelProcessingRoute(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 
-	var result sJetstream.JobStatus
+	var result pipeline.JobStatus
 	var outcome milestoneWriteOutcome
 
-	result, outcome, err := tryUpdateMilestone(ctx, c.kv, jobID, sJetstream.JobStatus{State: sJetstream.StateCancelled})
+	result, outcome, err := tryUpdateMilestone(ctx, c.kv, jobID, pipeline.JobStatus{State: pipeline.StateCancelled})
 	if err != nil {
 		errMsg := "failed to update current stage for jobID as CANCELLED"
 		http.Error(w, errMsg, http.StatusInternalServerError)

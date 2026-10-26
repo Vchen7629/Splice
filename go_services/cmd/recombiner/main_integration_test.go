@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"splice.com/go_services/internal/recombiner"
-	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/service"
-	"splice.com/go_services/internal/shared/test"
 	"syscall"
 	"testing"
 	"time"
+
+	"splice.com/go_services/internal/recombiner"
+	"splice.com/go_services/internal/shared/pipeline"
+	"splice.com/go_services/internal/shared/service"
+	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -94,8 +95,8 @@ func TestRecombinerServiceI(t *testing.T) {
 		ctx := context.Background()
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerURL, jobID, fileName)
-			payload, err := json.Marshal(handler.ChunkCompleteMessage{
-				ChunkRef:    handler.ChunkRef{JobID: jobID, ChunkIndex: i},
+			payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+				ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: i},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})
@@ -106,7 +107,7 @@ func TestRecombinerServiceI(t *testing.T) {
 
 		select {
 		case data := <-received:
-			var msg handler.JobCompleteMessage
+			var msg pipeline.JobCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 		case <-time.After(30 * time.Second):

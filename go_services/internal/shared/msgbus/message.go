@@ -1,4 +1,4 @@
-package jetstream
+package msgbus
 
 import (
 	"context"
@@ -25,8 +25,8 @@ func NakWithErrHandling(logger *slog.Logger, msg jetstream.Msg) {
 	}
 }
 
-// todo: add 1 line comment
-func UnmarshalJetstreamMsg[T any](msg jetstream.Msg, logger *slog.Logger) (T, bool) {
+// Decodes the message bus message into the provided type and handles errors
+func Decode[T any](msg jetstream.Msg, logger *slog.Logger) (T, bool) {
 	var payload T
 
 	err := json.Unmarshal(msg.Data(), &payload)
@@ -39,8 +39,8 @@ func UnmarshalJetstreamMsg[T any](msg jetstream.Msg, logger *slog.Logger) (T, bo
 	return payload, true
 }
 
-// publishes a msg to JetStream
-func PublishJetstreamMsg(js jetstream.JetStream, msg any, pubSubject string) error {
+// publishes a msg to the msg bus (Jetstream)
+func Publish(js jetstream.JetStream, msg any, pubSubject string) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshall chunk error: %w", err)
@@ -51,25 +51,4 @@ func PublishJetstreamMsg(js jetstream.JetStream, msg any, pubSubject string) err
 		return err
 	}
 	return nil
-}
-
-// terminate the nats msg if the job is cancelled and return true
-func TerminateIfCancelled(
-	jobMilestoneKV jetstream.KeyValue, msg jetstream.Msg, jobID string, logger *slog.Logger,
-) (shouldCancel, stopJob bool) {
-	_, milestoneStatus, err := GetMilestoneKV(jobMilestoneKV, jobID)
-	if err != nil {
-		logger.Error("failed to fetch milestoneStatus from KV", "job_id", jobID, "err", err)
-		NakWithErrHandling(logger, msg)
-		return false, true
-	}
-	if milestoneStatus.State != "CANCELLED" {
-		return false, false
-	}
-
-	err = msg.Term()
-	if err != nil {
-		logger.Error("failed to terminate the cancelled jetstream msg", "job_id", jobID, "err", err)
-	}
-	return true, true
 }
