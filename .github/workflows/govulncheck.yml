@@ -1,0 +1,28 @@
+name: check for vulnerabilities in go services with govulncheck
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  govulncheck:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go_services/go.mod'
+          cache: 'true'
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: run the vuln check
+        run: govulncheck ./...
+
