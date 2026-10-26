@@ -7,7 +7,6 @@ import (
 	"syscall"
 	"time"
 
-	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
 	"splice.com/go_services/internal/chunkworker"
@@ -40,7 +39,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "chunk-worker")
+	logger := service.StructuredLogger(cfg.ProdMode, "chunk-worker")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {

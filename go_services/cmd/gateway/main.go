@@ -12,9 +12,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/gateway"
-	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/handler"
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
-	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 )
 
@@ -35,7 +34,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "gateway")
+	logger := service.StructuredLogger(cfg.ProdMode, "gateway")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -95,7 +94,7 @@ func runGateway(
 	}
 	jobCompleteSub.Stop()
 
-	shandler.ShutdownHttpServer(server, logger)
+	handler.ShutdownHttpServer(server, logger)
 
 	return nc.Drain()
 }

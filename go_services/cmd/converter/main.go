@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/converter"
-	"splice.com/go_services/internal/shared/middleware"
 	"splice.com/go_services/internal/shared/service"
 
 	sJetstream "splice.com/go_services/internal/shared/jetstream"
@@ -30,7 +29,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 
-	logger := middleware.StructuredLogger(cfg.ProdMode, "format-converter")
+	logger := service.StructuredLogger(cfg.ProdMode, "format-converter")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
