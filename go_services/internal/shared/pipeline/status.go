@@ -17,7 +17,7 @@ type JobStatus struct {
 }
 
 func (m JobStatus) IsTerminal() bool {
-	return m.State == "COMPLETE" || m.State == "FAILED" || m.State == "CANCELLED"
+	return m.State == StateComplete || m.State == StateFailed || m.State == StateCancelled
 }
 
 // checks if the current or newStatus jobStatus is stale (terminal)

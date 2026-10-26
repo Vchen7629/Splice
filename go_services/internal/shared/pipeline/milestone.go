@@ -94,7 +94,7 @@ func TerminateIfCancelled(
 		msgbus.NakWithErrHandling(logger, msg)
 		return false, true
 	}
-	if milestoneStatus.State != "CANCELLED" {
+	if milestoneStatus.State != StateCancelled {
 		return false, false
 	}
 
