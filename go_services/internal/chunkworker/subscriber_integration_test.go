@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
@@ -168,13 +168,13 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
 		select {
 		case data := <-received:
-			var msg shandler.ChunkCompleteMessage
+			var msg pipeline.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 			assert.Equal(t, 0, msg.ChunkIndex)
@@ -215,7 +215,7 @@ func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
 	var percents []int
 	reached100 := make(chan struct{}, 1)
 	progressSub, err := nc.Subscribe(fmt.Sprintf("progress.%s", jobID), func(m *nats.Msg) {
-		var progress shandler.ProgressMessage
+		var progress pipeline.ProgressMessage
 		if json.Unmarshal(m.Data, &progress) != nil {
 			return
 		}
@@ -233,11 +233,11 @@ func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
 	t.Cleanup(func() { _ = progressSub.Unsubscribe() })
 
 	publishVideoChunk(t, js, VideoChunkMessage{
-		ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 2,
+		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 2,
 		StorageURL: storageURL0, TargetResolution: "480p", Operation: "transcode",
 	})
 	publishVideoChunk(t, js, VideoChunkMessage{
-		ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 1}, TotalChunks: 2,
+		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 1}, TotalChunks: 2,
 		StorageURL: storageURL1, TargetResolution: "480p", Operation: "transcode",
 	})
 
@@ -274,7 +274,7 @@ func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testin
 	require.NoError(t, err)
 
 	publishVideoChunk(t, js, VideoChunkMessage{
-		ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 		StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 	})
 
@@ -331,7 +331,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 			require.NoError(t, err)
 
 			publishVideoChunk(t, js, VideoChunkMessage{
-				ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+				ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 				StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 			})
 
@@ -379,7 +379,7 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
@@ -408,7 +408,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
@@ -481,7 +481,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: "http://storage/fake", TargetResolution: "480p", Operation: "transcode",
 		})
 
@@ -509,7 +509,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
@@ -536,7 +536,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 
@@ -596,7 +596,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, VideoChunkMessage{
-			ChunkRef: shandler.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
 

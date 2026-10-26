@@ -1,4 +1,4 @@
-package jetstream
+package pipeline
 
 type JobState string
 

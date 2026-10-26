@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"splice.com/go_services/internal/converter"
-	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 )
 
 func TestConsumeAndProcessVideo(t *testing.T) {
-	validPayload, err := json.Marshal(handler.VideoJobMessage{
+	validPayload, err := json.Marshal(pipeline.VideoJobMessage{
 		JobID: "job-1", StorageURL: "http://localhost:1/job-1/clip.mp4", TargetFormat: "mp4",
 	})
 	require.NoError(t, err)

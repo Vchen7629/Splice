@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/msgbus"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -23,56 +23,56 @@ var removeAll = os.RemoveAll
 
 // consume video chunk from nats jetstream and process it
 func ConsumeVideoChunk(
-	baseStorageURL string, nc handler.Publisher,
+	baseStorageURL string, nc pipeline.Publisher,
 	js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
 	ackWait time.Duration, logger *slog.Logger,
 ) (jetstream.ConsumeContext, error) {
-	return sJetstream.ConsumeDurable(js, sJetstream.ConsumerConfig{
+	return msgbus.ConsumeDurable(js, msgbus.ConsumerConfig{
 		Subject:       subSubject,
 		ServiceName:   "chunk-worker",
 		AckWait:       ackWait,
 		MaxAckPending: 10,
 	}, func(msg jetstream.Msg) {
-		payload, ok := sJetstream.UnmarshalJetstreamMsg[VideoChunkMessage](msg, logger)
+		payload, ok := msgbus.Decode[VideoChunkMessage](msg, logger)
 		if !ok {
 			return
 		}
 
-		processed, err := sJetstream.IsMsgProcessed(processedKV, payload.ChunkKVKey())
+		processed, err := msgbus.IsProcessed(processedKV, payload.ChunkKVKey())
 		if err != nil {
 			logger.Error("failed to check chunk processed", "err", err)
-			sJetstream.NakWithErrHandling(logger, msg)
+			msgbus.NakWithErrHandling(logger, msg)
 			return
 		}
 		if processed {
 			logger.Debug("message already processed, skipping")
-			sJetstream.AckWithErrHandling(logger, msg)
+			msgbus.AckWithErrHandling(logger, msg)
 			return
 		}
 
-		if _, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
+		if _, stopJob := pipeline.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 			return
 		}
 
-		claimed, err := sJetstream.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
+		claimed, err := msgbus.ClaimAndRun(claimKV, payload.JobID, payload.ChunkIndex, logger, func() bool {
 			chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 			defer cleanupTempFolders(chunkName, logger)
 
-			if shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
+			if shouldCancel, stopJob := pipeline.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 				return shouldCancel
 			}
 
 			outputPath, err := processChunk(jobMilestoneKV, payload, logger)
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
-					sJetstream.NakWithErrHandling(logger, msg)
+					msgbus.NakWithErrHandling(logger, msg)
 					return false
 				}
-				sJetstream.NakWithErrHandling(logger, msg)
+				msgbus.NakWithErrHandling(logger, msg)
 				return false
 			}
 
-			if shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
+			if shouldCancel, stopJob := pipeline.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 				return shouldCancel
 			}
 
@@ -87,24 +87,24 @@ func ConsumeVideoChunk(
 					"file_path", outputPath,
 					"err", err,
 				)
-				sJetstream.NakWithErrHandling(logger, msg)
+				msgbus.NakWithErrHandling(logger, msg)
 				return false
 			}
 
-			if shouldCancel, stopJob := sJetstream.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
+			if shouldCancel, stopJob := pipeline.TerminateIfCancelled(jobMilestoneKV, msg, payload.JobID, logger); stopJob {
 				return shouldCancel
 			}
 
 			if err := publishJetstreamProcessedMsg(nc, js, processedKV, payload, storageURL, logger); err != nil {
-				sJetstream.NakWithErrHandling(logger, msg)
+				msgbus.NakWithErrHandling(logger, msg)
 				return false
 			}
-			sJetstream.AckWithErrHandling(logger, msg)
+			msgbus.AckWithErrHandling(logger, msg)
 			return true
 		})
 		if err != nil {
 			logger.Error("failed to claim chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-			sJetstream.NakWithErrHandling(logger, msg)
+			msgbus.NakWithErrHandling(logger, msg)
 			return
 		}
 

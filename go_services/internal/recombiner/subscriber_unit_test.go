@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/recombiner"
-	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -20,8 +20,8 @@ const ackWaitU = 30 * time.Second
 
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
-	data, err := json.Marshal(shandler.ChunkCompleteMessage{
-		ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
+	data, err := json.Marshal(pipeline.ChunkCompleteMessage{
+		ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		TotalChunks: 2, // not ready — combine never runs
 		StorageURL:  "http://localhost:1/job-1/chunk.mp4",
 	})
@@ -76,8 +76,8 @@ func TestRecombineVideo(t *testing.T) {
 
 	t.Run("ack failure on a non-triggering chunk still persists kv", func(t *testing.T) {
 		// AddChunkKV runs before Ack for a non-triggering chunk, so it succeeds even if Ack later fails.
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
+		payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 2, // not ready — combine never runs
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -113,8 +113,8 @@ func TestRecombineVideo(t *testing.T) {
 	})
 
 	t.Run("triggering chunk advances the job milestone", func(t *testing.T) {
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: 0},
+		payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})

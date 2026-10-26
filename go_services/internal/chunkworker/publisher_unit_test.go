@@ -4,9 +4,9 @@ package chunkworker
 
 import (
 	"errors"
-	"splice.com/go_services/internal/shared/handler"
 	"testing"
 
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +24,7 @@ func (m *mockPublisher) Publish(subj string, _ []byte) error {
 }
 
 func TestPublishJetstreamProcessedMsg(t *testing.T) {
-	payload := VideoChunkMessage{ChunkRef: handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2}, TotalChunks: 4, Operation: "transcode"}
+	payload := VideoChunkMessage{ChunkRef: pipeline.ChunkRef{JobID: "job-abc", ChunkIndex: 2}, TotalChunks: 4, Operation: "transcode"}
 
 	t.Run("publish failure does not write kv or ack and err", func(t *testing.T) {
 		js := &test.MockJS{PublishErr: errors.New("nats unavailable")}

@@ -1,16 +1,6 @@
-package handler
+package pipeline
 
 import "fmt"
-
-type ChunkRef struct {
-	JobID      string `json:"job_id"`
-	ChunkIndex int    `json:"chunk_index"`
-}
-
-// returns the key that identifies this chunk in the KV bucket, in form of <jobID>.<chunkIndex>
-func (m *ChunkRef) ChunkKVKey() string {
-	return fmt.Sprintf("%s.%d", m.JobID, m.ChunkIndex)
-}
 
 type VideoJobMessage struct {
 	JobID            string `json:"job_id"`
@@ -20,6 +10,16 @@ type VideoJobMessage struct {
 	SourceResolution string `json:"source_resolution"`
 	StorageURL       string `json:"storage_url"`
 	Operation        string `json:"operation"`
+}
+
+type ChunkRef struct {
+	JobID      string `json:"job_id"`
+	ChunkIndex int    `json:"chunk_index"`
+}
+
+// returns the key that identifies this chunk in the KV bucket, in form of <jobID>.<chunkIndex>
+func (m *ChunkRef) ChunkKVKey() string {
+	return fmt.Sprintf("%s.%d", m.JobID, m.ChunkIndex)
 }
 
 type ChunkCompleteMessage struct {

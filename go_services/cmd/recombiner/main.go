@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/recombiner"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/msgbus"
 	"splice.com/go_services/internal/shared/service"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -46,9 +46,9 @@ func main() {
 		return
 	}
 
-	msgRecievedKV := sJetstream.CreateKV("recombine-chunk-recieved", js, 0, logger) // no ttl for now
-	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
-	claimKV := sJetstream.CreateKV("recombine-chunk-claims", js, chunkClaimTTL, logger)
+	msgRecievedKV := msgbus.CreateKV("recombine-chunk-recieved", js, 0, logger) // no ttl for now
+	jobMilestoneKV := msgbus.ConnectKV(js, "job-milestones", logger)
+	claimKV := msgbus.CreateKV("recombine-chunk-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

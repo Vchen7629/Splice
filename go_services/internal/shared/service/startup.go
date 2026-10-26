@@ -8,7 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 )
 
@@ -44,7 +44,7 @@ func Connect(logger *slog.Logger, cfg BaseConfig) (*nats.Conn, jetstream.JetStre
 
 type ncDrainer interface {
 	Drain() error
-	handler.Publisher
+	pipeline.Publisher
 }
 
 type StartConsumer func() (jetstream.ConsumeContext, error)

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"splice.com/go_services/internal/recombiner"
-	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
@@ -104,8 +104,8 @@ func TestRecombineVideoI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			ChunkRef:    shandler.ChunkRef{JobID: "job-partial", ChunkIndex: 0},
+		payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: "job-partial", ChunkIndex: 0},
 			TotalChunks: 2,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -148,8 +148,8 @@ func TestRecombineVideoI(t *testing.T) {
 		ctx := context.Background()
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/job-combine/processed/%s", sharedFilerURL, fileName)
-			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-				ChunkRef:    shandler.ChunkRef{JobID: "job-combine", ChunkIndex: i},
+			payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+				ChunkRef:    pipeline.ChunkRef{JobID: "job-combine", ChunkIndex: i},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})
@@ -191,7 +191,7 @@ func TestRecombineVideoI(t *testing.T) {
 
 		reached100 := make(chan struct{}, 1)
 		sub, err := nc.Subscribe(fmt.Sprintf("progress.%s", jobID), func(msg *nats.Msg) {
-			var progress shandler.ProgressMessage
+			var progress pipeline.ProgressMessage
 			if json.Unmarshal(msg.Data, &progress) == nil && progress.Progress == 100 {
 				reached100 <- struct{}{}
 			}
@@ -202,8 +202,8 @@ func TestRecombineVideoI(t *testing.T) {
 		ctx := context.Background()
 		for i, fileName := range []string{"chunk-0.mp4", "chunk-1.mp4"} {
 			storageURL := fmt.Sprintf("%s/%s/processed/%s", sharedFilerURL, jobID, fileName)
-			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-				ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: i},
+			payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+				ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: i},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})
@@ -244,8 +244,8 @@ func TestRecombineVideoI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
+		payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks: 1,
 			StorageURL:  "http://storage/fake",
 		})
@@ -272,8 +272,8 @@ func TestRecombineVideoI(t *testing.T) {
 		require.NoError(t, err)
 
 		// Partial chunk (TotalChunks:2) so combine never fires — KV write still happens after ack.
-		payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-			ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: 0},
+		payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks: 2,
 			StorageURL:  "http://storage/chunk-0.mp4",
 		})
@@ -319,8 +319,8 @@ func TestRecombineVideoI(t *testing.T) {
 		chunk1URL := fmt.Sprintf("%s/%s/processed/chunk-1.mp4", sharedFilerURL, jobID)
 
 		publishChunk := func(idx int, storageURL string) {
-			payload, err := json.Marshal(shandler.ChunkCompleteMessage{
-				ChunkRef:    shandler.ChunkRef{JobID: jobID, ChunkIndex: idx},
+			payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+				ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: idx},
 				TotalChunks: 2,
 				StorageURL:  storageURL,
 			})

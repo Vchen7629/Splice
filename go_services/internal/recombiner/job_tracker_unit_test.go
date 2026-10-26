@@ -8,16 +8,16 @@ import (
 	"fmt"
 	"testing"
 
-	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func chunkMsg(idx, total int) shandler.ChunkCompleteMessage {
-	return shandler.ChunkCompleteMessage{
-		ChunkRef:    shandler.ChunkRef{JobID: "job-1", ChunkIndex: idx},
+func chunkMsg(idx, total int) pipeline.ChunkCompleteMessage {
+	return pipeline.ChunkCompleteMessage{
+		ChunkRef:    pipeline.ChunkRef{JobID: "job-1", ChunkIndex: idx},
 		TotalChunks: total,
 		StorageURL:  fmt.Sprintf("/tmp/chunk-%d.mp4", idx),
 	}

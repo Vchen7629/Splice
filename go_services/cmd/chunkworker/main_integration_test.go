@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"splice.com/go_services/internal/chunkworker"
-	"splice.com/go_services/internal/shared/handler"
-	"splice.com/go_services/internal/shared/service"
-	"splice.com/go_services/internal/shared/test"
 	"syscall"
 	"testing"
 	"time"
+
+	"splice.com/go_services/internal/chunkworker"
+	"splice.com/go_services/internal/shared/pipeline"
+	"splice.com/go_services/internal/shared/service"
+	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -76,7 +77,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 
 		payload, err := json.Marshal(chunkworker.VideoChunkMessage{
-			ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: 0},
+			ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks:      1,
 			StorageURL:       storageURL,
 			TargetResolution: "240p",
@@ -89,7 +90,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 
 		select {
 		case data := <-received:
-			var msg handler.ChunkCompleteMessage
+			var msg pipeline.ChunkCompleteMessage
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 			assert.Equal(t, 0, msg.ChunkIndex)

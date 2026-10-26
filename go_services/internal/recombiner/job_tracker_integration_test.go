@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"splice.com/go_services/internal/recombiner"
-	shandler "splice.com/go_services/internal/shared/handler"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -18,13 +18,13 @@ func TestAddI(t *testing.T) {
 		js, _ := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "recombine-chunk-recieved")
 
-		_, _, err := recombiner.Add(kv, shandler.ChunkCompleteMessage{
-			ChunkRef: shandler.ChunkRef{JobID: "job-A", ChunkIndex: 0}, TotalChunks: 2, StorageURL: "/tmp/A-0.mp4",
+		_, _, err := recombiner.Add(kv, pipeline.ChunkCompleteMessage{
+			ChunkRef: pipeline.ChunkRef{JobID: "job-A", ChunkIndex: 0}, TotalChunks: 2, StorageURL: "/tmp/A-0.mp4",
 		}, test.SilentLogger())
 		require.NoError(t, err)
 
-		readyB, chunksB, err := recombiner.Add(kv, shandler.ChunkCompleteMessage{
-			ChunkRef: shandler.ChunkRef{JobID: "job-B", ChunkIndex: 0}, TotalChunks: 1, StorageURL: "/tmp/B-0.mp4",
+		readyB, chunksB, err := recombiner.Add(kv, pipeline.ChunkCompleteMessage{
+			ChunkRef: pipeline.ChunkRef{JobID: "job-B", ChunkIndex: 0}, TotalChunks: 1, StorageURL: "/tmp/B-0.mp4",
 		}, test.SilentLogger())
 		require.NoError(t, err)
 		require.True(t, readyB)

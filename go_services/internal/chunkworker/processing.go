@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 )
 
@@ -22,7 +22,7 @@ var transcodeVideoFn = transcodeVideo
 // process a video chunk from nats msg. Includes Updating the job status to be chunk-worker stage -> fetching the chunk
 // -> transcoding it. returns the outputPath and the error
 func processChunk(jobMilestoneKV jetstream.KeyValue, payload VideoChunkMessage, logger *slog.Logger) (string, error) {
-	err := sJetstream.AdvanceMilestone(jobMilestoneKV, payload.JobID, sJetstream.JobStatus{State: "PROCESSING", Stage: "chunk-worker"})
+	err := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{State: "PROCESSING", Stage: "chunk-worker"})
 	if err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
 		return "", err

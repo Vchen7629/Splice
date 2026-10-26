@@ -1,6 +1,6 @@
 //go:build integration
 
-package jetstream
+package msgbus
 
 import (
 	"context"

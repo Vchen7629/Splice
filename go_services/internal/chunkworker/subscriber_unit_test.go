@@ -13,8 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"splice.com/go_services/internal/shared/handler"
-
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +23,7 @@ import (
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
 	data, err := json.Marshal(VideoChunkMessage{
-		ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: 0},
+		ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		StorageURL:       "http://localhost:1/job-1/chunk.mp4",
 		TargetResolution: "720p",
 		Operation:        "transcode",
@@ -68,7 +67,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		}
 
 		payload, err := json.Marshal(VideoChunkMessage{
-			ChunkRef:         handler.ChunkRef{JobID: jobID, ChunkIndex: chunkIndex},
+			ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: chunkIndex},
 			TotalChunks:      1,
 			StorageURL:       storageSrv.URL + "/chunk.mp4",
 			TargetResolution: "480p",
@@ -135,7 +134,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 
 	t.Run("does not write kv when chunk fetch fails", func(t *testing.T) {
 		payload, err := json.Marshal(VideoChunkMessage{
-			ChunkRef:         handler.ChunkRef{JobID: "job-abc", ChunkIndex: 2},
+			ChunkRef:         pipeline.ChunkRef{JobID: "job-abc", ChunkIndex: 2},
 			StorageURL:       "http://localhost:1/job-abc/chunk.mp4",
 			TargetResolution: "480p",
 			Operation:        "transcode",

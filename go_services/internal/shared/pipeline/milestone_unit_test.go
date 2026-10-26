@@ -1,92 +1,22 @@
 //go:build unit
 
-package jetstream
+package pipeline
 
 import (
 	"errors"
 	"testing"
 
-	"splice.com/go_services/internal/shared/test"
-
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"splice.com/go_services/internal/shared/test"
 )
 
-func TestIsMsgProcesseds(t *testing.T) {
-	t.Run("returns false when key not found", func(t *testing.T) {
-		mockProcessedKV := &test.MockKV{GetFound: false}
-
-		processed, err := IsMsgProcessed(mockProcessedKV, "job-1.0")
-
-		require.NoError(t, err)
-		assert.False(t, processed)
-	})
-
-	t.Run("returns true when key exists", func(t *testing.T) {
-		mockProcessedKV := &test.MockKV{GetFound: true}
-
-		processed, err := IsMsgProcessed(mockProcessedKV, "job-1.0")
-
-		require.NoError(t, err)
-		assert.True(t, processed)
-	})
-
-	t.Run("returns error on unexpected kv failure", func(t *testing.T) {
-		mockProcessedKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
-
-		_, err := IsMsgProcessed(mockProcessedKV, "job-1.0")
-
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed")
-	})
-}
-
-func TestPutKeyKV(t *testing.T) {
-	t.Run("writes correct key job_id.chunk_index", func(t *testing.T) {
-		mockKV := &test.MockKV{}
-
-		err := PutKeyKV(mockKV, "job-abc.2", []byte("processed"))
-
-		require.NoError(t, err)
-		assert.Equal(t, "job-abc.2", mockKV.PutKey)
-	})
-
-	t.Run("returns error on kv failure", func(t *testing.T) {
-		mockKV := &test.MockKV{PutErr: errors.New("put failed")}
-
-		err := PutKeyKV(mockKV, "job-1", []byte("processed"))
-
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed")
-	})
-}
-
-func TestMarkMsgProcessed(t *testing.T) {
-	t.Run("writes under the given key", func(t *testing.T) {
-		mockKV := &test.MockKV{}
-
-		err := MarkMsgProcessed(mockKV, "job-abc.2", test.SilentLogger())
-
-		require.NoError(t, err)
-		assert.Equal(t, "job-abc.2", mockKV.PutKey)
-	})
-
-	t.Run("returns error on kv failure", func(t *testing.T) {
-		mockKV := &test.MockKV{PutErr: errors.New("put failed")}
-
-		err := MarkMsgProcessed(mockKV, "job-abc.2", test.SilentLogger())
-
-		require.Error(t, err)
-	})
-}
-
-func TestGetMilestoneKV(t *testing.T) {
+func TestGetMilestone(t *testing.T) {
 
 	t.Run("key that doesnt exist returns revision 0 and zero-value status", func(t *testing.T) {
 		mockKV := &test.MockKV{}
 
-		revision, status, err := GetMilestoneKV(mockKV, "some-jobID")
+		revision, status, err := GetMilestone(mockKV, "some-jobID")
 
 		require.NoError(t, err)
 		assert.Zero(t, revision)
@@ -96,7 +26,7 @@ func TestGetMilestoneKV(t *testing.T) {
 	t.Run("error fetching from keyValue returns error", func(t *testing.T) {
 		mockKV := &test.MockKV{GetErr: errors.New("Some error")}
 
-		revision, status, err := GetMilestoneKV(mockKV, "some-jobID")
+		revision, status, err := GetMilestone(mockKV, "some-jobID")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to fetch from kv: Some error")
@@ -110,7 +40,7 @@ func TestGetMilestoneKV(t *testing.T) {
 			GetValue: []byte(`{[`),
 		}
 
-		revision, status, err := GetMilestoneKV(mockKV, "job-1")
+		revision, status, err := GetMilestone(mockKV, "job-1")
 
 		require.Error(t, err)
 		assert.Equal(t, err.Error(), "failed to unmarshal json: invalid character '[' looking for beginning of object key string")
@@ -125,55 +55,13 @@ func TestGetMilestoneKV(t *testing.T) {
 			GetEntryRevision: 5,
 		}
 
-		revision, status, err := GetMilestoneKV(mockKV, "job-1")
+		revision, status, err := GetMilestone(mockKV, "job-1")
 
 		require.NoError(t, err)
 		assert.Equal(t, uint64(5), revision)
 		assert.Equal(t, JobStatus{State: "CANCELLED", Stage: "chunk-worker"}, status)
 	})
 }
-
-// For video chunk kv related tests
-
-func TestClaimChunk(t *testing.T) {
-	t.Run("returns true when claim is created", func(t *testing.T) {
-		mockKV := &test.MockKV{}
-
-		claimed, err := claimChunk(mockKV, "job-1", 0)
-
-		require.NoError(t, err)
-		assert.True(t, claimed)
-	})
-
-	t.Run("returns false, no error when key already claimed", func(t *testing.T) {
-		mockKV := &test.MockKV{CreateErr: jetstream.ErrKeyExists}
-
-		claimed, err := claimChunk(mockKV, "job-1", 0)
-
-		require.NoError(t, err)
-		assert.False(t, claimed)
-	})
-
-	t.Run("returns error on unexpected kv failure", func(t *testing.T) {
-		mockKV := &test.MockKV{CreateErr: errors.New("kv unavailable")}
-
-		_, err := claimChunk(mockKV, "job-1", 0)
-
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed")
-	})
-
-	t.Run("uses correct key format job_id.chunk_index", func(t *testing.T) {
-		mockKV := &test.MockKV{}
-
-		_, err := claimChunk(mockKV, "job-abc", 2)
-
-		require.NoError(t, err)
-		assert.Equal(t, "job-abc.2", mockKV.CreateKey)
-	})
-}
-
-// For job milestone kv related tests
 
 func TestAdvanceMilestone(t *testing.T) {
 	writePolicyTests := []struct {
@@ -265,30 +153,57 @@ func TestAdvanceMilestone(t *testing.T) {
 	}
 }
 
-func TestReleaseChunkClaim(t *testing.T) {
-	t.Run("returns nil on success", func(t *testing.T) {
-		mockKV := &test.MockKV{}
+func TestTerminateIfCancelled(t *testing.T) {
+	t.Run("Naks and returns correct shouldCancel and stopJob when GetMilestoneKV returns an err", func(t *testing.T) {
+		mockKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
+		msg := &test.MockMsg{}
 
-		err := releaseChunkClaim(mockKV, "job-1", 0)
+		shouldCancel, stopJob := TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
 
-		require.NoError(t, err)
+		assert.False(t, shouldCancel)
+		assert.True(t, stopJob)
+		assert.True(t, msg.NakCalled)
+		assert.False(t, msg.TermCalled)
 	})
 
-	t.Run("releases correct key job_id.chunk_index", func(t *testing.T) {
+	t.Run("Returns false for both when job isnt cancelled", func(t *testing.T) {
 		mockKV := &test.MockKV{}
+		msg := &test.MockMsg{}
 
-		err := releaseChunkClaim(mockKV, "job-abc", 2)
+		shouldCancel, stopJob := TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
 
-		require.NoError(t, err)
-		assert.Equal(t, "job-abc.2", mockKV.DeleteKey)
+		assert.False(t, shouldCancel)
+		assert.False(t, stopJob)
+		assert.False(t, msg.NakCalled)
+		assert.False(t, msg.TermCalled)
 	})
 
-	t.Run("returns error on kv failure", func(t *testing.T) {
-		mockKV := &test.MockKV{DeleteErr: errors.New("delete failed")}
+	t.Run("Returns true when msg termination fails", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
+		}
+		msg := &test.MockMsg{TermErr: errors.New("term failed")}
 
-		err := releaseChunkClaim(mockKV, "job-1", 0)
+		shouldCancel, stopJob := TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
 
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed")
+		assert.True(t, shouldCancel)
+		assert.True(t, stopJob)
+		assert.True(t, msg.TermCalled)
+	})
+
+	t.Run("Returns true when msg Term is successful", func(t *testing.T) {
+		mockKV := &test.MockKV{
+			GetFound: true,
+			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
+		}
+		msg := &test.MockMsg{}
+
+		shouldCancel, stopJob := TerminateIfCancelled(mockKV, msg, "job-1", test.SilentLogger())
+
+		assert.True(t, shouldCancel)
+		assert.True(t, stopJob)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.NakCalled)
 	})
 }

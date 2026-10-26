@@ -7,10 +7,10 @@ import (
 	"syscall"
 	"time"
 
+	"splice.com/go_services/internal/shared/msgbus"
 	"splice.com/go_services/internal/shared/service"
 
 	"splice.com/go_services/internal/chunkworker"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -47,9 +47,9 @@ func main() {
 		return
 	}
 
-	processedKV := sJetstream.CreateKV("chunk-worker-job-processed", js, 3*time.Hour, logger)
-	jobMilestoneKV := sJetstream.ConnectKV(js, "job-milestones", logger)
-	claimKV := sJetstream.CreateKV("chunk-worker-claims", js, chunkClaimTTL, logger)
+	processedKV := msgbus.CreateKV("chunk-worker-job-processed", js, 3*time.Hour, logger)
+	jobMilestoneKV := msgbus.ConnectKV(js, "job-milestones", logger)
+	claimKV := msgbus.CreateKV("chunk-worker-claims", js, chunkClaimTTL, logger)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

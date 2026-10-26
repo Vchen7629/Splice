@@ -12,7 +12,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"splice.com/go_services/internal/gateway"
-	sJetstream "splice.com/go_services/internal/shared/jetstream"
+	"splice.com/go_services/internal/shared/msgbus"
 	"splice.com/go_services/internal/shared/service"
 )
 
@@ -54,7 +54,7 @@ func main() {
 func runGateway(
 	cfg *Config, nc *nats.Conn, js jetstream.JetStream, logger *slog.Logger, quit <-chan os.Signal,
 ) error {
-	jobMilestoneKV := sJetstream.CreateKV("job-milestones", js, 24*time.Hour, logger)
+	jobMilestoneKV := msgbus.CreateKV("job-milestones", js, 24*time.Hour, logger)
 
 	advisorySub, err := gateway.ListenAdvisoriesFailure(nc, js, jobMilestoneKV, logger)
 	if err != nil {

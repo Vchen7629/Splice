@@ -1,4 +1,4 @@
-package jetstream
+package msgbus
 
 import (
 	"context"
