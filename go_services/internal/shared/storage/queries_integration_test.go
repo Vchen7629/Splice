@@ -52,13 +52,13 @@ func TestDownloadVideoIntegration(t *testing.T) {
 	})
 }
 
-func TestUploadProcessedVideo(t *testing.T) {
+func TestUploadFile(t *testing.T) {
 	t.Run("uploads file properly", func(t *testing.T) {
 		videoFile := test.OpenTestVideo(t, "../test/testvideo.mp4")
 		fileName := filepath.Base(videoFile.Name())
 		uploadURL := fmt.Sprintf("%s/job-upload/processed/%s", sharedFilerUrl, fileName)
 
-		url, err := storage.UploadProcessedVideo(uploadURL, videoFile.Name(), 30*time.Second)
+		url, err := storage.UploadFile(uploadURL, videoFile.Name(), 30*time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, uploadURL, url)

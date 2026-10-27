@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadProcessedVideoFileErrors(t *testing.T) {
+func TestUploadFileFileErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -42,7 +42,7 @@ func TestUploadProcessedVideoFileErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := UploadProcessedVideo(srv.URL, tc.filePath, 30*time.Second)
+			url, err := UploadFile(srv.URL, tc.filePath, 30*time.Second)
 
 			require.Error(t, err)
 			assert.Empty(t, url)
@@ -51,7 +51,7 @@ func TestUploadProcessedVideoFileErrors(t *testing.T) {
 	}
 }
 
-func TestUploadProcessedVideo(t *testing.T) {
+func TestUploadFile(t *testing.T) {
 	validFile := filepath.Join(t.TempDir(), "chunk.mp4")
 	require.NoError(t, os.WriteFile(validFile, []byte("fake video"), 0644))
 
@@ -61,7 +61,7 @@ func TestUploadProcessedVideo(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		url, err := UploadProcessedVideo(srv.URL, validFile, 30*time.Second)
+		url, err := UploadFile(srv.URL, validFile, 30*time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, srv.URL, url)
@@ -73,7 +73,7 @@ func TestUploadProcessedVideo(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		url, err := UploadProcessedVideo(srv.URL, validFile, 30*time.Second)
+		url, err := UploadFile(srv.URL, validFile, 30*time.Second)
 
 		require.Error(t, err)
 		assert.Empty(t, url)
