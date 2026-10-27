@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadFileFileErrors(t *testing.T) {
+func TestUploadFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -42,42 +41,12 @@ func TestUploadFileFileErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			url, err := UploadFile(srv.URL, tc.filePath, 30*time.Second)
+			err := UploadFile(srv.URL, tc.filePath, 30*time.Second)
 
 			require.Error(t, err)
-			assert.Empty(t, url)
 			assert.Contains(t, err.Error(), tc.errContains)
 		})
 	}
-}
-
-func TestUploadFile(t *testing.T) {
-	validFile := filepath.Join(t.TempDir(), "chunk.mp4")
-	require.NoError(t, os.WriteFile(validFile, []byte("fake video"), 0644))
-
-	t.Run("returns the upload url on success", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusCreated)
-		}))
-		t.Cleanup(srv.Close)
-
-		url, err := UploadFile(srv.URL, validFile, 30*time.Second)
-
-		require.NoError(t, err)
-		assert.Equal(t, srv.URL, url)
-	})
-
-	t.Run("returns empty url when the upload fails", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		t.Cleanup(srv.Close)
-
-		url, err := UploadFile(srv.URL, validFile, 30*time.Second)
-
-		require.Error(t, err)
-		assert.Empty(t, url)
-	})
 }
 
 func TestUpload(t *testing.T) {

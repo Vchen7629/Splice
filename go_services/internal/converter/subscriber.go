@@ -74,7 +74,7 @@ func ConsumeAndProcessVideo(
 
 		fileName := filepath.Base(outputPath)
 		destURL := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
-		if _, err := storage.UploadFile(destURL, outputPath, 10*time.Minute); err != nil {
+		if err := storage.UploadFile(destURL, outputPath, 10*time.Minute); err != nil {
 			logger.Error("error saving format convert video to seaweedfs storage", "jobID", payload.JobID, "filePath", outputPath, "err", err)
 			msgbus.NakWithErrHandling(logger, msg)
 			return
