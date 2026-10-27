@@ -42,11 +42,11 @@ func Upload(ctx context.Context, url string, body io.Reader, timeout time.Durati
 	return nil
 }
 
-// save (upload) the processed video to seaweedfs storage
-func UploadProcessedVideo(destURL, filePath string, timeout time.Duration) (string, error) {
+// save (upload) the file on local disk to seaweedfs storage
+func UploadFile(destURL, filePath string, timeout time.Duration) error {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("error opening video file: %w", err)
+		return fmt.Errorf("error opening video file: %w", err)
 	}
 	defer func() {
 		err := file.Close()
@@ -56,10 +56,10 @@ func UploadProcessedVideo(destURL, filePath string, timeout time.Duration) (stri
 	}()
 
 	if err := Upload(context.Background(), destURL, file, timeout); err != nil {
-		return "", err
+		return err
 	}
 
-	return destURL, nil
+	return nil
 }
 
 // ValidatePathSegment rejects path segments that could escape the intended

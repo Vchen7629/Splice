@@ -77,10 +77,9 @@ func ConsumeVideoChunk(
 			}
 
 			outFileName := filepath.Base(outputPath)
-			url := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, outFileName)
+			storageURL := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, outFileName)
 
-			storageURL, err := storage.UploadProcessedVideo(url, outputPath, uploadTimeout)
-			if err != nil {
+			if err := storage.UploadFile(storageURL, outputPath, uploadTimeout); err != nil {
 				logger.Error(
 					"error saving transcoded video chunk to seaweedfs storage",
 					"job_id", payload.JobID,
