@@ -12,9 +12,12 @@ import (
 	"time"
 )
 
+const TempStorageTTL = "6h"      // for things like raw chunk uploads, unprocessed videos
+const ProcessedStorageTTL = "3d" // for final processed output storage
+
 // uploads (PUT) body to the storage url
-func Upload(ctx context.Context, url string, body io.Reader, timeout time.Duration) error {
-	client := &http.Client{Timeout: timeout} // 0 = no timeout
+func Upload(ctx context.Context, url, storageTTL string, body io.Reader, httpUploadTimeout time.Duration) error {
+	client := &http.Client{Timeout: httpUploadTimeout} // 0 = no httpUploadTimeout
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
 	if err != nil {
 		return fmt.Errorf("error creating upload request: %w", err)
@@ -23,6 +26,11 @@ func Upload(ctx context.Context, url string, body io.Reader, timeout time.Durati
 		req.Body = io.NopCloser(body)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
+	if storageTTL != "" {
+		q := req.URL.Query()
+		q.Set("ttl", storageTTL)
+		req.URL.RawQuery = q.Encode()
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -43,7 +51,7 @@ func Upload(ctx context.Context, url string, body io.Reader, timeout time.Durati
 }
 
 // save (upload) the file on local disk to seaweedfs storage
-func UploadFile(destURL, filePath string, timeout time.Duration) error {
+func UploadFile(destURL, filePath, storageTTL string, httpUploadTimeout time.Duration) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening video file: %w", err)
@@ -55,7 +63,7 @@ func UploadFile(destURL, filePath string, timeout time.Duration) error {
 		}
 	}()
 
-	if err := Upload(context.Background(), destURL, file, timeout); err != nil {
+	if err := Upload(context.Background(), destURL, storageTTL, file, httpUploadTimeout); err != nil {
 		return err
 	}
 
@@ -83,13 +91,13 @@ func TempUnprocessedDir(videoID string) string {
 }
 
 // down the video from seaweedfs storage and save it to a temp directory with dirName
-func DownloadVideo(storageURL, dirName string, timeout time.Duration) (string, error) {
+func DownloadVideo(storageURL, dirName string, httpUploadTimeout time.Duration) (string, error) {
 	err := ValidatePathSegment(dirName)
 	if err != nil {
 		return "", err
 	}
 
-	httpClient := &http.Client{Timeout: timeout}
+	httpClient := &http.Client{Timeout: httpUploadTimeout}
 	resp, err := httpClient.Get(storageURL)
 	if err != nil {
 		return "", fmt.Errorf("error connecting to seedweedfs, %w", err)
