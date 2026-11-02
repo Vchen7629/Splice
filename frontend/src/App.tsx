@@ -15,6 +15,7 @@ import { CancelledVideosList, ProcessedVideosList, UploadedFileQueueList } from 
 import FileUploadPanel from './components/file/UploadPanel'
 import { useProcessedStore } from './state/processedVideos'
 import { fileMap, nextFileId } from './state/fileRegistry'
+import { usePruneExpiredProcessed } from './hooks/usePruneExpiredProcessed'
 
 function App() {
   const { videos, cancelled, addVideos, removeCancelled, resetVideo, setResolution, setDenoiseQuality, setTargetFormat } = useVideoQueueStore()
@@ -24,6 +25,7 @@ function App() {
   const { removeUploadedVideo, cancelVideo, startVideoUploads } = useUploadQueue()
   const { isDragging, inputRef, browse, dropHandlers, handleInputChange } = useFileDrop(handleFiles)
   useJobEvents()
+  usePruneExpiredProcessed()
 
   const queue = videos.filter(v => v.processingType === activeFeature)
   const processedVideo = processed.filter(v => v.processingType === activeFeature)
