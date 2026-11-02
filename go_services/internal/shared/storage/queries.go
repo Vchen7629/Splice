@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,8 +13,10 @@ import (
 	"time"
 )
 
-const TempStorageTTL = "6h"      // for things like raw chunk uploads, unprocessed videos
+const TempStorageTTL = "1d"      // for things like raw chunk uploads, unprocessed videos
 const ProcessedStorageTTL = "3d" // for final processed output storage
+
+var ErrNotFound = errors.New("not found")
 
 // uploads (PUT) body to the storage url
 func Upload(ctx context.Context, url, storageTTL string, body io.Reader, httpUploadTimeout time.Duration) error {
@@ -112,7 +115,7 @@ func DownloadVideo(storageURL, dirName string, httpUploadTimeout time.Duration) 
 	if resp.StatusCode != http.StatusOK {
 		switch resp.StatusCode {
 		case http.StatusNotFound:
-			return "", fmt.Errorf("video not found")
+			return "", fmt.Errorf("video not found: %w", ErrNotFound)
 		case http.StatusForbidden:
 			return "", fmt.Errorf("access denied")
 		case http.StatusInternalServerError:
