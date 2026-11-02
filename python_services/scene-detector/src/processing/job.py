@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from shared_core import get_logger, sharedsettings
 from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
-from shared_storage import fetch_video, upload_video
+from shared_storage import fetch_video, upload_video, TEMP_UNPROCESSED_STORAGE_TTL
 from shared_util import cleanup_temp
 
 from ..core.settings import settings
@@ -68,6 +68,7 @@ async def process_job(
                     metadata.job_id,
                     path,
                     settings.SERVICE_NAME,
+                    TEMP_UNPROCESSED_STORAGE_TTL,
                 )
                 for path in chunk_paths
             ],

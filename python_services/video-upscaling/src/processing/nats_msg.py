@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
-from shared_core import get_logger, sharedsettings
+from shared_core import get_logger
 from shared_handler import (
     ProcessJobMsgContext,
     UpscaleCompleteMsg,
     publisher,
     update_job_stage,
 )
-from shared_storage import fetch_video, upload_video
+from shared_storage import PROCESSED_STORAGE_TTL, fetch_video, upload_video
 from shared_util import ProgressReporter, cleanup_temp
 
 from utils import select_model
@@ -157,7 +157,12 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     await asyncio.to_thread(
-        upload_video, storage_url, job_id, temp_file_loc, SERVICE_NAME
+        upload_video,
+        storage_url,
+        job_id,
+        temp_file_loc,
+        SERVICE_NAME,
+        PROCESSED_STORAGE_TTL,
     )
 
     await publisher(
@@ -195,7 +200,12 @@ async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     await asyncio.to_thread(
-        upload_video, storage_url, job_id, ctx.temp_file_loc, SERVICE_NAME
+        upload_video,
+        storage_url,
+        job_id,
+        ctx.temp_file_loc,
+        SERVICE_NAME,
+        PROCESSED_STORAGE_TTL,
     )
 
     await publisher(
