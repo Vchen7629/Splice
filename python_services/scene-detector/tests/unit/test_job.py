@@ -73,7 +73,9 @@ async def test_process_job_returns_chunk_messages_on_success() -> None:
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch(
             "src.processing.job.upload_video",
-            side_effect=lambda storage_url, job_id, path, service_name, storage_ttl: url_map[path],
+            side_effect=lambda storage_url, job_id, path, service_name, storage_ttl: (
+                url_map[path]
+            ),
         ),
         patch("src.processing.job.cleanup_temp"),
     ):
@@ -118,7 +120,9 @@ async def test_process_job_forwards_operation_fields_to_chunk_messages(
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch(
             "src.processing.job.upload_video",
-            side_effect=lambda storage_url, job_id, path, service_name, storage_ttl: url_map[path],
+            side_effect=lambda storage_url, job_id, path, service_name, storage_ttl: (
+                url_map[path]
+            ),
         ),
         patch("src.processing.job.cleanup_temp"),
     ):
@@ -141,7 +145,9 @@ async def test_process_job_cleans_up_temp_dir_after_upload() -> None:
         patch("src.processing.job.split_into_chunks", return_value=FAKE_CHUNK_PATHS),
         patch(
             "src.processing.job.upload_video",
-            side_effect=lambda storage_url, job_id, path, service_name, storage_ttl: url_map[path],
+            side_effect=lambda storage_url, job_id, path, service_name, storage_ttl: (
+                url_map[path]
+            ),
         ),
         patch("src.processing.job.cleanup_temp") as mock_cleanup_temp,
     ):

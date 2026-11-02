@@ -50,8 +50,11 @@ async def process_job_msg(ctx: ProcessJobMsgContext, cancel_event: Event) -> Non
         job_id=job_id,
         saved_to=local_video_path,
     )
+    target_res = ctx.metadata.target_resolution
+    if target_res is None:
+        raise ValueError
 
-    res = select_model(ctx.metadata.source_resolution, ctx.metadata.target_resolution)
+    res = select_model(ctx.metadata.source_resolution, target_res)
     if res is None:
         filename = os.path.basename(local_video_path)
         temp_file_loc = f"{TEMP_ROOT}/output/{job_id}/{filename}"
@@ -176,6 +179,9 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
 async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
     """downscale video path logic"""
     job_id = ctx.metadata.job_id
+    target_res = ctx.metadata.target_resolution
+    if target_res is None:
+        raise ValueError
 
     logger.debug(
         "downscaling video",
@@ -191,7 +197,7 @@ async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
         video_downscale,
         cancel_event,
         ctx.local_video_path,
-        ctx.metadata.target_resolution,
+        target_res,
         ctx.temp_file_loc,
         downscale_reporter,
     )
