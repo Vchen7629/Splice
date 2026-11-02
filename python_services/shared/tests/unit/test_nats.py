@@ -20,6 +20,7 @@ from shared_handler import (
     nats_connect,
 )
 from shared_handler.nats import _handle_consumer_message
+from shared_storage import VideoNotFoundErr
 from test_helpers.nats import make_msg, milestone_entry
 
 MOCK_NC = AsyncMock(spec=NATSClient)
@@ -407,3 +408,38 @@ async def test_cleanup_job_called_on_failure_before_nak() -> None:
     await _handle_consumer_message(ctx, msg, AsyncMock(), fake_cleanup)
 
     assert call_order == ["cleanup_job", "nak"]
+
+
+@pytest.mark.asyncio
+async def test_video_not_found_records_failed_milestone_and_acks() -> None:
+    """A missing/expired artifact writes a FAILED milestone with a clear error
+    and the message is acked (terminal, no redelivery) once the write succeeds"""
+    msg = make_msg(job_id="1", target_resolution="1080p")
+    ctx = make_ctx()
+    mock_process_job_msg = AsyncMock(side_effect=VideoNotFoundErr("gone"))
+
+    await _handle_consumer_message(ctx, msg, mock_process_job_msg)
+
+    job_id, payload = ctx.job_milestone_kv.update.call_args_list[-1][0]
+    assert job_id == "1"
+    assert json.loads(payload)["state"] == "FAILED"
+    assert "missing or expired" in payload.decode()
+    msg.ack.assert_called_once()
+    msg.nak.assert_not_called()
+    ctx.msg_processed_kv.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_video_not_found_naks_when_failed_milestone_write_fails() -> None:
+    """If the FAILED milestone can't be persisted, the message must stay
+    retryable: nak'd and never acked"""
+    msg = make_msg(target_resolution="1080p")
+    ctx = make_ctx()
+    # stage write succeeds, FAILED write fails
+    ctx.job_milestone_kv.update.side_effect = [None, Exception("kv write failed")]
+    mock_process_job_msg = AsyncMock(side_effect=VideoNotFoundErr("gone"))
+
+    await _handle_consumer_message(ctx, msg, mock_process_job_msg)
+
+    msg.nak.assert_called_once()
+    msg.ack.assert_not_called()

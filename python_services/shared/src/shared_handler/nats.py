@@ -16,6 +16,7 @@ from structlog.stdlib import BoundLogger
 
 from shared_core import get_logger, sharedsettings
 from shared_handler import ProcessJobMessage, UpscaleCompleteMsg, is_job_cancelled
+from shared_storage import VideoNotFoundErr
 
 from .exceptions import JobCancelledError
 from .kv import check_already_processed, update_job_failed, update_job_stage
@@ -204,6 +205,11 @@ async def _handle_consumer_message(
         else:
             ctx.logger.error("timed out on final delivery, failing job", err=str(e))
             needs_nak = not await _fail_job(ctx, msg, metadata, str(e))
+    except VideoNotFoundErr as e:
+        ctx.logger.error("storage artifact missing or expired", err=str(e))
+        needs_nak = not await _fail_job(
+            ctx, msg, metadata, "video missing or expired from storage"
+        )
     except Exception as e:
         ctx.logger.error("unexpected error processing job", err=str(e))
         needs_nak = not await _fail_job(ctx, msg, metadata, str(e))

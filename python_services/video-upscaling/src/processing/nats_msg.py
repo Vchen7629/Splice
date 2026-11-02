@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
-from shared_core import get_logger, sharedsettings
+from shared_core import get_logger
 from shared_handler import (
     ProcessJobMsgContext,
     UpscaleCompleteMsg,
     publisher,
     update_job_stage,
 )
-from shared_storage import fetch_video, upload_video
+from shared_storage import PROCESSED_STORAGE_TTL, fetch_video, upload_video
 from shared_util import ProgressReporter, cleanup_temp
 
 from utils import select_model
@@ -50,8 +50,11 @@ async def process_job_msg(ctx: ProcessJobMsgContext, cancel_event: Event) -> Non
         job_id=job_id,
         saved_to=local_video_path,
     )
+    target_res = ctx.metadata.target_resolution
+    if target_res is None:
+        raise ValueError
 
-    res = select_model(ctx.metadata.source_resolution, ctx.metadata.target_resolution)
+    res = select_model(ctx.metadata.source_resolution, target_res)
     if res is None:
         filename = os.path.basename(local_video_path)
         temp_file_loc = f"{TEMP_ROOT}/output/{job_id}/{filename}"
@@ -157,7 +160,12 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     await asyncio.to_thread(
-        upload_video, storage_url, job_id, temp_file_loc, SERVICE_NAME
+        upload_video,
+        storage_url,
+        job_id,
+        temp_file_loc,
+        SERVICE_NAME,
+        PROCESSED_STORAGE_TTL,
     )
 
     await publisher(
@@ -171,6 +179,9 @@ async def _upscale_job(ctx: UpscaleJobContext, cancel_event: Event) -> None:
 async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
     """downscale video path logic"""
     job_id = ctx.metadata.job_id
+    target_res = ctx.metadata.target_resolution
+    if target_res is None:
+        raise ValueError
 
     logger.debug(
         "downscaling video",
@@ -186,7 +197,7 @@ async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
         video_downscale,
         cancel_event,
         ctx.local_video_path,
-        ctx.metadata.target_resolution,
+        target_res,
         ctx.temp_file_loc,
         downscale_reporter,
     )
@@ -195,7 +206,12 @@ async def _downscale_job(ctx: DownscaleJobContext, cancel_event: Event) -> None:
 
     storage_url = f"{settings.BASE_STORAGE_URL}/{job_id}/output.mp4/processed"
     await asyncio.to_thread(
-        upload_video, storage_url, job_id, ctx.temp_file_loc, SERVICE_NAME
+        upload_video,
+        storage_url,
+        job_id,
+        ctx.temp_file_loc,
+        SERVICE_NAME,
+        PROCESSED_STORAGE_TTL,
     )
 
     await publisher(

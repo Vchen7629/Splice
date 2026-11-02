@@ -6,7 +6,7 @@ import pytest
 import requests
 
 from shared_core import sharedsettings
-from shared_storage import fetch_video
+from shared_storage import VideoNotFoundErr, fetch_video
 
 
 @pytest.mark.parametrize("status_code", [500, 502, 503])
@@ -26,6 +26,22 @@ def test_fetch_video_raises_on_server_error(status_code: int) -> None:
         fetch_video("http://fake/job-id/video.mp4", service_name="scene-detector")
 
     mock_response.__exit__.assert_called_once()
+
+
+def test_fetch_video_raises_not_found_on_404() -> None:
+    """A 404 from SeaweedFS is raised as VideoNotFoundErr, not a generic HTTPError"""
+    mock_response = MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.status_code = 404
+    mock_response.raise_for_status.side_effect = requests.HTTPError(
+        response=mock_response
+    )
+
+    with (
+        patch("shared_storage.queries.requests.get", return_value=mock_response),
+        pytest.raises(VideoNotFoundErr),
+    ):
+        fetch_video("http://fake/job-id/video.mp4", service_name="scene-detector")
 
 
 def test_fetch_video_removes_partial_file_on_copy_failure(

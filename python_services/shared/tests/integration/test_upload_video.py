@@ -3,7 +3,7 @@ from pathlib import Path
 
 import requests
 
-from shared_storage import upload_video
+from shared_storage import TEMP_UNPROCESSED_STORAGE_TTL, upload_video
 
 
 def test_upload_chunks_happy_path(seaweedfs_url: str, chunk_files: list[str]) -> None:
@@ -16,6 +16,7 @@ def test_upload_chunks_happy_path(seaweedfs_url: str, chunk_files: list[str]) ->
             job_id,
             path,
             service_name="scene-detector",
+            storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
         )
         for path in chunk_files
     ]
@@ -34,6 +35,12 @@ def test_upload_single_chunk(seaweedfs_url: str, tmp_path: Path) -> None:
     chunk.write_bytes(b"single chunk")
     storage_url = f"{seaweedfs_url}/{job_id}/video-Scene-001.mp4"
 
-    url = upload_video(storage_url, job_id, str(chunk), service_name="scene-detector")
+    url = upload_video(
+        storage_url,
+        job_id,
+        str(chunk),
+        service_name="scene-detector",
+        storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
+    )
 
     assert "video-Scene-001.mp4" in url

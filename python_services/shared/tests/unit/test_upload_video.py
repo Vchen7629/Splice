@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from shared_storage import upload_video
+from shared_storage import TEMP_UNPROCESSED_STORAGE_TTL, upload_video
 
 fake_storage_url = "idk/idk2/chunk-001.mp4"
 
@@ -17,6 +17,7 @@ def test_raises_file_not_found(tmp_path: Path) -> None:
             "job-1",
             str(tmp_path / "missing.mp4"),
             service_name="scene-detector",
+            storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
         )
 
 
@@ -34,7 +35,11 @@ def test_raises_on_http_error(single_video_chunk: str, status_code: int) -> None
         pytest.raises(requests.HTTPError),
     ):
         upload_video(
-            fake_storage_url, "job-1", single_video_chunk, service_name="scene-detector"
+            fake_storage_url,
+            "job-1",
+            single_video_chunk,
+            service_name="scene-detector",
+            storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
         )
 
 
@@ -47,7 +52,11 @@ def test_raises_on_connection_error(single_video_chunk: str) -> None:
         pytest.raises(requests.ConnectionError),
     ):
         upload_video(
-            fake_storage_url, "job-1", single_video_chunk, service_name="scene-detector"
+            fake_storage_url,
+            "job-1",
+            single_video_chunk,
+            service_name="scene-detector",
+            storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
         )
 
 
@@ -64,7 +73,30 @@ def test_returns_correct_storage_url(fake_base_url: str, tmp_path: Path) -> None
 
     with patch("shared_storage.queries.requests.put", return_value=mock_response):
         url = upload_video(
-            storage_url, job_id, str(chunk), service_name="scene-detector"
+            storage_url,
+            job_id,
+            str(chunk),
+            service_name="scene-detector",
+            storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
         )
 
     assert url == storage_url
+
+
+def test_upload_sends_temp_ttl_param(single_video_chunk: str) -> None:
+    """Uploads pass the 1d temporary-artifact TTL as a query param"""
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+
+    with patch(
+        "shared_storage.queries.requests.put", return_value=mock_response
+    ) as mock_put:
+        upload_video(
+            fake_storage_url,
+            "job-1",
+            single_video_chunk,
+            service_name="scene-detector",
+            storage_ttl=TEMP_UNPROCESSED_STORAGE_TTL,
+        )
+
+    assert mock_put.call_args.kwargs["params"] == {"ttl": "1d"}

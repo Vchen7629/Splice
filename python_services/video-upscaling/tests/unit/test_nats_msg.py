@@ -259,7 +259,7 @@ async def test_uploads_to_correct_storage_url(nats_msg_patches: dict[str, Any]) 
 
     expected_url = f"{settings.BASE_STORAGE_URL}/job-abc/output.mp4/processed"
     nats_msg_patches["upload"].assert_called_once_with(
-        expected_url, "job-abc", ANY, settings.SERVICE_NAME
+        expected_url, "job-abc", ANY, settings.SERVICE_NAME, ANY
     )
 
 

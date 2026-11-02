@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from shared_core import get_logger, sharedsettings
 from shared_handler import JobCancelledError, ProcessJobMessage, VideoChunkMessage
-from shared_storage import fetch_video, upload_video
+from shared_storage import TEMP_UNPROCESSED_STORAGE_TTL, fetch_video, upload_video
 from shared_util import cleanup_temp
 
 from ..core.settings import settings
@@ -34,6 +34,7 @@ async def process_job(
     Raises:
         requests.ConnectionError: if seaweedfs is unreachable during fetch or upload
         requests.HTTPError: If seaweedfs returns an error during fetch or upload
+        VideoNotFoundErr: If seaweedfs returns 404 error
         FileNotFOundError: If a local chunk video file is missing before upload
         VideoOpenFailure: if scenedetect is unable to open the video
         OSError: if the video isnt found like not existing on the filepath, logs and raises
@@ -67,6 +68,7 @@ async def process_job(
                     metadata.job_id,
                     path,
                     settings.SERVICE_NAME,
+                    TEMP_UNPROCESSED_STORAGE_TTL,
                 )
                 for path in chunk_paths
             ],

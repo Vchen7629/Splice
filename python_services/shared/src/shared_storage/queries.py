@@ -8,6 +8,10 @@ import requests
 from shared_core import get_logger, sharedsettings
 
 
+class VideoNotFoundErr(Exception):
+    pass
+
+
 def fetch_video(storage_url: str, service_name: str) -> str:
     """
     Fetch unprocessed video from seaweedfs storage for processing
@@ -19,7 +23,8 @@ def fetch_video(storage_url: str, service_name: str) -> str:
 
     Raises:
         requests.ConnectionError if SeaweedFS is unreachable
-        request.HTTPError: if SeaweedFS returns 404 or 5xx
+        request.HTTPError: if SeaweedFS returns 4xx or 5xx
+        VideoNotFoundErr: if SeaweedFS returns 404
 
     Returns:
         dest_path string on success
@@ -56,6 +61,8 @@ def fetch_video(storage_url: str, service_name: str) -> str:
             status_code=e.response.status_code,
             err=str(e),
         )
+        if e.response.status_code == 404:
+            raise VideoNotFoundErr(f"not found: {storage_url}")
         raise
     finally:
         if not completed and tmp_path is not None:
@@ -65,8 +72,12 @@ def fetch_video(storage_url: str, service_name: str) -> str:
     return dest_path
 
 
+TEMP_UNPROCESSED_STORAGE_TTL = "1d"
+PROCESSED_STORAGE_TTL = "3d"
+
+
 def upload_video(
-    storage_url: str, job_id: str, video_path: str, service_name: str
+    storage_url: str, job_id: str, video_path: str, service_name: str, storage_ttl: str
 ) -> str:
     """
     Upload a single video to seaweedfs storage
@@ -76,6 +87,7 @@ def upload_video(
         job_id: job_id for one request from NATS
         video_path: local file path for the video
         service_name: the service name to log with
+        storage_ttl: how long to keep the video file stored in storage
 
     Raises:
         FileNotFoundError: if the local chunk file is missing before upload
@@ -101,6 +113,7 @@ def upload_video(
                 storage_url,
                 data=f,
                 headers={"Content-Type": "application/octet-stream"},
+                params={"ttl": storage_ttl},
                 timeout=sharedsettings.STORAGE_READ_TIMEOUT_S,
             )
         response.raise_for_status()
