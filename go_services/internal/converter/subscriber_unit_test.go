@@ -51,4 +51,25 @@ func TestConsumeAndProcessVideo(t *testing.T) {
 			assert.Equal(t, tc.wantTerm, msg.TermCalled, "term")
 		})
 	}
+
+	t.Run("download 404 marks job FAILED and terminates", func(t *testing.T) {
+		payload, err := json.Marshal(pipeline.VideoJobMessage{
+			JobID: "job-1", StorageURL: test.NotFoundStorageURL(t) + "/job-1/clip.mp4", TargetFormat: "mp4",
+		})
+		require.NoError(t, err)
+		msg := &test.MockMsg{Payload: payload}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumerWithMsg{Msg: msg}}}
+		// already at this stage, so the PROCESSING advance is a no-op and the FAILED write lands in UpdateValue
+		milestoneKV := &test.MockKV{
+			GetFound: true, GetEntryRevision: 1,
+			GetValue: []byte(`{"state":"PROCESSING","stage":"format-converter"}`),
+		}
+
+		_, err = converter.ConsumeAndProcessVideo("http://localhost:1", js, &test.MockKV{}, milestoneKV, test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.NakCalled)
+		assert.Contains(t, string(milestoneKV.UpdateValue), `"state":"FAILED"`)
+	})
 }

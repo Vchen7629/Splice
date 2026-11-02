@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -91,6 +92,16 @@ func waitForFilerWritable(filerURL string) error {
 	}
 
 	return lastErr
+}
+
+// starts a storage server that 404s every request, simulating an expired/missing file
+func NotFoundStorageURL(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
 }
 
 // OpenTestVideo opens the shared testvideo.mp4 fixture. path is relative to

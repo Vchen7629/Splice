@@ -104,6 +104,30 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		assert.True(t, msg.NakCalled)
 	})
 
+	t.Run("fetch 404 marks job FAILED and terminates", func(t *testing.T) {
+		payload, err := json.Marshal(VideoChunkMessage{
+			ChunkRef:         pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0},
+			StorageURL:       test.NotFoundStorageURL(t) + "/job-1/chunk.mp4",
+			TargetResolution: "720p",
+			Operation:        "transcode",
+		})
+		require.NoError(t, err)
+		msg := &test.MockMsg{Payload: payload}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumerWithMsg{Msg: msg}}}
+		// already at this stage, so the PROCESSING advance is a no-op and the FAILED write lands in UpdateValue
+		milestoneKV := &test.MockKV{
+			GetFound: true, GetEntryRevision: 1,
+			GetValue: []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`),
+		}
+
+		_, err = ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, milestoneKV, &test.MockKV{}, 30*time.Second, test.SilentLogger())
+
+		require.NoError(t, err)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.NakCalled)
+		assert.Contains(t, string(milestoneKV.UpdateValue), `"state":"FAILED"`)
+	})
+
 	// idempotency test cases
 
 	t.Run("already processed chunk acks and skips processing", func(t *testing.T) {

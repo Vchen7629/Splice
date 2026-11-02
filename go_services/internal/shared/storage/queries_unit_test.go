@@ -175,24 +175,28 @@ func TestUpload(t *testing.T) {
 
 func TestDownloadVideoHTTPErrors(t *testing.T) {
 	tests := []struct {
-		name        string
-		status      int
-		errContains string
+		name         string
+		status       int
+		errContains  string
+		wantNotFound bool // callers branch on ErrNotFound to fail the job instead of retrying
 	}{
 		{
-			name:        "404 returns video not found error",
-			status:      http.StatusNotFound,
-			errContains: "video not found",
+			name:         "404 returns video not found error",
+			status:       http.StatusNotFound,
+			errContains:  "video not found",
+			wantNotFound: true,
 		},
 		{
-			name:        "403 returns access denied error",
-			status:      http.StatusForbidden,
-			errContains: "access denied",
+			name:         "403 returns access denied error",
+			status:       http.StatusForbidden,
+			errContains:  "access denied",
+			wantNotFound: false,
 		},
 		{
-			name:        "500 returns error",
-			status:      http.StatusInternalServerError,
-			errContains: "error accessing seedweedfs",
+			name:         "500 returns error",
+			status:       http.StatusInternalServerError,
+			errContains:  "error accessing seedweedfs",
+			wantNotFound: false,
 		},
 	}
 
@@ -209,6 +213,7 @@ func TestDownloadVideoHTTPErrors(t *testing.T) {
 			require.Error(t, err)
 			assert.Empty(t, filePath)
 			assert.Contains(t, err.Error(), tc.errContains)
+			assert.Equal(t, tc.wantNotFound, errors.Is(err, ErrNotFound))
 
 			t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 		})
