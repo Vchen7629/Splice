@@ -4,7 +4,7 @@ from typing import Tuple
 import pytest
 import requests
 
-from shared_storage import fetch_video
+from shared_storage import VideoNotFoundErr, fetch_video
 
 
 def test_fetch_video_downloads_file(seeded_video: Tuple[str, str]) -> None:
@@ -34,9 +34,9 @@ def test_fetch_video_path_namespaced_by_job_id(seeded_video: Tuple[str, str]) ->
 
 
 def test_fetch_video_raises_on_404(seaweedfs_url: str) -> None:
-    """Raises HTTPError when the video does not exist in storage"""
+    """Raises VideoNotFoundErr when the video does not exist in storage"""
     missing_url = f"{seaweedfs_url}/nonexistent-job/missing.mp4"
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(VideoNotFoundErr):
         fetch_video(missing_url, service_name="scene-detector")
 
 

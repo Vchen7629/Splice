@@ -68,3 +68,18 @@ def test_returns_correct_storage_url(fake_base_url: str, tmp_path: Path) -> None
         )
 
     assert url == storage_url
+
+
+def test_upload_sends_temp_ttl_param(single_video_chunk: str) -> None:
+    """Uploads pass the 1d temporary-artifact TTL as a query param"""
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+
+    with patch(
+        "shared_storage.queries.requests.put", return_value=mock_response
+    ) as mock_put:
+        upload_video(
+            fake_storage_url, "job-1", single_video_chunk, service_name="scene-detector"
+        )
+
+    assert mock_put.call_args.kwargs["params"] == {"ttl": "1d"}

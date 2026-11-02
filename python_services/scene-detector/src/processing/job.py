@@ -34,6 +34,7 @@ async def process_job(
     Raises:
         requests.ConnectionError: if seaweedfs is unreachable during fetch or upload
         requests.HTTPError: If seaweedfs returns an error during fetch or upload
+        VideoNotFoundErr: If seaweedfs returns 404 error
         FileNotFOundError: If a local chunk video file is missing before upload
         VideoOpenFailure: if scenedetect is unable to open the video
         OSError: if the video isnt found like not existing on the filepath, logs and raises
