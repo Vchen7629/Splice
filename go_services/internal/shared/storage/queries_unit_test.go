@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -41,7 +42,7 @@ func TestUploadFile(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := UploadFile(srv.URL, tc.filePath, 30*time.Second)
+			err := UploadFile(srv.URL, tc.filePath, TempStorageTTL, 30*time.Second)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errContains)
@@ -71,7 +72,7 @@ func TestUpload(t *testing.T) {
 				}))
 				t.Cleanup(srv.Close)
 
-				err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), time.Second)
+				err := Upload(t.Context(), srv.URL, TempStorageTTL, strings.NewReader("fake video"), time.Second)
 
 				if tc.wantErr {
 					require.Error(t, err)
@@ -84,7 +85,7 @@ func TestUpload(t *testing.T) {
 	})
 
 	t.Run("unreachable storage returns error", func(t *testing.T) {
-		err := Upload(t.Context(), "http://localhost:1", strings.NewReader("fake video"), time.Second)
+		err := Upload(t.Context(), "http://localhost:1", TempStorageTTL, strings.NewReader("fake video"), time.Second)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
@@ -102,7 +103,7 @@ func TestUpload(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		err := Upload(t.Context(), srv.URL+"/job-1/video.mp4", strings.NewReader("fake video"), time.Second)
+		err := Upload(t.Context(), srv.URL+"/job-1/video.mp4", TempStorageTTL, strings.NewReader("fake video"), time.Second)
 
 		require.NoError(t, err)
 		assert.Equal(t, http.MethodPut, method)
@@ -110,6 +111,36 @@ func TestUpload(t *testing.T) {
 		assert.Equal(t, "application/octet-stream", contentType)
 		assert.Equal(t, int64(len("fake video")), contentLength)
 		assert.Equal(t, "fake video", string(body))
+	})
+
+	t.Run("ttl query param is only sent when storageTTL is provided", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			storageTTL  string
+			wantTTL     string
+			wantPresent bool
+		}{
+			{"ttl provided", TempStorageTTL, TempStorageTTL, true},
+			{"ttl empty", "", "", false},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				var query url.Values
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					query = r.URL.Query()
+					w.WriteHeader(http.StatusCreated)
+				}))
+				t.Cleanup(srv.Close)
+
+				err := Upload(t.Context(), srv.URL+"/job-1/video.mp4", tc.storageTTL, strings.NewReader("fake video"), time.Second)
+
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantPresent, query.Has("ttl"))
+				assert.Equal(t, tc.wantTTL, query.Get("ttl"))
+			})
+		}
 	})
 
 	t.Run("returns error when storage does not respond within the timeout", func(t *testing.T) {
@@ -123,7 +154,7 @@ func TestUpload(t *testing.T) {
 		t.Cleanup(srv.Close)
 		t.Cleanup(func() { close(release) })
 
-		err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), 50*time.Millisecond)
+		err := Upload(t.Context(), srv.URL, TempStorageTTL, strings.NewReader("fake video"), 50*time.Millisecond)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "error connecting to seaweedfs")
@@ -136,7 +167,7 @@ func TestUpload(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		err := Upload(t.Context(), srv.URL, strings.NewReader("fake video"), 0)
+		err := Upload(t.Context(), srv.URL, TempStorageTTL, strings.NewReader("fake video"), 0)
 
 		require.NoError(t, err)
 	})
@@ -144,24 +175,28 @@ func TestUpload(t *testing.T) {
 
 func TestDownloadVideoHTTPErrors(t *testing.T) {
 	tests := []struct {
-		name        string
-		status      int
-		errContains string
+		name         string
+		status       int
+		errContains  string
+		wantNotFound bool // callers branch on ErrNotFound to fail the job instead of retrying
 	}{
 		{
-			name:        "404 returns video not found error",
-			status:      http.StatusNotFound,
-			errContains: "video not found",
+			name:         "404 returns video not found error",
+			status:       http.StatusNotFound,
+			errContains:  "video not found",
+			wantNotFound: true,
 		},
 		{
-			name:        "403 returns access denied error",
-			status:      http.StatusForbidden,
-			errContains: "access denied",
+			name:         "403 returns access denied error",
+			status:       http.StatusForbidden,
+			errContains:  "access denied",
+			wantNotFound: false,
 		},
 		{
-			name:        "500 returns error",
-			status:      http.StatusInternalServerError,
-			errContains: "error accessing seedweedfs",
+			name:         "500 returns error",
+			status:       http.StatusInternalServerError,
+			errContains:  "error accessing seedweedfs",
+			wantNotFound: false,
 		},
 	}
 
@@ -178,6 +213,7 @@ func TestDownloadVideoHTTPErrors(t *testing.T) {
 			require.Error(t, err)
 			assert.Empty(t, filePath)
 			assert.Contains(t, err.Error(), tc.errContains)
+			assert.Equal(t, tc.wantNotFound, errors.Is(err, ErrNotFound))
 
 			t.Cleanup(func() { os.RemoveAll("/tmp/" + jobID) })
 		})

@@ -37,7 +37,7 @@ func videoHeight(t *testing.T, path string) int {
 const testVideoPath = "../shared/test/testvideo.mp4"
 
 func TestProcessChunkErrorsOnUnknownChunkOp(t *testing.T) {
-	outputPath, err := processChunk(&test.MockKV{}, VideoChunkMessage{Operation: "Unknown"}, test.SilentLogger())
+	outputPath, err := processChunk(VideoChunkMessage{Operation: "Unknown"}, test.SilentLogger())
 
 	require.Error(t, err)
 	assert.Equal(t, outputPath, "")

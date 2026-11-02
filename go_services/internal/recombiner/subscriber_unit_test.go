@@ -131,6 +131,29 @@ func TestRecombineVideo(t *testing.T) {
 		assert.Equal(t, "job-1", jobMilestoneKV.CreateKey)
 	})
 
+	t.Run("chunk download 404 marks job FAILED and terminates", func(t *testing.T) {
+		payload, err := json.Marshal(pipeline.ChunkCompleteMessage{
+			ChunkRef:    pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0},
+			TotalChunks: 1,
+			StorageURL:  test.NotFoundStorageURL(t) + "/job-1/processed/chunk.mp4",
+		})
+		require.NoError(t, err)
+		msg := &test.MockMsg{Payload: payload}
+		js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumerWithMsg{Msg: msg}}}
+		// already at this stage, so the PROCESSING advance is a no-op and the FAILED write lands in UpdateValue
+		jobMilestoneKV := &test.MockKV{
+			GetFound: true, GetEntryRevision: 1,
+			GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`),
+		}
+
+		_, err = recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+
+		require.NoError(t, err)
+		assert.True(t, msg.TermCalled)
+		assert.False(t, msg.NakCalled)
+		assert.Contains(t, string(jobMilestoneKV.UpdateValue), `"state":"FAILED"`)
+	})
+
 	// Idempotency tests
 
 	t.Run("already processed chunk acks and skips processing", func(t *testing.T) {

@@ -58,7 +58,7 @@ func TestUploadFile(t *testing.T) {
 		fileName := filepath.Base(videoFile.Name())
 		uploadURL := fmt.Sprintf("%s/job-upload/processed/%s", sharedFilerUrl, fileName)
 
-		err := storage.UploadFile(uploadURL, videoFile.Name(), 30*time.Second)
+		err := storage.UploadFile(uploadURL, videoFile.Name(), storage.TempStorageTTL, 30*time.Second)
 
 		require.NoError(t, err)
 

@@ -198,7 +198,7 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	pubSubject := processSubjects[processType]
 
 	url := fmt.Sprintf("%s/%s/%s", v.storageURL, jobID, url.PathEscape(header.Filename))
-	if err := storage.Upload(r.Context(), url, tmp, uploadTimeout); err != nil {
+	if err := storage.Upload(r.Context(), url, storage.TempStorageTTL, tmp, uploadTimeout); err != nil {
 		http.Error(w, "failed to save uploaded video", http.StatusInternalServerError)
 		v.logger.Error("failed to save uploaded video", "err", err)
 		return

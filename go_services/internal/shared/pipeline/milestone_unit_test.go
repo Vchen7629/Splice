@@ -29,7 +29,7 @@ func TestGetMilestone(t *testing.T) {
 		revision, status, err := GetMilestone(mockKV, "some-jobID")
 
 		require.Error(t, err)
-		assert.Equal(t, err.Error(), "failed to fetch from kv: Some error")
+		assert.Equal(t, err.Error(), "failed to fetch from jobMilestoneKV: Some error")
 		assert.Zero(t, revision)
 		assert.Equal(t, JobStatus{}, status)
 	})

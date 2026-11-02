@@ -13,16 +13,16 @@ import (
 )
 
 // reads a job's milestone entry for the jobID and returns the revision, JobStatus, and err (if applicable)
-func GetMilestone(kv jetstream.KeyValue, jobID string) (uint64, JobStatus, error) {
+func GetMilestone(jobMilestoneKV jetstream.KeyValue, jobID string) (uint64, JobStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	entry, err := kv.Get(ctx, jobID)
+	entry, err := jobMilestoneKV.Get(ctx, jobID)
 	if errors.Is(err, jetstream.ErrKeyNotFound) {
 		return 0, JobStatus{}, nil
 	}
 	if err != nil {
-		return 0, JobStatus{}, fmt.Errorf("failed to fetch from kv: %w", err)
+		return 0, JobStatus{}, fmt.Errorf("failed to fetch from jobMilestoneKV: %w", err)
 	}
 
 	var current JobStatus
@@ -44,7 +44,7 @@ var milestoneStageOrder = map[string]int{
 
 // writes a job's milestone entry only if newStage is not behind currently stored stage and
 // job isnt already in terminal state.
-func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus JobStatus) error {
+func AdvanceMilestone(jobMilestoneKV jetstream.KeyValue, jobID string, newStatus JobStatus) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -54,12 +54,12 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus JobStatus) 
 	}
 
 	for {
-		revision, jobStatus, err := GetMilestone(kv, jobID)
+		revision, jobStatus, err := GetMilestone(jobMilestoneKV, jobID)
 		if err != nil {
 			return fmt.Errorf("failed: %w", err)
 		}
 		if revision == 0 {
-			_, err = kv.Create(ctx, jobID, newValue)
+			_, err = jobMilestoneKV.Create(ctx, jobID, newValue)
 			if errors.Is(err, jetstream.ErrKeyExists) {
 				continue // lost create race, reread and compare against winner
 			}
@@ -73,7 +73,7 @@ func AdvanceMilestone(kv jetstream.KeyValue, jobID string, newStatus JobStatus) 
 			return nil
 		}
 
-		_, err = kv.Update(ctx, jobID, newValue, revision)
+		_, err = jobMilestoneKV.Update(ctx, jobID, newValue, revision)
 		if errors.Is(err, jetstream.ErrKeyExists) {
 			continue // revision change concurrently, reread and compare again
 		}

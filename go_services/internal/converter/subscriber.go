@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -55,6 +56,21 @@ func ConsumeAndProcessVideo(
 		}
 
 		filePath, err := storage.DownloadVideo(payload.StorageURL, payload.JobID, 10*time.Minute)
+		if errors.Is(err, storage.ErrNotFound) {
+			if failErr := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{
+				State: pipeline.StateFailed,
+				Stage: "format-converter",
+				Error: fmt.Sprintf("unprocessed video missing from storage (likely expired): %v", err),
+			}); failErr != nil {
+				logger.Error("failed to mark job FAILED", "job_id", payload.JobID, "err", failErr)
+				msgbus.NakWithErrHandling(logger, msg)
+				return
+			}
+			if err := msg.Term(); err != nil {
+				logger.Error("failed to terminate jetstream msg", "job_id", payload.JobID, "err", err)
+			}
+			return
+		}
 		if err != nil {
 			logger.Error("failed to download the unprocessed convert video", "job_id", payload.JobID, "err", err)
 			msgbus.NakWithErrHandling(logger, msg)
@@ -74,7 +90,7 @@ func ConsumeAndProcessVideo(
 
 		fileName := filepath.Base(outputPath)
 		destURL := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
-		if err := storage.UploadFile(destURL, outputPath, 10*time.Minute); err != nil {
+		if err := storage.UploadFile(destURL, outputPath, storage.ProcessedStorageTTL, 10*time.Minute); err != nil {
 			logger.Error("error saving format convert video to seaweedfs storage", "jobID", payload.JobID, "filePath", outputPath, "err", err)
 			msgbus.NakWithErrHandling(logger, msg)
 			return

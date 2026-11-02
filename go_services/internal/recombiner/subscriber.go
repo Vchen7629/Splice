@@ -1,7 +1,6 @@
 package recombiner
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -69,11 +68,22 @@ func RecombineVideo(
 			}
 
 			outputPath, err := recombineVideoChunks(nc, jobMilestoneKV, payload, chunks, logger)
-			if err != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, storage.ErrNotFound) {
+				if failErr := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{
+					State: pipeline.StateFailed,
+					Stage: "video-recombiner",
+					Error: fmt.Sprintf("processed chunk missing from storage (likely expired): %v", err),
+				}); failErr != nil {
+					logger.Error("failed to mark job FAILED", "job_id", payload.JobID, "err", failErr)
 					msgbus.NakWithErrHandling(logger, msg)
-					return false
+					return false // releases claim so the retry can try marking FAILED again
 				}
+				if err := msg.Term(); err != nil {
+					logger.Error("failed to terminate jetstream msg", "job_id", payload.JobID, "err", err)
+				}
+				return true // no retry
+			}
+			if err != nil {
 				msgbus.NakWithErrHandling(logger, msg)
 				return false
 			}
@@ -82,7 +92,7 @@ func RecombineVideo(
 			fileName := filepath.Base(outputPath)
 			url := fmt.Sprintf("%s/%s/%s/processed", baseStorageURL, payload.JobID, fileName)
 
-			if err := storage.UploadFile(url, outputPath, uploadTimeout); err != nil {
+			if err := storage.UploadFile(url, outputPath, storage.ProcessedStorageTTL, uploadTimeout); err != nil {
 				logger.Error("failed to upload recombined video", "job_id", payload.JobID, "err", err)
 				msgbus.NakWithErrHandling(logger, msg)
 				return false
