@@ -22,6 +22,16 @@ func (m *ChunkRef) ChunkKVKey() string {
 	return fmt.Sprintf("%s.%d", m.JobID, m.ChunkIndex)
 }
 
+// type struct for jetstream msg body
+type VideoChunkMessage struct {
+	ChunkRef
+	TotalChunks      int    `json:"total_chunks"`
+	StorageURL       string `json:"storage_url"`
+	TargetResolution string `json:"target_resolution"`
+	DenoiseQuality   string `json:"denoise_quality"`
+	Operation        string `json:"operation"`
+}
+
 type ChunkCompleteMessage struct {
 	ChunkRef
 	TotalChunks int    `json:"total_chunks"`

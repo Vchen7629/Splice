@@ -31,7 +31,7 @@ import (
 
 // helpers
 
-func publishVideoChunk(t *testing.T, js jetstream.JetStream, msg VideoChunkMessage) {
+func publishVideoChunk(t *testing.T, js jetstream.JetStream, msg pipeline.VideoChunkMessage) {
 	t.Helper()
 	payload, err := json.Marshal(msg)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		invalidPayload, err := json.Marshal("not a VideoChunkMessage")
+		invalidPayload, err := json.Marshal("not a pipeline.VideoChunkMessage")
 		require.NoError(t, err)
 		_, err = js.Publish(context.Background(), "jobs.video.chunks", invalidPayload)
 		require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
@@ -232,11 +232,11 @@ func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = progressSub.Unsubscribe() })
 
-	publishVideoChunk(t, js, VideoChunkMessage{
+	publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 2,
 		StorageURL: storageURL0, TargetResolution: "480p", Operation: "transcode",
 	})
-	publishVideoChunk(t, js, VideoChunkMessage{
+	publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 1}, TotalChunks: 2,
 		StorageURL: storageURL1, TargetResolution: "480p", Operation: "transcode",
 	})
@@ -273,7 +273,7 @@ func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testin
 	_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 	require.NoError(t, err)
 
-	publishVideoChunk(t, js, VideoChunkMessage{
+	publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 		StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 	})
@@ -330,7 +330,7 @@ func TestConsumeVideoChunkNaksOnError(t *testing.T) {
 			_, err := ConsumeVideoChunk(tc.baseStorageURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 			require.NoError(t, err)
 
-			publishVideoChunk(t, js, VideoChunkMessage{
+			publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 				ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 				StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 			})
@@ -378,7 +378,7 @@ func TestConsumeVideoChunkPublishFails(t *testing.T) {
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
@@ -407,7 +407,7 @@ func TestConsumeVideoChunkCleanup(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
@@ -480,7 +480,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: "http://storage/fake", TargetResolution: "480p", Operation: "transcode",
 		})
@@ -508,7 +508,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
@@ -535,7 +535,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
 		require.NoError(t, err)
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})
@@ -595,7 +595,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())
 		require.NoError(t, err)
 
-		publishVideoChunk(t, js, VideoChunkMessage{
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
 			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
 			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
 		})

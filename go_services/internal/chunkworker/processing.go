@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 )
 
@@ -18,7 +19,7 @@ const downloadTimeout = 30 * time.Second
 var transcodeVideoFn = transcodeVideo
 
 // process a video chunk from nats msg. Fetches the chunk -> transcods it. returns the outputPath and the error
-func processChunk(payload VideoChunkMessage, logger *slog.Logger) (string, error) {
+func processChunk(payload pipeline.VideoChunkMessage, logger *slog.Logger) (string, error) {
 	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 
 	switch payload.Operation {

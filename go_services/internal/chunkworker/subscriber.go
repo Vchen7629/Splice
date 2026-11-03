@@ -32,7 +32,7 @@ func ConsumeVideoChunk(
 		AckWait:       ackWait,
 		MaxAckPending: 10,
 	}, func(msg jetstream.Msg) {
-		payload, ok := msgbus.Decode[VideoChunkMessage](msg, logger)
+		payload, ok := msgbus.Decode[pipeline.VideoChunkMessage](msg, logger)
 		if !ok {
 			return
 		}

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -37,7 +38,7 @@ func videoHeight(t *testing.T, path string) int {
 const testVideoPath = "../shared/test/testvideo.mp4"
 
 func TestProcessChunkErrorsOnUnknownChunkOp(t *testing.T) {
-	outputPath, err := processChunk(VideoChunkMessage{Operation: "Unknown"}, test.SilentLogger())
+	outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"}, test.SilentLogger())
 
 	require.Error(t, err)
 	assert.Equal(t, outputPath, "")

@@ -12,7 +12,7 @@ import (
 // publishes the "processed" jetstream msg, updates the KeyValue, and updates Job Progress KV
 func publishJetstreamProcessedMsg(
 	nc pipeline.Publisher, js jetstream.JetStream, processedKV jetstream.KeyValue,
-	payload VideoChunkMessage, storageUrl string, logger *slog.Logger,
+	payload pipeline.VideoChunkMessage, storageUrl string, logger *slog.Logger,
 ) error {
 	const pubSubject = "jobs.chunks.complete"
 
