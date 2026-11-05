@@ -21,7 +21,7 @@ var (
 
 // stitches transcoded/denoise video chunks for a job into a single output video file
 // chunks is a map of chunk index -> output path, sorted by index
-func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)) (string, error) {
+func CombineChunks(jobID, audioURL string, chunks map[int]string, onProgress func(pct int)) (string, error) {
 	outDir := filepath.Join("/tmp/jobs", jobID)
 
 	err := os.MkdirAll(outDir, 0755)
@@ -61,17 +61,14 @@ func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)
 	defer cancel()
 
 	outputPath := filepath.Join(outDir, "output.mp4")
-	cmd := exec.CommandContext(
-		ctx,
-		"ffmpeg",
-		"-f", "concat",
-		"-safe", "0",
-		"-protocol_whitelist", "file,pipe", "-i", manifestPath,
-		"-c", "copy",
-		"-progress", "pipe:1",
-		"-y",
-		outputPath,
-	)
+	args := []string{"-f", "concat", "-safe", "0", "-protocol_whitelist", "file,pipe", "-i", manifestPath}
+	if audioURL != "" {
+		args = append(args, "-i", audioURL, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac")
+	} else {
+		args = append(args, "-c", "copy")
+	}
+	args = append(args, "-progress", "pipe:1", "-y", outputPath)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

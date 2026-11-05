@@ -172,7 +172,7 @@ func recombineVideoChunks(
 	}
 
 	onProgress := pipeline.NewProgressReporter(nc, payload.JobID, "video-recombiner", logger)
-	outputPath, err := CombineChunks(payload.JobID, localChunks, onProgress)
+	outputPath, err := CombineChunks(payload.JobID, payload.AudioURL, localChunks, onProgress)
 	if err != nil {
 		logger.Error("failed to combine chunks", "job_id", payload.JobID, "err", err)
 		CleanUpTempFolders(payload.JobID, logger)

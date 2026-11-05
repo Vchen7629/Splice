@@ -34,58 +34,8 @@ func makeVideoChunk(t *testing.T, path string, duration_s int) {
 	require.NoError(t, err, "failed to generate test video chunk: %s", out)
 }
 
-func TestCombineChunksErrors(t *testing.T) {
-	t.Run("MkdirAll failure returns wrapped error", func(t *testing.T) {
-		// Block /tmp/jobs/job-1 by pre-creating it as a file.
-		blockingFile := "/tmp/jobs/job-1"
-		require.NoError(t, os.MkdirAll(filepath.Dir(blockingFile), 0755))
-		require.NoError(t, os.WriteFile(blockingFile, []byte{}, 0644))
-		t.Cleanup(func() { os.Remove(blockingFile) })
-
-		_, err := CombineChunks("job-1", map[int]string{0: "chunk.mp4"}, nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "create output dir error")
-	})
-
-	t.Run("manifest write failure returns wrapped error", func(t *testing.T) {
-		outDir := "/tmp/jobs/job-1"
-		require.NoError(t, os.MkdirAll(outDir, 0755))
-		require.NoError(t, os.Chmod(outDir, 0555))
-		t.Cleanup(func() {
-			os.Chmod(outDir, 0755)
-			os.RemoveAll(outDir)
-		})
-
-		_, err := CombineChunks("job-1", map[int]string{0: "chunk.mp4"}, nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "write manifest error")
-	})
-
-	t.Run("ffmpeg failure returns wrapped error", func(t *testing.T) {
-		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-1") })
-
-		_, err := CombineChunks("job-1", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ffmpeg concat error")
-	})
-
-	t.Run("ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
-		orig := recombineChunkTimeout
-		recombineChunkTimeout = time.Microsecond
-		t.Cleanup(func() { recombineChunkTimeout = orig })
-
-		_, err := CombineChunks("job-1", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
-
-		require.ErrorIs(t, err, context.DeadlineExceeded)
-		assert.Contains(t, err.Error(), "timed out")
-	})
-}
-
-func TestManifest(t *testing.T) {
-	t.Run("is sorted by chunk index regardless of map order", func(t *testing.T) {
+func TestCombineChunks(t *testing.T) {
+	t.Run("manifest is sorted by chunk index regardless of map order", func(t *testing.T) {
 		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-1") })
 		chunks := map[int]string{
 			2: "/fake/c.mp4",
@@ -93,7 +43,7 @@ func TestManifest(t *testing.T) {
 			1: "/fake/b.mp4",
 		}
 
-		_, err := CombineChunks("job-1", chunks, nil)
+		_, err := CombineChunks("job-1", "", chunks, nil)
 		require.Error(t, err) // ffmpeg fails on fake paths — expected
 
 		raw, readErr := os.ReadFile("/tmp/jobs/job-1/manifest.txt")
@@ -109,7 +59,7 @@ func TestManifest(t *testing.T) {
 	t.Run("is written to /tmp/jobs/{jobID}/manifest.txt", func(t *testing.T) {
 		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/my-job") })
 
-		_, _ = CombineChunks("my-job", map[int]string{0: "/fake/chunk.mp4"}, nil)
+		_, _ = CombineChunks("my-job", "", map[int]string{0: "/fake/chunk.mp4"}, nil)
 
 		_, err := os.Stat("/tmp/jobs/my-job/manifest.txt")
 		assert.NoError(t, err)
@@ -118,7 +68,7 @@ func TestManifest(t *testing.T) {
 	t.Run("empty chunks map writes an empty manifest", func(t *testing.T) {
 		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-empty") })
 
-		_, err := CombineChunks("job-empty", map[int]string{}, nil)
+		_, err := CombineChunks("job-empty", "", map[int]string{}, nil)
 		require.Error(t, err) // ffmpeg fails with no inputs — expected
 
 		raw, readErr := os.ReadFile("/tmp/jobs/job-empty/manifest.txt")
@@ -129,7 +79,7 @@ func TestManifest(t *testing.T) {
 	t.Run("single chunk produces one file entry", func(t *testing.T) {
 		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-1") })
 
-		_, _ = CombineChunks("job-1", map[int]string{0: "/fake/only.mp4"}, nil)
+		_, _ = CombineChunks("job-1", "", map[int]string{0: "/fake/only.mp4"}, nil)
 
 		raw, err := os.ReadFile("/tmp/jobs/job-1/manifest.txt")
 		require.NoError(t, err)
@@ -139,10 +89,92 @@ func TestManifest(t *testing.T) {
 	t.Run("a chunk that fails to probe does not block manifest write", func(t *testing.T) {
 		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-unprobeable") })
 
-		_, _ = CombineChunks("job-unprobeable", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
+		_, _ = CombineChunks("job-unprobeable", "", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
 
 		_, err := os.Stat("/tmp/jobs/job-unprobeable/manifest.txt")
 		assert.NoError(t, err)
+	})
+
+	t.Run("MkdirAll failure returns wrapped error", func(t *testing.T) {
+		// Block /tmp/jobs/job-1 by pre-creating it as a file.
+		blockingFile := "/tmp/jobs/job-1"
+		require.NoError(t, os.MkdirAll(filepath.Dir(blockingFile), 0755))
+		require.NoError(t, os.WriteFile(blockingFile, []byte{}, 0644))
+		t.Cleanup(func() { os.Remove(blockingFile) })
+
+		_, err := CombineChunks("job-1", "", map[int]string{0: "chunk.mp4"}, nil)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "create output dir error")
+	})
+
+	t.Run("manifest write failure returns wrapped error", func(t *testing.T) {
+		outDir := "/tmp/jobs/job-1"
+		require.NoError(t, os.MkdirAll(outDir, 0755))
+		require.NoError(t, os.Chmod(outDir, 0555))
+		t.Cleanup(func() {
+			os.Chmod(outDir, 0755)
+			os.RemoveAll(outDir)
+		})
+
+		_, err := CombineChunks("job-1", "", map[int]string{0: "chunk.mp4"}, nil)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "write manifest error")
+	})
+
+	t.Run("ffmpeg failure returns wrapped error", func(t *testing.T) {
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-1") })
+
+		_, err := CombineChunks("job-1", "", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ffmpeg concat error")
+	})
+
+	t.Run("ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
+		orig := recombineChunkTimeout
+		recombineChunkTimeout = time.Microsecond
+		t.Cleanup(func() { recombineChunkTimeout = orig })
+
+		_, err := CombineChunks("job-1", "", map[int]string{0: "/nonexistent/chunk.mp4"}, nil)
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Contains(t, err.Error(), "timed out")
+	})
+
+	t.Run("progress reaches 100 and is monotonically non-decreasing", func(t *testing.T) {
+		jobID := "job-progress"
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/" + jobID) })
+
+		chunkDir := t.TempDir()
+		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
+		chunk1 := filepath.Join(chunkDir, "chunk-1.mp4")
+		makeVideoChunk(t, chunk0, 3)
+		makeVideoChunk(t, chunk1, 3)
+
+		var pcts []int
+		onProgress := func(pct int) { pcts = append(pcts, pct) }
+
+		_, err := CombineChunks(jobID, "", map[int]string{0: chunk0, 1: chunk1}, onProgress)
+		require.NoError(t, err)
+
+		require.NotEmpty(t, pcts, "onProgress should have been called at least once")
+		assert.True(t, sort.IntsAreSorted(pcts), "percents must be monotonically non-decreasing, got %v", pcts)
+		assert.Equal(t, 100, pcts[len(pcts)-1], "final call must be exactly 100")
+	})
+
+	t.Run("progress nil onProgress does not panic and doesn't block on ffmpeg's progress pipe", func(t *testing.T) {
+		jobID := "job-progress-nil"
+		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/" + jobID) })
+
+		chunkDir := t.TempDir()
+		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
+		makeVideoChunk(t, chunk0, 1)
+
+		_, err := CombineChunks(jobID, "", map[int]string{0: chunk0}, nil)
+
+		require.NoError(t, err)
 	})
 }
 
@@ -173,41 +205,5 @@ func TestProbeDurationSeconds(t *testing.T) {
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Contains(t, err.Error(), "timed out")
-	})
-}
-
-func TestCombineChunksProgress(t *testing.T) {
-	t.Run("reaches 100 and is monotonically non-decreasing", func(t *testing.T) {
-		jobID := "job-progress"
-		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/" + jobID) })
-
-		chunkDir := t.TempDir()
-		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
-		chunk1 := filepath.Join(chunkDir, "chunk-1.mp4")
-		makeVideoChunk(t, chunk0, 3)
-		makeVideoChunk(t, chunk1, 3)
-
-		var pcts []int
-		onProgress := func(pct int) { pcts = append(pcts, pct) }
-
-		_, err := CombineChunks(jobID, map[int]string{0: chunk0, 1: chunk1}, onProgress)
-		require.NoError(t, err)
-
-		require.NotEmpty(t, pcts, "onProgress should have been called at least once")
-		assert.True(t, sort.IntsAreSorted(pcts), "percents must be monotonically non-decreasing, got %v", pcts)
-		assert.Equal(t, 100, pcts[len(pcts)-1], "final call must be exactly 100")
-	})
-
-	t.Run("nil onProgress does not panic and doesn't block on ffmpeg's progress pipe", func(t *testing.T) {
-		jobID := "job-progress-nil"
-		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/" + jobID) })
-
-		chunkDir := t.TempDir()
-		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
-		makeVideoChunk(t, chunk0, 1)
-
-		_, err := CombineChunks(jobID, map[int]string{0: chunk0}, nil)
-
-		require.NoError(t, err)
 	})
 }
