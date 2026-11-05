@@ -84,7 +84,7 @@ func transcodeVideo(filePath, target_resolution, chunkName string) (string, erro
 		"-protocol_whitelist", "file,pipe", "-i", filePath,
 		"-vf", fmt.Sprintf("scale=-2:%s:flags=lanczos", height),
 		"-c:v", "libx264",
-		"-c:a", "copy",
+		"-an", "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-video_track_timescale", "90000",
 		"-y", outputPath,
 	).CombinedOutput()
 	if err != nil {
@@ -129,6 +129,7 @@ func denoiseVideo(filePath, denoiseQuality, chunkName string) (string, error) {
 		"-vf", filterStrength,
 		"-c:v", "libx264",
 		"-crf", "18",
+		"-an", "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-video_track_timescale", "90000",
 		"-y", outputPath,
 	).CombinedOutput()
 	if err != nil {

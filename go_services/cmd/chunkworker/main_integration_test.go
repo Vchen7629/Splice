@@ -76,7 +76,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 
 		time.Sleep(500 * time.Millisecond)
 
-		payload, err := json.Marshal(chunkworker.VideoChunkMessage{
+		payload, err := json.Marshal(pipeline.VideoChunkMessage{
 			ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks:      1,
 			StorageURL:       storageURL,
