@@ -12,6 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type MockConfig struct {
+	NatsURL    string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	ProdMode   bool   `envconfig:"PROD_MODE" default:"false"`
+	StorageURL string `envconfig:"STORAGE_URL" default:"http://localhost:8888"`
+	HTTPPort   string `envconfig:"HTTP_PORT" default:"8080"`
+}
+
 func TestLoadConfig(t *testing.T) {
 	t.Run("missing env file shouldnt return error", func(t *testing.T) {
 		_, err := os.Stat(filepath.Join("..", ".env"))
@@ -19,7 +26,7 @@ func TestLoadConfig(t *testing.T) {
 			t.Skip(".env already exists")
 		}
 
-		_, err = LoadConfig[test.MockConfig]()
+		_, err = LoadConfig[MockConfig]()
 
 		assert.NoError(t, err)
 	})
@@ -27,7 +34,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("reads all values from env file", func(t *testing.T) {
 		test.WriteEnvFile(t, "NATS_URL=nats://test:9999\nPROD_MODE=true\nSTORAGE_URL=http://storage:9333\nHTTP_PORT=9090\n")
 
-		cfg, err := LoadConfig[test.MockConfig]()
+		cfg, err := LoadConfig[MockConfig]()
 
 		require.NoError(t, err)
 		assert.Equal(t, "nats://test:9999", cfg.NatsURL)
@@ -39,7 +46,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("empty env file uses struct defaults", func(t *testing.T) {
 		test.WriteEnvFile(t, "")
 
-		cfg, err := LoadConfig[test.MockConfig]()
+		cfg, err := LoadConfig[MockConfig]()
 
 		require.NoError(t, err)
 		assert.Equal(t, "nats://localhost:4222", cfg.NatsURL)
