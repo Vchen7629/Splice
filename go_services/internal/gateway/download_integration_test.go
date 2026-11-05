@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -32,54 +31,7 @@ func openTestVideo(t *testing.T) *os.File {
 	return f
 }
 
-func TestGetProcessedVideo(t *testing.T) {
-	t.Run("returns nil and error", func(t *testing.T) {
-		tests := []struct {
-			name       string
-			storageURL string
-			handler    http.HandlerFunc
-		}{
-			{
-				name:       "when storage is unreachable",
-				storageURL: "http://localhost:1",
-			},
-			{
-				name: "when storage returns status 404",
-				handler: func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusNotFound)
-				},
-			},
-			{
-				name: "when storage returns status 403",
-				handler: func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusForbidden)
-				},
-			},
-			{
-				name: "when storage returns status 500",
-				handler: func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusInternalServerError)
-				},
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				url := tc.storageURL
-				if tc.handler != nil {
-					server := httptest.NewServer(tc.handler)
-					defer server.Close()
-					url = server.URL
-				}
-
-				body, err := GetProcessedVideo(url, "job123", "testvideo.mp4")
-
-				assert.Error(t, err)
-				assert.Nil(t, body)
-			})
-		}
-	})
-
+func TestGetProcessedVideoI(t *testing.T) {
 	t.Run("fetches correct video content from storage", func(t *testing.T) {
 		const fileName = "testvideo.mp4"
 
@@ -96,7 +48,7 @@ func TestGetProcessedVideo(t *testing.T) {
 		seedResp.Body.Close()
 		require.Less(t, seedResp.StatusCode, 400)
 
-		body, err := GetProcessedVideo(sharedFilerUrl, "job123", fileName)
+		body, err := getProcessedVideo(sharedFilerUrl, "job123", fileName)
 		require.NoError(t, err)
 		defer body.Close()
 

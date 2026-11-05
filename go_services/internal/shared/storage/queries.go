@@ -54,7 +54,7 @@ func Upload(ctx context.Context, url, storageTTL string, body io.Reader, httpUpl
 }
 
 // save (upload) the file on local disk to seaweedfs storage
-func UploadFile(destURL, filePath, storageTTL string, httpUploadTimeout time.Duration) error {
+func UploadFile(ctx context.Context, destURL, filePath, storageTTL string, httpUploadTimeout time.Duration) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening video file: %w", err)
@@ -66,7 +66,7 @@ func UploadFile(destURL, filePath, storageTTL string, httpUploadTimeout time.Dur
 		}
 	}()
 
-	if err := Upload(context.Background(), destURL, storageTTL, file, httpUploadTimeout); err != nil {
+	if err := Upload(ctx, destURL, storageTTL, file, httpUploadTimeout); err != nil {
 		return err
 	}
 

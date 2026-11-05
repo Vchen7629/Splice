@@ -6,22 +6,22 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 )
 
-const probeTimeout = time.Minute
+const (
+	probeTimeout     = time.Minute
+	splitTimeout     = 5 * time.Minute
+	chunkSegmentTime = "30" // seconds, ffmpeg cuts at first keyframe at or after each multiple of this
+)
 
 type videoInfo struct {
-	format, VideoCodec string
+	format, videoCodec string
 	width, height      int
 	packets            int64
 	hasAudio           bool // gateway only adds audio.mka output when true
-}
-
-// video format and codecs that are not able to be split on keyframes into chunks
-func (v videoInfo) splitTable() bool {
-	return v.format != "avi" && v.VideoCodec != "hevc"
 }
 
 // runs ffprobe on video file on disk and returns the video info like format, width, height, packets
@@ -75,7 +75,7 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 		// first real vikdeo stream, skipping cover art which ffprobe also reports as video
 		case stream.CodecType == "video" && stream.Disposition.AttachedPic == 0 && !foundVideo:
 			foundVideo = true
-			info.VideoCodec = stream.CodecName
+			info.videoCodec = stream.CodecName
 			info.width, info.height = stream.Width, stream.Height
 			info.packets, _ = strconv.ParseInt(stream.Packets, 10, 64)
 
@@ -96,4 +96,65 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 	}
 
 	return info, nil
+}
+
+// local files video was split into. chunkPaths are in playback order
+// audioPath is "" when source has no audio
+type splitResult struct {
+	chunkPaths []string
+	audioPath  string
+}
+
+// splits video into keyframe aligned video-only chunks and a seperate audio file in one stream-copy pass
+// and writes them to outDir. Videos that can't be keyframe split are returned as single chunk (original file)
+func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (splitResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, splitTimeout)
+	defer cancel()
+
+	var res splitResult
+	args := []string{"-fflags", "+genpts", "-protocol_whitelist", "file", "-i", videoPath}
+
+	split := info.shouldSplit()
+	if split {
+		args = append(args,
+			"-map", "0:v:0", "-c", "copy",
+			"-f", "segment", "-segment_time", chunkSegmentTime, "-reset_timestamps", "1", "-segment_format", "matroska",
+			filepath.Join(outDir, "chunk_%04d.mkv"))
+	} else {
+		res.chunkPaths = []string{videoPath}
+	}
+
+	if info.hasAudio {
+		res.audioPath = filepath.Join(outDir, "audio.mka")
+		args = append(args, "-map", "0:a:0", "-vn", "-c", "copy", res.audioPath)
+	}
+
+	if !split && !info.hasAudio {
+		return res, nil
+	}
+
+	out, err := exec.CommandContext(ctx, "ffmpeg", args...).CombinedOutput()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return splitResult{}, fmt.Errorf("ffmpeg split timed out after %s: %w", splitTimeout, ctxErr)
+		}
+		return splitResult{}, fmt.Errorf("ffmepg split error: %w\n%s", err, out)
+	}
+
+	if split {
+		res.chunkPaths, err = filepath.Glob(filepath.Join(outDir, "chunk_*.mkv"))
+		if err != nil {
+			return splitResult{}, fmt.Errorf("error listing split chunks: %w", err)
+		}
+		if len(res.chunkPaths) == 0 {
+			return splitResult{}, errors.New("ffmpeg split produced no chunks")
+		}
+	}
+
+	return res, nil
+}
+
+// video format and codecs that are able to be split on keyframes into chunks
+func (v videoInfo) shouldSplit() bool {
+	return v.format != "avi" && v.videoCodec != "hevc"
 }

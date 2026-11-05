@@ -5,17 +5,13 @@ package gateway
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"mime/multipart"
 	"net/http"
 	"os"
-	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,16 +67,6 @@ func NewUploadRequest(t *testing.T, target, filename string, fileContent []byte,
 	req, err := http.NewRequest(http.MethodPost, target, &body)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	return req
-}
-
-// NewDownloadRequest builds a GET request with a JSON body containing job_id and file_name.
-func NewDownloadRequest(t *testing.T, target, fileName string, jobID uuid.UUID) *http.Request {
-	t.Helper()
-	body := fmt.Sprintf(`{"job_id":%q,"file_name":%q}`, jobID, fileName)
-	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
 	return req
 }
 
@@ -219,13 +205,4 @@ func patchProbeVideo(t *testing.T) {
 
 type jobMsg struct {
 	JobID string `json:"job_id"`
-}
-
-// panic variant for use in table literal field initializers.
-func mustMarshalJobStatic(jobID string) []byte {
-	b, err := json.Marshal(jobMsg{JobID: jobID})
-	if err != nil {
-		panic(err)
-	}
-	return b
 }

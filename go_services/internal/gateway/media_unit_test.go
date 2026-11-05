@@ -55,7 +55,7 @@ func TestProbeVideo(t *testing.T) {
 		info, err := probeVideo(context.Background(), "video.mp4")
 
 		require.NoError(t, err)
-		assert.Equal(t, videoInfo{format: "mov,mp4,m4a,3gp,3g2,mj2", VideoCodec: "h264", width: 1920, height: 1080, packets: 240}, info)
+		assert.Equal(t, videoInfo{format: "mov,mp4,m4a,3gp,3g2,mj2", videoCodec: "h264", width: 1920, height: 1080, packets: 240}, info)
 	})
 
 	t.Run("restricts ffprobe to the file protocol and probes the given path", func(t *testing.T) {
@@ -175,7 +175,7 @@ func TestProbeVideo(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tc.wantCodec, info.VideoCodec)
+			assert.Equal(t, tc.wantCodec, info.videoCodec)
 			assert.Equal(t, tc.wantAudio, info.hasAudio)
 		})
 	}

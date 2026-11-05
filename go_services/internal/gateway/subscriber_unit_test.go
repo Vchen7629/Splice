@@ -13,6 +13,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// panic variant for use in table literal field initializers.
+func mustMarshalJobStatic(jobID string) []byte {
+	b, err := json.Marshal(jobMsg{JobID: jobID})
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 func TestListenJobCompleteU(t *testing.T) {
 	nakErr := errors.New("nak failed")
 

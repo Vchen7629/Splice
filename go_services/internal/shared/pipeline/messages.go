@@ -4,7 +4,6 @@ import "fmt"
 
 type VideoJobMessage struct {
 	JobID            string `json:"job_id"`
-	DenoiseQuality   string `json:"denoise_quality,omitempty"`
 	TargetResolution string `json:"target_resolution,omitempty"`
 	TargetFormat     string `json:"target_format,omitempty"`
 	SourceResolution string `json:"source_resolution"`
@@ -22,13 +21,14 @@ func (m *ChunkRef) ChunkKVKey() string {
 	return fmt.Sprintf("%s.%d", m.JobID, m.ChunkIndex)
 }
 
-// type struct for jetstream msg body
+
 type VideoChunkMessage struct {
 	ChunkRef
 	TotalChunks      int    `json:"total_chunks"`
 	StorageURL       string `json:"storage_url"`
-	TargetResolution string `json:"target_resolution"`
-	DenoiseQuality   string `json:"denoise_quality"`
+	AudioURL 		 string `json:"audio_url,omitempty"`
+	TargetResolution string `json:"target_resolution,omitempty"`
+	DenoiseQuality   string `json:"denoise_quality,omitempty"`
 	Operation        string `json:"operation"`
 }
 
@@ -36,6 +36,7 @@ type ChunkCompleteMessage struct {
 	ChunkRef
 	TotalChunks int    `json:"total_chunks"`
 	StorageURL  string `json:"storage_url"`
+	AudioURL 	string `json:"audio_url,omitempty"`
 }
 
 type JobCompleteMessage struct {
