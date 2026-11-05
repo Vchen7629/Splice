@@ -19,7 +19,7 @@ var (
 	probeDurationTimeout  = 15 * time.Second
 )
 
-// stitches transcoded video chunks for a job into a single output video file
+// stitches transcoded/denoise video chunks for a job into a single output video file
 // chunks is a map of chunk index -> output path, sorted by index
 func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)) (string, error) {
 	outDir := filepath.Join("/tmp/jobs", jobID)

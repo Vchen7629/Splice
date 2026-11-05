@@ -6,12 +6,14 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"splice.com/go_services/internal/shared/pipeline"
+	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/stretchr/testify/assert"
@@ -35,257 +37,168 @@ func videoHeight(t *testing.T, path string) int {
 	return height
 }
 
-const testVideoPath = "../shared/test/testvideo.mp4"
+func TestProcessChunk(t *testing.T) {
+	t.Run("unknown chunk operation returns error", func(t *testing.T) {
+		outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"})
 
-func TestProcessChunkErrorsOnUnknownChunkOp(t *testing.T) {
-	outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"}, test.SilentLogger())
+		require.Error(t, err)
+		assert.Empty(t, outputPath)
+		assert.Equal(t, "unsupported chunk operation: Unknown", err.Error())
+	})
 
-	require.Error(t, err)
-	assert.Equal(t, outputPath, "")
-	assert.Equal(t, "unsupported chunk operation: Unknown", err.Error())
+	t.Run("missing chunk in storage returns ErrNotFound", func(t *testing.T) {
+		outputPath, err := processChunk(pipeline.VideoChunkMessage{
+			JobID:      "job-404",
+			Operation:  "transcode",
+			StorageURL: test.NotFoundStorageURL(t) + "/job-404/video_chunk_0000.mkv",
+		})
+
+		require.ErrorIs(t, err, storage.ErrNotFound)
+		assert.Empty(t, outputPath)
+	})
 }
 
 func TestTranscodeVideo(t *testing.T) {
-	t.Run("mkdir failure returns create output dir error", func(t *testing.T) {
-		blockedDir := "/tmp/transcode/temp-processed-job-blocked"
-		require.NoError(t, os.MkdirAll("/tmp/transcode", 0755))
-		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
-		t.Cleanup(func() { os.Remove(blockedDir) })
+	baseURL := test.ServeTestChunks(t, 1)
 
-		path, err := transcodeVideo("/some/input.mp4", "720p", "job-blocked")
+	t.Run("writes output to chunk-named path", func(t *testing.T) {
+		chunkName := "job-fmt"
+		outDir := filepath.Join("/tmp/transcode", "temp-processed-"+chunkName)
+		t.Cleanup(func() { os.RemoveAll(outDir) })
 
-		require.Error(t, err)
-		assert.Empty(t, path)
-		assert.Contains(t, err.Error(), "create output transcode dir error")
+		outputPath, err := transcodeVideo(baseURL+"/chunk.mkv", "720p", chunkName)
+
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(outDir, chunkName+".mp4"), outputPath)
+		assert.FileExists(t, outputPath)
 	})
 
-	t.Run("mkdir failure wraps underlying OS error", func(t *testing.T) {
-		blockedDir := "/tmp/transcode/temp-processed-job-blocked2"
+	t.Run("mkdir failure returns wrapped create output dir error", func(t *testing.T) {
+		chunkName := "job-blocked"
+		blockedDir := filepath.Join("/tmp/transcode", "temp-processed-"+chunkName)
 		require.NoError(t, os.MkdirAll("/tmp/transcode", 0755))
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		_, err := transcodeVideo("/some/input.mp4", "720p", "job-blocked2")
+		outputPath, err := transcodeVideo(baseURL+"/chunk.mkv", "720p", chunkName)
 
 		require.Error(t, err)
+		assert.Empty(t, outputPath)
+		assert.Contains(t, err.Error(), "create output transcode dir error")
 		var pathErr *os.PathError
 		assert.ErrorAs(t, err, &pathErr)
 	})
 
-	t.Run("video ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
+	t.Run("ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
 		orig := ffmpegTimeout
 		ffmpegTimeout = time.Microsecond
 		t.Cleanup(func() { ffmpegTimeout = orig })
 
-		_, err := transcodeVideo("in.mp4", "720p", "job-timeout")
+		_, err := transcodeVideo(baseURL+"/chunk.mkv", "720p", "job-timeout")
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Contains(t, err.Error(), "timed out")
 	})
 
-	resolutionTests := []struct {
-		name             string
-		targetResolution string
-		expectedHeight   int
-	}{
-		{
-			name:             "downscales video to target resolution",
-			targetResolution: "480p",
-			expectedHeight:   480,
-		},
-		{
-			name:             "upscales video to target resolution",
-			targetResolution: "1080p",
-			expectedHeight:   1080,
-		},
-	}
-
-	for _, tc := range resolutionTests {
-		t.Run(tc.name, func(t *testing.T) {
-			jobID := "job-resolution-" + tc.targetResolution
-			t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
-
-			outputPath, err := transcodeVideo(testVideoPath, tc.targetResolution, jobID)
-
-			require.NoError(t, err)
-			assert.FileExists(t, outputPath)
-			assert.Equal(t, tc.expectedHeight, videoHeight(t, outputPath))
-		})
-	}
-
-	t.Run("creates output directory", func(t *testing.T) {
-		jobID := "job-dir"
-		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
-
-		_, err := transcodeVideo(testVideoPath, "720p", jobID)
-
-		require.NoError(t, err)
-		assert.DirExists(t, "/tmp/transcode/temp-processed-"+jobID)
-	})
-
-	t.Run("output path follows expected structure", func(t *testing.T) {
-		jobID := "job-fmt"
-		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
-
-		outputPath, err := transcodeVideo(testVideoPath, "720p", jobID)
-
-		require.NoError(t, err)
-		assert.Equal(t, "/tmp/transcode/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
-	})
-
-	t.Run("normalizes non-mp4 source extension to mp4 output", func(t *testing.T) {
-		jobID := "job-webm-src"
-		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + jobID) })
-
-		outputPath, err := transcodeVideo("../shared/test/testvideo.webm", "720p", jobID)
-
-		require.NoError(t, err)
-		assert.Equal(t, "/tmp/transcode/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
-		assert.FileExists(t, outputPath)
-	})
-
 	errorTests := []struct {
-		name     string
-		filePath string
-		jobID    string
+		name string
+		file string
 	}{
-		{
-			name:     "missing input file returns ffmpeg error",
-			filePath: "/nonexistent/video.mp4",
-			jobID:    "job-missing",
-		},
-		{
-			name: "non-video input returns ffmpeg error",
-			filePath: func() string {
-				f := "/tmp/fake.mp4"
-				_ = os.WriteFile(f, []byte("not a video"), 0644)
-				return f
-			}(),
-			jobID: "job-fakevideo",
-		},
+		{name: "missing input returns ffmpeg error", file: "/missing.mkv"},
+		{name: "non-video input returns ffmpeg error", file: "/garbage.mkv"},
 	}
-
 	for _, tc := range errorTests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + tc.jobID) })
+			chunkName := "job-err"
+			t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp/transcode", "temp-processed-"+chunkName)) })
 
-			_, err := transcodeVideo(tc.filePath, "720p", tc.jobID)
+			_, err := transcodeVideo(baseURL+tc.file, "720p", chunkName)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "ffmpeg error")
 		})
 	}
+
+	t.Run("transcodes to target resolution", func(t *testing.T) {
+		chunkName := "job-resolution-1080p"
+		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + chunkName) })
+
+		outputPath, err := transcodeVideo(baseURL+"/chunk.mkv", "1080p", chunkName)
+
+		require.NoError(t, err)
+		assert.Equal(t, 1080, videoHeight(t, outputPath))
+	})
 }
 
 func TestDenoiseVideo(t *testing.T) {
-	t.Run("mkdir failure returns create output dir error", func(t *testing.T) {
-		blockedDir := "/tmp/denoise/temp-processed-job-blocked"
-		require.NoError(t, os.MkdirAll("/tmp/denoise", 0755))
-		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
-		t.Cleanup(func() { os.Remove(blockedDir) })
+	baseURL := test.ServeTestChunks(t, 1)
 
-		path, err := denoiseVideo("/some/input.mp4", "light", "job-blocked")
+	t.Run("unsupported quality returns error", func(t *testing.T) {
+		chunkName := "job-bad-quality"
+		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + chunkName) })
+
+		outputPath, err := denoiseVideo("http://localhost:1/chunk.mkv", "boom", chunkName)
 
 		require.Error(t, err)
-		assert.Empty(t, path)
-		assert.Contains(t, err.Error(), "create output denoise dir error")
+		assert.Empty(t, outputPath)
+		assert.Equal(t, "unsupported quality selected: boom", err.Error())
 	})
 
-	t.Run("mkdir failure wraps underlying OS error", func(t *testing.T) {
-		blockedDir := "/tmp/denoise/temp-processed-job-blocked2"
+	t.Run("writes output to chunk-named path", func(t *testing.T) {
+		chunkName := "job-fmt"
+		outDir := filepath.Join("/tmp/denoise", "temp-processed-"+chunkName)
+		t.Cleanup(func() { os.RemoveAll(outDir) })
+
+		outputPath, err := denoiseVideo(baseURL+"/chunk.mkv", "light", chunkName)
+
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(outDir, chunkName+".mp4"), outputPath)
+		assert.FileExists(t, outputPath)
+	})
+
+	t.Run("mkdir failure returns wrapped create output dir error", func(t *testing.T) {
+		chunkName := "job-blocked"
+		blockedDir := filepath.Join("/tmp/denoise", "temp-processed-"+chunkName)
 		require.NoError(t, os.MkdirAll("/tmp/denoise", 0755))
 		require.NoError(t, os.WriteFile(blockedDir, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove(blockedDir) })
 
-		_, err := denoiseVideo("/some/input.mp4", "light", "job-blocked2")
+		outputPath, err := denoiseVideo(baseURL+"/chunk.mkv", "light", chunkName)
 
 		require.Error(t, err)
+		assert.Empty(t, outputPath)
+		assert.Contains(t, err.Error(), "create output denoise dir error")
 		var pathErr *os.PathError
 		assert.ErrorAs(t, err, &pathErr)
 	})
 
-	t.Run("video ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
+	t.Run("ffmpeg processing timeout returns context deadline exceeded", func(t *testing.T) {
 		orig := ffmpegTimeout
 		ffmpegTimeout = time.Microsecond
 		t.Cleanup(func() { ffmpegTimeout = orig })
 
-		_, err := denoiseVideo("in.mp4", "light", "job-timeout")
+		_, err := denoiseVideo(baseURL+"/chunk.mkv", "light", "job-timeout")
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Contains(t, err.Error(), "timed out")
 	})
 
-	t.Run("creates output directory", func(t *testing.T) {
-		jobID := "job-dir"
-		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
-
-		_, err := denoiseVideo(testVideoPath, "light", jobID)
-
-		require.NoError(t, err)
-		assert.DirExists(t, "/tmp/denoise/temp-processed-"+jobID)
-	})
-
-	t.Run("output path follows expected structure", func(t *testing.T) {
-		jobID := "job-fmt"
-		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
-
-		outputPath, err := denoiseVideo(testVideoPath, "light", jobID)
-
-		require.NoError(t, err)
-		assert.Equal(t, "/tmp/denoise/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
-	})
-
-	t.Run("normalizes non-mp4 source extension to mp4 output", func(t *testing.T) {
-		jobID := "job-webm-src"
-		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
-
-		outputPath, err := denoiseVideo("../shared/test/testvideo.webm", "light", jobID)
-
-		require.NoError(t, err)
-		assert.Equal(t, "/tmp/denoise/temp-processed-"+jobID+"/testvideo.mp4", outputPath)
-		assert.FileExists(t, outputPath)
-	})
-
 	errorTests := []struct {
-		name     string
-		filePath string
-		jobID    string
+		name string
+		file string
 	}{
-		{
-			name:     "missing input file returns ffmpeg error",
-			filePath: "/nonexistent/video.mp4",
-			jobID:    "job-missing",
-		},
-		{
-			name: "non-video input returns ffmpeg error",
-			filePath: func() string {
-				f := "/tmp/fake.mp4"
-				_ = os.WriteFile(f, []byte("not a video"), 0644)
-				return f
-			}(),
-			jobID: "job-fakevideo",
-		},
+		{name: "missing input returns ffmpeg error", file: "/missing.mkv"},
+		{name: "non-video input returns ffmpeg error", file: "/garbage.mkv"},
 	}
-
 	for _, tc := range errorTests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + tc.jobID) })
+			chunkName := "job-err"
+			t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp/denoise", "temp-processed-"+chunkName)) })
 
-			_, err := denoiseVideo(tc.filePath, "light", tc.jobID)
+			_, err := denoiseVideo(baseURL+tc.file, "light", chunkName)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "ffmpeg error")
 		})
 	}
-
-	t.Run("unsupported quality returns error", func(t *testing.T) {
-		jobID := "job-bad-quality"
-		t.Cleanup(func() { os.RemoveAll("/tmp/denoise/temp-processed-" + jobID) })
-
-		path, err := denoiseVideo(testVideoPath, "boom", jobID)
-
-		require.Error(t, err)
-		assert.Empty(t, path)
-		assert.Equal(t, "unsupported quality selected: boom", err.Error())
-	})
 }

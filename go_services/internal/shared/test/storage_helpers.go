@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -150,4 +152,24 @@ func SeedProcessedVideo(t *testing.T, filerURL, jobID, fileName string, content 
 	require.NoError(t, err)
 
 	require.Less(t, resp.StatusCode, 400)
+}
+
+// generates a synthetic seconds-long 720p video-only h264 mkv (matching what the gateway uploads as chunks)
+// as chunk.mkv plus a non-video garbage.mkv, serves them over http, and returns the server's base url
+func ServeTestChunks(t *testing.T, seconds int) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	out, err := exec.Command(
+		"ffmpeg", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", fmt.Sprintf("testsrc2=size=1280x720:rate=30:duration=%d", seconds),
+		"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+		filepath.Join(dir, "chunk.mkv"),
+	).CombinedOutput()
+	require.NoError(t, err, "generating test chunk: %s", out)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "garbage.mkv"), []byte("not a video"), 0644))
+
+	srv := httptest.NewServer(http.FileServer(http.Dir(dir)))
+	t.Cleanup(srv.Close)
+	return srv.URL
 }

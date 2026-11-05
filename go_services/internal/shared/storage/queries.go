@@ -88,6 +88,25 @@ func ValidatePathSegment(name string) error {
 
 var removeAll = os.RemoveAll
 
+// sends HEAD request to check that object at url exists in storage (seaweedfs)
+func CheckExists(url string, timeout time.Duration) error {
+	httpClient := &http.Client{Timeout: timeout}
+	resp, err := httpClient.Head(url)
+	if err != nil {
+		return fmt.Errorf("error connecting to seaweedfs: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusNotFound:
+		return fmt.Errorf("object not found: %w", ErrNotFound)
+	default:
+		return fmt.Errorf("seaweedfs returned status %d", resp.StatusCode)
+	}
+}
+
 // returns local directory DownloadVideo downloads into
 func TempUnprocessedDir(videoID string) string {
 	return filepath.Join("/tmp/temp-unprocessed-" + videoID)

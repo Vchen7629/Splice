@@ -41,7 +41,6 @@ func TestConsumeVideoChunkU(t *testing.T) {
 
 		t.Cleanup(func() {
 			transcodeVideoFn = transcodeVideo
-			os.RemoveAll("/tmp/temp-unprocessed-" + chunkName)
 			os.RemoveAll("/tmp/transcode/temp-processed-" + chunkName)
 			os.RemoveAll("/tmp/denoise/temp-processed-" + chunkName)
 		})

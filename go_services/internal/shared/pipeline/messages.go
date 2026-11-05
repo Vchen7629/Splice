@@ -21,12 +21,11 @@ func (m *ChunkRef) ChunkKVKey() string {
 	return fmt.Sprintf("%s.%d", m.JobID, m.ChunkIndex)
 }
 
-
 type VideoChunkMessage struct {
 	ChunkRef
 	TotalChunks      int    `json:"total_chunks"`
 	StorageURL       string `json:"storage_url"`
-	AudioURL 		 string `json:"audio_url,omitempty"`
+	AudioURL         string `json:"audio_url,omitempty"`
 	TargetResolution string `json:"target_resolution,omitempty"`
 	DenoiseQuality   string `json:"denoise_quality,omitempty"`
 	Operation        string `json:"operation"`
@@ -36,7 +35,7 @@ type ChunkCompleteMessage struct {
 	ChunkRef
 	TotalChunks int    `json:"total_chunks"`
 	StorageURL  string `json:"storage_url"`
-	AudioURL 	string `json:"audio_url,omitempty"`
+	AudioURL    string `json:"audio_url,omitempty"`
 }
 
 type JobCompleteMessage struct {

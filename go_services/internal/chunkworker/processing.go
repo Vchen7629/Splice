@@ -3,7 +3,6 @@ package chunkworker
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +18,7 @@ const downloadTimeout = 30 * time.Second
 var transcodeVideoFn = transcodeVideo
 
 // process a video chunk from nats msg. Fetches the chunk -> transcods it. returns the outputPath and the error
-func processChunk(payload pipeline.VideoChunkMessage, logger *slog.Logger) (string, error) {
+func processChunk(payload pipeline.VideoChunkMessage) (string, error) {
 	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 
 	switch payload.Operation {
@@ -31,29 +30,23 @@ func processChunk(payload pipeline.VideoChunkMessage, logger *slog.Logger) (stri
 			return "", fmt.Errorf("unsupported quality selected: %s", payload.DenoiseQuality)
 		}
 	default:
-		err := fmt.Errorf("unsupported chunk operation: %s", payload.Operation)
-		logger.Error("unsupported chunk operation", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
-		return "", err
+		return "", fmt.Errorf("unsupported chunk operation: %s", payload.Operation)
 	}
 
-	filePath, err := storage.DownloadVideo(payload.StorageURL, chunkName, downloadTimeout)
-	if err != nil {
-		logger.Error("error downloading unprocessed video chunk", "job_id", payload.JobID, "err", err)
+	if err := storage.CheckExists(payload.StorageURL, downloadTimeout); err != nil {
 		return "", err
 	}
 
 	if payload.Operation == "transcode" {
-		outputPath, err := transcodeVideoFn(filePath, payload.TargetResolution, chunkName)
+		outputPath, err := transcodeVideoFn(payload.StorageURL, payload.TargetResolution, chunkName)
 		if err != nil {
-			logger.Error("error transcoding chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 			return "", err
 		}
 		return outputPath, nil
 	}
 
-	outputPath, err := denoiseVideo(filePath, payload.DenoiseQuality, chunkName)
+	outputPath, err := denoiseVideo(payload.StorageURL, payload.DenoiseQuality, chunkName)
 	if err != nil {
-		logger.Error("error denoising chunk", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
 		return "", err
 	}
 
@@ -69,10 +62,9 @@ func transcodeVideo(filePath, target_resolution, chunkName string) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("create output transcode dir error: %w", err)
 	}
-	// output must always be mp4 since always re-encoded to h264
-	filename := filepath.Base(filePath)
-	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
-	outputPath := filepath.Join(outDir, stem+".mp4")
+	// output must always be mp4 since always re-encoded to h264. named from chunkName rather than the
+	// input url since the url contains the user-supplied filename, which can exceed NAME_MAX once escaped
+	outputPath := filepath.Join(outDir, chunkName+".mp4")
 	height := strings.TrimSuffix(target_resolution, "p")
 
 	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
@@ -81,7 +73,8 @@ func transcodeVideo(filePath, target_resolution, chunkName string) (string, erro
 	out, err := exec.CommandContext(
 		ctx,
 		"ffmpeg",
-		"-protocol_whitelist", "file,pipe", "-i", filePath,
+		"-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
+		"-protocol_whitelist", "http,tcp", "-f", "matroska", "-i", filePath,
 		"-vf", fmt.Sprintf("scale=-2:%s:flags=lanczos", height),
 		"-c:v", "libx264",
 		"-an", "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-video_track_timescale", "90000",
@@ -104,9 +97,7 @@ func denoiseVideo(filePath, denoiseQuality, chunkName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create output denoise dir error: %w", err)
 	}
-	filename := filepath.Base(filePath)
-	stem := strings.TrimSuffix(filename, filepath.Ext(filename))
-	outputPath := filepath.Join(outDir, stem+".mp4")
+	outputPath := filepath.Join(outDir, chunkName+".mp4")
 
 	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
 	defer cancel()
@@ -125,7 +116,8 @@ func denoiseVideo(filePath, denoiseQuality, chunkName string) (string, error) {
 	out, err := exec.CommandContext(
 		ctx,
 		"ffmpeg",
-		"-protocol_whitelist", "file,pipe", "-i", filePath,
+		"-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
+		"-protocol_whitelist", "http,tcp", "-f", "matroska", "-i", filePath,
 		"-vf", filterStrength,
 		"-c:v", "libx264",
 		"-crf", "18",
