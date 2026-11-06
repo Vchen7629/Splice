@@ -197,7 +197,7 @@ func (v *videoHandler) submitChunked(ctx context.Context, jobID, videoPath strin
 	for i, chunkURL := range videoChunkURLs {
 		if err := msgbus.Publish(v.js, pipeline.VideoChunkMessage{
 			ChunkRef:    pipeline.ChunkRef{JobID: jobID, ChunkIndex: i},
-			TotalChunks: len(videoChunkURLs), StorageURL: chunkURL, AudioURL: audioURL,
+			TotalChunks: len(videoChunkURLs), StorageURL: chunkURL, AudioURL: audioURL, AudioVideoOffset: info.avOffset,
 			TargetResolution: params.targetRes, DenoiseQuality: params.denoiseQuality, Operation: params.processType,
 		}, processSubjects[params.processType],
 		); err != nil {

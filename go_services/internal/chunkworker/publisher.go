@@ -17,10 +17,11 @@ func publishJetstreamProcessedMsg(
 	const pubSubject = "jobs.chunks.complete"
 
 	err := msgbus.Publish(js, pipeline.ChunkCompleteMessage{
-		ChunkRef:    payload.ChunkRef,
-		TotalChunks: payload.TotalChunks,
-		StorageURL:  storageUrl,
-		AudioURL:    payload.AudioURL,
+		ChunkRef:         payload.ChunkRef,
+		TotalChunks:      payload.TotalChunks,
+		StorageURL:       storageUrl,
+		AudioURL:         payload.AudioURL,
+		AudioVideoOffset: payload.AudioVideoOffset,
 	}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)

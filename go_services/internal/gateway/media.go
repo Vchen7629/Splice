@@ -22,6 +22,7 @@ type videoInfo struct {
 	width, height      int
 	packets            int64
 	hasAudio           bool // gateway only adds audio.mka output when true
+	avOffset           float64
 }
 
 // runs ffprobe on video file on disk and returns the video info like format, width, height, packets
@@ -33,7 +34,7 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 		"ffprobe", "-v", "error", "-protocol_whitelist", "file",
 		"-count_packets", "-of", "json",
 		"-show_entries", "format=format_name:"+
-			"stream=codec_type,codec_name,width,height,nb_read_packets:"+
+			"stream=codec_type,codec_name,width,height,start_time,nb_read_packets:"+
 			"stream_disposition=attached_pic:stream_side_data=rotation",
 		videoPath).Output()
 
@@ -54,6 +55,7 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 			CodecName   string `json:"codec_name"`
 			Width       int    `json:"width"`
 			Height      int    `json:"height"`
+			StartTime   string `json:"start_time"`
 			Packets     string `json:"nb_read_packets"` // used for determining size of video
 			Disposition struct {
 				AttachedPic int `json:"attached_pic"`
@@ -69,12 +71,15 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 
 	info := videoInfo{format: probe.Format.Name}
 	foundVideo := false
+	var videoStart float64
+	var audioStart float64
 
 	for _, stream := range probe.Streams {
 		switch {
 		// first real vikdeo stream, skipping cover art which ffprobe also reports as video
 		case stream.CodecType == "video" && stream.Disposition.AttachedPic == 0 && !foundVideo:
 			foundVideo = true
+			videoStart = parseSeconds(stream.StartTime)
 			info.videoCodec = stream.CodecName
 			info.width, info.height = stream.Width, stream.Height
 			info.packets, _ = strconv.ParseInt(stream.Packets, 10, 64)
@@ -86,8 +91,9 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 					break
 				}
 			}
-		case stream.CodecType == "audio":
+		case stream.CodecType == "audio" && !info.hasAudio:
 			info.hasAudio = true
+			audioStart = parseSeconds(stream.StartTime)
 		}
 	}
 
@@ -95,7 +101,20 @@ func probeVideo(ctx context.Context, videoPath string) (videoInfo, error) {
 		return videoInfo{}, &rejectError{"no video stream"}
 	}
 
+	if info.hasAudio {
+		info.avOffset = audioStart - videoStart // > 0: audio starts late, < 0: video starts late
+	}
+
 	return info, nil
+}
+
+// parses ffprobe seconds string for video stream start_time, "N/A" or empty becomes 0
+func parseSeconds(s string) float64 {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // local files video was split into. chunkPaths are in playback order
@@ -112,7 +131,7 @@ func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (
 	defer cancel()
 
 	var res splitResult
-	args := []string{"-fflags", "+genpts", "-protocol_whitelist", "file", "-i", videoPath}
+	args := []string{"-v", "error", "-fflags", "+genpts", "-protocol_whitelist", "file", "-i", videoPath}
 
 	split := info.shouldSplit()
 	if split {
@@ -138,7 +157,7 @@ func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return splitResult{}, fmt.Errorf("ffmpeg split timed out after %s: %w", splitTimeout, ctxErr)
 		}
-		return splitResult{}, fmt.Errorf("ffmepg split error: %w\n%s", err, out)
+		return splitResult{}, fmt.Errorf("ffmpeg split error: %w\n%s", err, out)
 	}
 
 	if split {
