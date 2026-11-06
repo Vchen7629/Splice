@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
         frontend: ${{ steps.changes.outputs.frontend }}
-        scene_detector: ${{ steps.changes.outputs.scene_detector }}
         video_upscaling: ${{ steps.changes.outputs.video_upscaling }}
         shared_python: ${{ steps.changes.outputs.shared_python }}
         gateway: ${{ steps.changes.outputs.gateway }}
@@ -29,8 +28,6 @@ jobs:
           filters: |
             frontend:
               - 'frontend/**'
-            scene_detector:
-              - 'python_services/scene-detector/**'
             video_upscaling:
               - 'python_services/video-upscaling/**'
             shared_python:
@@ -80,49 +77,6 @@ jobs:
       - name: Run Linting
         working-directory: frontend
         run: npm run lint
-
-  scene-detector-ci:
-    needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.scene_detector == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.8.19"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install ffmpeg dependency
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: Install the project
-        run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/scene-detector
-
-      - name: Run Linter and Formatting
-        run: |
-          uv run ruff check .
-          uv run ruff format --check
-        working-directory: ./python_services/scene-detector
-
-      - name: Run Type Checking
-        run: uv run pyrefly check
-        working-directory: ./python_services/scene-detector
-
-      - name: Run Unit/Integration Tests
-        run: make test_all
-        working-directory: ./python_services/scene-detector
 
   video-upscaling-ci:
     needs: path-filter
