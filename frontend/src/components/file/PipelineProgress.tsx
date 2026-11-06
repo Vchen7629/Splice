@@ -20,12 +20,10 @@ const STAGES: Record<'Upscale' | 'Transcode' | 'Denoise' | 'Convert', { key: str
         { key: 'video-recombiner', label: 'Recombine Audio' },
     ],
     Transcode: [
-        { key: 'scene-detector',   label: 'Splitting Video' },
         { key: 'chunk-worker',     label: 'Transcoding' },
         { key: 'video-recombiner', label: 'Recombining' },
     ],
     Denoise: [
-        { key: 'scene-detector',   label: 'Splitting Video' },
         { key: 'chunk-worker',     label: 'Denoising' },
         { key: 'video-recombiner', label: 'Recombining' },
     ],
