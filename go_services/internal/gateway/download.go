@@ -18,10 +18,11 @@ import (
 // handler for streaming the completed out video for a given job ID
 func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		JobID    string `json:"job_id" validate:"required,min=2"`
+		JobID    string `json:"job_id" validate:"required,uuid"`
 		FileName string `json:"file_name" validate:"required,min=2"`
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<10) // 1 KiB limit for download request body
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		v.logger.Error("error decoding the request body", "err", err)

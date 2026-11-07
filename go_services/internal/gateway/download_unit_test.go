@@ -33,7 +33,7 @@ func TestDownloadVideoRouteU(t *testing.T) {
 		{"invalid json", `not json`, "invalid json payload"},
 		{"missing job_id", `{"file_name":"video.mp4"}`, ""},
 		{"missing file_name", `{"job_id":"abc-123"}`, ""},
-		{"job_id too short", `{"job_id":"a","file_name":"video.mp4"}`, ""},
+		{"job_id non uuid", `{"job_id":"a","file_name":"video.mp4"}`, ""},
 		{"file_name too short", `{"job_id":"abc-123","file_name":"v"}`, ""},
 	}
 
