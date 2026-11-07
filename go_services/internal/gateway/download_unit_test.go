@@ -34,7 +34,7 @@ func TestDownloadVideoRouteU(t *testing.T) {
 		{"missing job_id", `{"file_name":"video.mp4"}`, ""},
 		{"missing file_name", `{"job_id":"abc-123"}`, ""},
 		{"job_id non uuid", `{"job_id":"a","file_name":"video.mp4"}`, ""},
-		{"file_name too short", `{"job_id":"abc-123","file_name":"v"}`, ""},
+		{"file_name too short", `{"job_id":"550e8400-e29b-41d4-a716-446655440000","file_name":"v"}`, ""},
 	}
 
 	for _, tc := range cases {
