@@ -112,9 +112,13 @@ func (v *videoHandler) uploadVideoRoute(w http.ResponseWriter, r *http.Request) 
 	} else {
 		submitErr = v.submitWhole(r.Context(), jobID, tempFile.Name(), uploadParams, info)
 	}
+
 	if submitErr != nil {
+		errorCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
 		v.logger.Error("failed to submit job", "job_id", jobID, "err", submitErr)
-		if kvErr := kh.updateJobStatusKV(r.Context(), jobID, pipeline.JobStatus{State: pipeline.StateFailed, Stage: "upload"}); kvErr != nil {
+		if kvErr := kh.updateJobStatusKV(errorCtx, jobID, pipeline.JobStatus{State: pipeline.StateFailed, Stage: "upload"}); kvErr != nil {
 			v.logger.Error("failed to mark job failed", "job_id", jobID, "err", kvErr)
 		}
 		http.Error(w, "failed to process upload", http.StatusInternalServerError)
