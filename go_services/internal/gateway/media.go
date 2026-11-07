@@ -135,7 +135,7 @@ func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (
 
 	if info.shouldSplit() {
 		args = append(args,
-			"-map", "0:v:0", "-c", "copy",
+			"-map", "0:V:0", "-c", "copy",
 			"-f", "segment", "-segment_time", chunkSegmentTime, "-reset_timestamps", "1", "-segment_format", "matroska",
 			filepath.Join(outDir, "chunk_%04d.mkv"))
 	} else {
