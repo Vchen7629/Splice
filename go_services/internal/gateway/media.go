@@ -125,7 +125,7 @@ type splitResult struct {
 }
 
 // splits video into keyframe aligned video-only chunks and a seperate audio file in one stream-copy pass
-// and writes them to outDir. Videos that can't be keyframe split are returned as single chunk (original file)
+// and writes them to outDir. Videos that can't be keyframe split are remuxed into single mkv chunk
 func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (splitResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, splitTimeout)
 	defer cancel()
@@ -133,23 +133,19 @@ func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (
 	var res splitResult
 	args := []string{"-v", "error", "-fflags", "+genpts", "-protocol_whitelist", "file", "-i", videoPath}
 
-	split := info.shouldSplit()
-	if split {
+	if info.shouldSplit() {
 		args = append(args,
 			"-map", "0:v:0", "-c", "copy",
 			"-f", "segment", "-segment_time", chunkSegmentTime, "-reset_timestamps", "1", "-segment_format", "matroska",
 			filepath.Join(outDir, "chunk_%04d.mkv"))
 	} else {
-		res.chunkPaths = []string{videoPath}
+		// can't keyframe split, remux the whole video stream (stream copy) into one mkv chunk so every chunk is matroska
+		args = append(args, "-map", "0:v:0", "-c", "copy", filepath.Join(outDir, "chunk_0000.mkv"))
 	}
 
 	if info.hasAudio {
 		res.audioPath = filepath.Join(outDir, "audio.mka")
 		args = append(args, "-map", "0:a:0", "-vn", "-c", "copy", res.audioPath)
-	}
-
-	if !split && !info.hasAudio {
-		return res, nil
 	}
 
 	out, err := exec.CommandContext(ctx, "ffmpeg", args...).CombinedOutput()
@@ -160,14 +156,12 @@ func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (
 		return splitResult{}, fmt.Errorf("ffmpeg split error: %w\n%s", err, out)
 	}
 
-	if split {
-		res.chunkPaths, err = filepath.Glob(filepath.Join(outDir, "chunk_*.mkv"))
-		if err != nil {
-			return splitResult{}, fmt.Errorf("error listing split chunks: %w", err)
-		}
-		if len(res.chunkPaths) == 0 {
-			return splitResult{}, errors.New("ffmpeg split produced no chunks")
-		}
+	res.chunkPaths, err = filepath.Glob(filepath.Join(outDir, "chunk_*.mkv"))
+	if err != nil {
+		return splitResult{}, fmt.Errorf("error listing split chunks: %w", err)
+	}
+	if len(res.chunkPaths) == 0 {
+		return splitResult{}, errors.New("ffmpeg split produced no chunks")
 	}
 
 	return res, nil
