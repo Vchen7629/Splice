@@ -64,10 +64,9 @@ func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(payload.FileName)}))
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	_, err = io.Copy(w, body)
-	if err != nil {
+	if _, err := io.Copy(w, body); err != nil {
 		v.logger.Error("error streaming video to response", "err", err)
-		return
+		panic(http.ErrAbortHandler)
 	}
 }
 
