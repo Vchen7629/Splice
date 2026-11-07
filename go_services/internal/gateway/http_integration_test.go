@@ -7,9 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,7 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,7 +55,7 @@ func seedStatus(t *testing.T, jobID string, status pipeline.JobStatus) {
 	require.NoError(t, err)
 }
 
-func TestResponse(t *testing.T) {
+func TestHTTPResponse(t *testing.T) {
 	tests := []struct {
 		name      string
 		jobID     string
@@ -115,9 +113,7 @@ func TestResponse(t *testing.T) {
 			assert.Equal(t, tc.wantErr, body.Error)
 		})
 	}
-}
 
-func TestResponse_NotFound(t *testing.T) {
 	t.Run("unknown job ID returns 404", func(t *testing.T) {
 		ts := newTestServer(t)
 
@@ -276,25 +272,6 @@ func seedProcessedVideo(t *testing.T, filerURL, fileName string, jobID uuid.UUID
 	require.Less(t, resp.StatusCode, 400)
 }
 
-func newUploadHandler(js jetstream.JetStream, kv jetstream.KeyValue, filerURL string) *videoHandler {
-	return &videoHandler{
-		logger:     stest.SilentLogger(),
-		js:         js,
-		kv:         kv,
-		storageURL: filerURL,
-	}
-}
-
-func newDownloadVideoServer(t *testing.T, storageURL string) *httptest.Server {
-	t.Helper()
-	h := &videoHandler{logger: stest.SilentLogger(), storageURL: storageURL}
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /jobs/download", h.downloadVideoRoute)
-	ts := httptest.NewServer(mux)
-	t.Cleanup(ts.Close)
-	return ts
-}
-
 type serverEnv struct {
 	url    string
 	server *http.Server
@@ -326,191 +303,6 @@ func setupServer(t *testing.T) *serverEnv {
 	}, 5*time.Second, 10*time.Millisecond, "server did not start in time")
 
 	return &serverEnv{url: url, server: server, js: js, nc: nc}
-}
-
-// covers the full upload pipeline: multipart form → SeaweedFS → NATS → response.
-func TestUploadVideoFlow(t *testing.T) {
-	js, nc := stest.SetupNats(t)
-	kv := stest.SetupJobMilestoneKV(t, js)
-	h := newUploadHandler(js, kv, sharedFilerUrl)
-	patchProbeVideo(t)
-
-	t.Run("Rejects uploads exceeding MaxUploadBytes", func(t *testing.T) {
-		h.maxUploadBytes = 100
-		defer func() { h.maxUploadBytes = 0 }()
-
-		req := NewUploadRequest(t, "/jobs", "big.mp4", bytes.Repeat([]byte("x"), 200), "1080p", "transcode")
-		rec := httptest.NewRecorder()
-
-		h.uploadVideoRoute(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Contains(t, rec.Body.String(), "invalid multipart form")
-	})
-
-	t.Run("File is saved to SeaweedFS and is fetchable at the returned StorageURL", func(t *testing.T) {
-		req := NewUploadRequest(t, "/jobs", "clip.mp4", testVideoBytes(t), "1080p", "transcode")
-		rec := httptest.NewRecorder()
-
-		h.uploadVideoRoute(rec, req)
-
-		require.Equal(t, http.StatusCreated, rec.Code)
-		var resp struct {
-			JobID string `json:"job_id"`
-		}
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-		assert.NotEmpty(t, resp.JobID)
-	})
-
-	t.Run("Saved file contains the exact bytes that were uploaded", func(t *testing.T) {
-		content := testVideoBytes(t)
-		req := NewUploadRequest(t, "/jobs", "video.mp4", content, "720p", "transcode")
-		rec := httptest.NewRecorder()
-
-		h.uploadVideoRoute(rec, req)
-
-		require.Equal(t, http.StatusCreated, rec.Code)
-		var resp struct {
-			JobID string `json:"job_id"`
-		}
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-
-		stored, err := http.Get(fmt.Sprintf("%s/%s/video.mp4", sharedFilerUrl, resp.JobID))
-		require.NoError(t, err)
-		defer stored.Body.Close() //nolint:errcheck
-		require.Less(t, stored.StatusCode, 400)
-		storedBytes, err := io.ReadAll(stored.Body)
-		require.NoError(t, err)
-		assert.Equal(t, content, storedBytes)
-	})
-
-	t.Run("Published NATS message contains correct job_id, target_resolution, storage_url, and operation", func(t *testing.T) {
-		received := make(chan []byte, 1)
-		sub, err := nc.Subscribe("jobs.video.scene-split", func(msg *nats.Msg) {
-			received <- msg.Data
-		})
-		require.NoError(t, err)
-		defer sub.Unsubscribe() //nolint:errcheck
-
-		req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "720p", "transcode")
-		rec := httptest.NewRecorder()
-		h.uploadVideoRoute(rec, req)
-		require.Equal(t, http.StatusCreated, rec.Code)
-
-		var uploadResp struct {
-			JobID string `json:"job_id"`
-		}
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&uploadResp))
-
-		select {
-		case data := <-received:
-			var msg pipeline.VideoJobMessage
-			require.NoError(t, json.Unmarshal(data, &msg))
-			assert.Equal(t, uploadResp.JobID, msg.JobID)
-			assert.Equal(t, "720p", msg.TargetResolution)
-			assert.Equal(t, "720p", msg.SourceResolution) // from probed height, not the client
-			assert.Equal(t, "transcode", msg.Operation)
-			assert.Equal(t, fmt.Sprintf("%s/%s/video.mp4", sharedFilerUrl, uploadResp.JobID), msg.StorageURL)
-		case <-time.After(5 * time.Second):
-			t.Fatal("timed out waiting for NATS message")
-		}
-	})
-
-	t.Run("Multiple uploads produce unique job IDs", func(t *testing.T) {
-		seen := make(map[string]bool)
-
-		for range 3 {
-			req := NewUploadRequest(t, "/jobs", "video.mp4", testVideoBytes(t), "1080p", "transcode")
-			rec := httptest.NewRecorder()
-			h.uploadVideoRoute(rec, req)
-			require.Equal(t, http.StatusCreated, rec.Code)
-
-			var resp struct {
-				JobID string `json:"job_id"`
-			}
-			require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-			assert.False(t, seen[resp.JobID], "duplicate job_id: %s", resp.JobID)
-			seen[resp.JobID] = true
-		}
-	})
-
-	t.Run("Large file (5 MB) is fully persisted to SeaweedFS", func(t *testing.T) {
-		content := bytes.Repeat([]byte("x"), 5*1024*1024)
-		req := NewUploadRequest(t, "/jobs", "big.mp4", content, "1080p", "transcode")
-		rec := httptest.NewRecorder()
-
-		h.uploadVideoRoute(rec, req)
-
-		require.Equal(t, http.StatusCreated, rec.Code)
-		var resp struct {
-			JobID string `json:"job_id"`
-		}
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-
-		stored, err := http.Get(fmt.Sprintf("%s/%s/big.mp4", sharedFilerUrl, resp.JobID))
-		require.NoError(t, err)
-		defer stored.Body.Close() //nolint:errcheck
-		require.Less(t, stored.StatusCode, 400)
-		storedBytes, err := io.ReadAll(stored.Body)
-		require.NoError(t, err)
-		assert.Equal(t, len(content), len(storedBytes))
-	})
-
-	t.Run("Returns 500 when NATS publish fails after successful storage save", func(t *testing.T) {
-		h := newUploadHandler(&MockJS{PublishErr: errors.New("nats unavailable")}, &MockKV{}, sharedFilerUrl)
-		req := NewUploadRequest(t, "/jobs", "video.mp4", []byte("data"), "1080p", "transcode")
-		rec := httptest.NewRecorder()
-
-		h.uploadVideoRoute(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Contains(t, rec.Body.String(), "unable to send process request")
-	})
-}
-
-func TestDownloadVideoFlow(t *testing.T) {
-	ts := newDownloadVideoServer(t, sharedFilerUrl)
-
-	t.Run("Streams the exact bytes of a seeded processed video", func(t *testing.T) {
-		content := []byte("fake processed video bytes")
-		id := uuid.New()
-		seedProcessedVideo(t, sharedFilerUrl, "output.mp4", id, content)
-
-		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "output.mp4", id)
-
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close() //nolint:errcheck
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, content, body)
-	})
-
-	t.Run("Returns correct Content-Disposition and Content-Type headers", func(t *testing.T) {
-		id := uuid.New()
-		seedProcessedVideo(t, sharedFilerUrl, "output.mp4", id, []byte("data"))
-
-		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "output.mp4", id)
-
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close() //nolint:errcheck
-
-		assert.Equal(t, "application/octet-stream", resp.Header.Get("Content-Type"))
-		assert.Contains(t, resp.Header.Get("Content-Disposition"), "output.mp4")
-	})
-
-	t.Run("Returns 500 when the processed video does not exist in storage", func(t *testing.T) {
-		req := NewDownloadRequest(t, ts.URL+"/jobs/download", "output.mp4", uuid.New())
-
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close() //nolint:errcheck
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	})
 }
 
 // Both write routes are reachable through the real server and middleware chain.
@@ -555,81 +347,6 @@ func TestStartHttpApi(t *testing.T) {
 	}
 }
 
-func TestUploadPipeline(t *testing.T) {
-	env := setupServer(t)
-
-	t.Run("upload writes PROCESSING state to KV and publishes scene-split message", func(t *testing.T) {
-		received := make(chan []byte, 1)
-		sub, err := env.nc.Subscribe("jobs.video.scene-split", func(msg *nats.Msg) {
-			received <- msg.Data
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-		req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "720p", "transcode")
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close() //nolint:errcheck
-		require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		var uploadResp struct {
-			JobID string `json:"job_id"`
-		}
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&uploadResp))
-		require.NotEmpty(t, uploadResp.JobID)
-
-		kv := stest.SetupJobMilestoneKV(t, env.js)
-		entry, err := kv.Get(context.Background(), uploadResp.JobID)
-		require.NoError(t, err)
-		var status struct {
-			State string `json:"state"`
-			Stage string `json:"stage"`
-		}
-		require.NoError(t, json.Unmarshal(entry.Value(), &status))
-		assert.Equal(t, "PROCESSING", status.State)
-		assert.Equal(t, "upload", status.Stage)
-
-		select {
-		case data := <-received:
-			var msg pipeline.VideoJobMessage
-			require.NoError(t, json.Unmarshal(data, &msg))
-			assert.Equal(t, uploadResp.JobID, msg.JobID)
-			assert.Equal(t, "720p", msg.TargetResolution)
-		case <-time.After(5 * time.Second):
-			t.Fatal("timed out waiting for NATS message")
-		}
-	})
-
-	t.Run("multiple uploads each get their own PROCESSING entry in KV", func(t *testing.T) {
-		kv := stest.SetupJobMilestoneKV(t, env.js)
-		jobIDs := make([]string, 3)
-
-		for i := range jobIDs {
-			req := NewUploadRequest(t, env.url+"/jobs/upload", "video.mp4", testVideoBytes(t), "1080p", "transcode")
-			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
-			defer resp.Body.Close() //nolint:errcheck
-			require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-			var uploadResp struct {
-				JobID string `json:"job_id"`
-			}
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&uploadResp))
-			jobIDs[i] = uploadResp.JobID
-		}
-
-		for _, jobID := range jobIDs {
-			entry, err := kv.Get(context.Background(), jobID)
-			require.NoError(t, err, "KV entry missing for job %s", jobID)
-			var status struct {
-				State string `json:"state"`
-			}
-			require.NoError(t, json.Unmarshal(entry.Value(), &status))
-			assert.Equal(t, "PROCESSING", status.State)
-		}
-	})
-}
-
 func TestGracefulShutdown(t *testing.T) {
 	t.Run("server stops accepting connections after Shutdown", func(t *testing.T) {
 		tests := []struct {
@@ -647,6 +364,9 @@ func TestGracefulShutdown(t *testing.T) {
 				resp, err := http.Post(env.url+"/jobs/upload", "text/plain", nil)
 				require.NoError(t, err)
 				require.NoError(t, resp.Body.Close())
+
+				// close spare keep-alive connection it never sent a request on that cause flakyness
+				http.DefaultClient.CloseIdleConnections()
 
 				ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
 				defer cancel()

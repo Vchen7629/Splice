@@ -42,7 +42,7 @@ func TestUploadFile(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := UploadFile(srv.URL, tc.filePath, TempStorageTTL, 30*time.Second)
+			err := UploadFile(t.Context(), srv.URL, tc.filePath, TempStorageTTL, 30*time.Second)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errContains)

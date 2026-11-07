@@ -19,9 +19,9 @@ var (
 	probeDurationTimeout  = 15 * time.Second
 )
 
-// stitches transcoded video chunks for a job into a single output video file
+// stitches transcoded/denoise video chunks for a job into a single output video file
 // chunks is a map of chunk index -> output path, sorted by index
-func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)) (string, error) {
+func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[int]string, onProgress func(pct int)) (string, error) {
 	outDir := filepath.Join("/tmp/jobs", jobID)
 
 	err := os.MkdirAll(outDir, 0755)
@@ -61,17 +61,18 @@ func CombineChunks(jobID string, chunks map[int]string, onProgress func(pct int)
 	defer cancel()
 
 	outputPath := filepath.Join(outDir, "output.mp4")
-	cmd := exec.CommandContext(
-		ctx,
-		"ffmpeg",
-		"-f", "concat",
-		"-safe", "0",
-		"-protocol_whitelist", "file,pipe", "-i", manifestPath,
-		"-c", "copy",
-		"-progress", "pipe:1",
-		"-y",
-		outputPath,
-	)
+
+	videoOffset, audioOffset := max(0, -audioVideoOffset), max(0, audioVideoOffset)
+	args := []string{"-itsoffset", strconv.FormatFloat(videoOffset, 'f', 6, 64), // to handle mismatched video and audio start time
+		"-f", "concat", "-safe", "0", "-protocol_whitelist", "file,pipe", "-i", manifestPath}
+	if audioURL != "" {
+		args = append(args, "-itsoffset", strconv.FormatFloat(audioOffset, 'f', 6, 64), // to handle mismatched video and audio start time
+			"-protocol_whitelist", "http,https,tcp,tls", "-i", audioURL, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac")
+	} else {
+		args = append(args, "-c", "copy")
+	}
+	args = append(args, "-progress", "pipe:1", "-y", outputPath)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

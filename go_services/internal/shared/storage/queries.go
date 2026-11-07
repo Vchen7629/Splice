@@ -54,7 +54,7 @@ func Upload(ctx context.Context, url, storageTTL string, body io.Reader, httpUpl
 }
 
 // save (upload) the file on local disk to seaweedfs storage
-func UploadFile(destURL, filePath, storageTTL string, httpUploadTimeout time.Duration) error {
+func UploadFile(ctx context.Context, destURL, filePath, storageTTL string, httpUploadTimeout time.Duration) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening video file: %w", err)
@@ -66,7 +66,7 @@ func UploadFile(destURL, filePath, storageTTL string, httpUploadTimeout time.Dur
 		}
 	}()
 
-	if err := Upload(context.Background(), destURL, storageTTL, file, httpUploadTimeout); err != nil {
+	if err := Upload(ctx, destURL, storageTTL, file, httpUploadTimeout); err != nil {
 		return err
 	}
 
@@ -87,6 +87,25 @@ func ValidatePathSegment(name string) error {
 }
 
 var removeAll = os.RemoveAll
+
+// sends HEAD request to check that object at url exists in storage (seaweedfs)
+func CheckExists(url string, timeout time.Duration) error {
+	httpClient := &http.Client{Timeout: timeout}
+	resp, err := httpClient.Head(url)
+	if err != nil {
+		return fmt.Errorf("error connecting to seaweedfs: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusNotFound:
+		return fmt.Errorf("object not found: %w", ErrNotFound)
+	default:
+		return fmt.Errorf("seaweedfs returned status %d", resp.StatusCode)
+	}
+}
 
 // returns local directory DownloadVideo downloads into
 func TempUnprocessedDir(videoID string) string {

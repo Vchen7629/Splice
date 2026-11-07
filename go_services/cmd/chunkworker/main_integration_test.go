@@ -47,15 +47,11 @@ func TestChunkWorkerServiceI(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 
 		jobID := "job-full-flow"
-		t.Cleanup(func() {
-			os.RemoveAll("/tmp/temp-unprocessed-" + jobID)
-			os.RemoveAll("/tmp/transcode/temp-processed-" + jobID)
-			os.RemoveAll("/tmp/denoise/temp-processed-" + jobID)
-		})
+		chunkName := jobID + "-0"
+		t.Cleanup(func() { os.RemoveAll("/tmp/transcode/temp-processed-" + chunkName) })
 
-		videoContent, err := os.ReadFile("../../internal/shared/test/testvideo.mp4")
-		require.NoError(t, err)
-		storageURL := test.SeedUnprocessedVideo(t, sharedFilerURL, jobID, "test_video.mp4", videoContent)
+		// worker streams input from any http url, so the chunk is served locally; output still uploads to the filer
+		storageURL := test.ServeTestChunks(t, 1) + "/chunk.mkv"
 
 		received := make(chan []byte, 1)
 		sub, err := nc.Subscribe("jobs.chunks.complete", func(msg *nats.Msg) {
@@ -76,7 +72,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 
 		time.Sleep(500 * time.Millisecond)
 
-		payload, err := json.Marshal(chunkworker.VideoChunkMessage{
+		payload, err := json.Marshal(pipeline.VideoChunkMessage{
 			ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 			TotalChunks:      1,
 			StorageURL:       storageURL,
@@ -94,7 +90,7 @@ func TestChunkWorkerServiceI(t *testing.T) {
 			require.NoError(t, json.Unmarshal(data, &msg))
 			assert.Equal(t, jobID, msg.JobID)
 			assert.Equal(t, 0, msg.ChunkIndex)
-			assert.Equal(t, fmt.Sprintf("%s/%s/processed/test_video.mp4", sharedFilerURL, jobID), msg.StorageURL)
+			assert.Equal(t, fmt.Sprintf("%s/%s/processed/%s.mp4", sharedFilerURL, jobID, chunkName), msg.StorageURL)
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for downstream message")
 		}

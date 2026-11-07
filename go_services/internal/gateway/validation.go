@@ -4,7 +4,6 @@ import (
 	"errors"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"splice.com/go_services/internal/shared/storage"
@@ -23,7 +22,6 @@ func validateJobID(jobID string) error {
 const (
 	maxFramePixels = 8192 * 4608 // allows videos up to 8K
 	maxTotalPixels = 1e12        // w*h*frames, approximate workload limit against decompression-bomb
-	probeTimeout   = time.Minute
 )
 
 var allowedContainers = []string{"mov", "mp4", "matroska", "webm", "avi"} // allowed video formats
@@ -68,9 +66,9 @@ func validateVideo(info videoInfo, size int64) error {
 }
 
 var processSubjects = map[string]string{
-	"transcode": "jobs.video.scene-split",
+	"transcode": "jobs.video.chunks",
+	"denoise":   "jobs.video.chunks",
 	"upscale":   "jobs.video.upscale",
-	"denoise":   "jobs.video.scene-split",
 	"convert":   "jobs.video.convert",
 }
 

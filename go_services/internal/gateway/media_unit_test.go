@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,7 +46,7 @@ func makeVideo(t *testing.T, name, lavfiSrc string, extraArgs ...string) string 
 }
 
 func TestProbeVideo(t *testing.T) {
-	const validOut = `{"streams":[{"width":1920,"height":1080,"nb_read_packets":"240"}],` +
+	const validOut = `{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,"height":1080,"nb_read_packets":"240"}],` +
 		`"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"}}`
 
 	t.Run("parses format, width, height and packets", func(t *testing.T) {
@@ -54,7 +55,7 @@ func TestProbeVideo(t *testing.T) {
 		info, err := probeVideo(context.Background(), "video.mp4")
 
 		require.NoError(t, err)
-		assert.Equal(t, videoInfo{format: "mov,mp4,m4a,3gp,3g2,mj2", width: 1920, height: 1080, packets: 240}, info)
+		assert.Equal(t, videoInfo{format: "mov,mp4,m4a,3gp,3g2,mj2", videoCodec: "h264", width: 1920, height: 1080, packets: 240}, info)
 	})
 
 	t.Run("restricts ffprobe to the file protocol and probes the given path", func(t *testing.T) {
@@ -70,7 +71,7 @@ func TestProbeVideo(t *testing.T) {
 	})
 
 	t.Run("missing packet count parses as zero", func(t *testing.T) {
-		fakeFfprobe(t, `{"streams":[{"width":64,"height":64}],"format":{"format_name":"avi"}}`, 0)
+		fakeFfprobe(t, `{"streams":[{"codec_type":"video","codec_name":"h264","width":64,"height":64}],"format":{"format_name":"avi"}}`, 0)
 
 		info, err := probeVideo(context.Background(), "video.avi")
 
@@ -84,8 +85,8 @@ func TestProbeVideo(t *testing.T) {
 		wantReason   string
 	}{
 		{"no streams in output", `{"streams":[],"format":{"format_name":"mp4"}}`, 0, "no video stream"},
-		{"output is not json", "not json", 0, "no video stream"},
-		{"empty output", "", 0, "no video stream"},
+		{"output is not json", "not json", 0, "unreadable video"},
+		{"empty output", "", 0, "unreadable video"},
 		{"ffprobe exits non zero", "", 1, "unreadable video"},
 	}
 	for _, tc := range rejects {
@@ -135,6 +136,49 @@ func TestProbeVideo(t *testing.T) {
 		assert.Equal(t, 48, info.width) // stored 64x48, displayed 48x64
 		assert.Equal(t, 64, info.height)
 	})
+
+	const (
+		videoSrc = small
+		audioSrc = "sine=d=1"
+	)
+	extraInput := func(src string) []string { return []string{"-f", "lavfi", "-i", src} }
+	h264, aac := []string{"-c:v", "libx264"}, []string{"-c:a", "aac"}
+	audioThenVideo := []string{"-map", "0:a", "-map", "1:v"}
+	coverArt := []string{"-c:v", "mjpeg", "-disposition:v:0", "attached_pic"}
+
+	streamCases := []struct {
+		name, file, src string
+		args            []string
+		wantCodec       string
+		wantAudio       bool
+		wantReject      string
+	}{
+		{"video only has no audio", "video.mp4", videoSrc, h264, "h264", false, ""},
+		{"video with audio", "video_audio.mp4", videoSrc,
+			slices.Concat(extraInput(audioSrc), h264, aac, []string{"-shortest"}), "h264", true, ""},
+		{"audio stream listed before video", "audio_first.mkv", audioSrc,
+			slices.Concat(extraInput(videoSrc), audioThenVideo, h264), "h264", true, ""},
+		{"cover art is skipped for the real video", "cover_video.mp4", audioSrc,
+			slices.Concat(extraInput(videoSrc), extraInput(videoSrc), []string{"-map", "0:a", "-map", "1:v", "-map", "2:v"},
+				[]string{"-c:v:0", "mjpeg", "-disposition:v:0", "attached_pic", "-c:v:1", "libx264"}), "h264", true, ""},
+		{"audio with only cover art has no video", "cover_only.m4a", audioSrc,
+			slices.Concat(extraInput(videoSrc), audioThenVideo, coverArt), "", true, "no video stream"},
+	}
+	for _, tc := range streamCases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := makeVideo(t, tc.file, tc.src, tc.args...)
+
+			info, err := probeVideo(context.Background(), path)
+
+			if tc.wantReject != "" {
+				assertRejected(t, err, tc.wantReject)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantCodec, info.videoCodec)
+			assert.Equal(t, tc.wantAudio, info.hasAudio)
+		})
+	}
 
 	t.Run("reports the container so validateVideo can reject it", func(t *testing.T) {
 		path := makeVideo(t, "ok.flv", small)

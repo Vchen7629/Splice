@@ -31,14 +31,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Install scene-detector project
-        run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/scene-detector
-
-      - name: Run scene-detector coverage
-        working-directory: ./python_services/scene-detector
-        run: make coverage
-
       - name: Install video-upscaling project
         run: uv sync --locked --all-extras --dev
         working-directory: ./python_services/video-upscaling
@@ -93,7 +85,6 @@ jobs:
             ./go_services/cmd/converter/coverage.out,
             ./go_services/cmd/recombiner/coverage.out,
             ./go_services/cmd/shared/coverage.out,
-            ./python_services/scene-detector/coverage.xml,
             ./python_services/video-upscaling/coverage.xml,
             ./python_services/shared/coverage.xml,
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -22,7 +22,7 @@ import (
 
 func validPayload(t *testing.T, jobID string) []byte {
 	t.Helper()
-	data, err := json.Marshal(VideoChunkMessage{
+	data, err := json.Marshal(pipeline.VideoChunkMessage{
 		ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0},
 		StorageURL:       "http://localhost:1/job-1/chunk.mp4",
 		TargetResolution: "720p",
@@ -41,7 +41,6 @@ func TestConsumeVideoChunkU(t *testing.T) {
 
 		t.Cleanup(func() {
 			transcodeVideoFn = transcodeVideo
-			os.RemoveAll("/tmp/temp-unprocessed-" + chunkName)
 			os.RemoveAll("/tmp/transcode/temp-processed-" + chunkName)
 			os.RemoveAll("/tmp/denoise/temp-processed-" + chunkName)
 		})
@@ -66,7 +65,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 			return outputPath, nil
 		}
 
-		payload, err := json.Marshal(VideoChunkMessage{
+		payload, err := json.Marshal(pipeline.VideoChunkMessage{
 			ChunkRef:         pipeline.ChunkRef{JobID: jobID, ChunkIndex: chunkIndex},
 			TotalChunks:      1,
 			StorageURL:       storageSrv.URL + "/chunk.mp4",
@@ -105,7 +104,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 	})
 
 	t.Run("fetch 404 marks job FAILED and terminates", func(t *testing.T) {
-		payload, err := json.Marshal(VideoChunkMessage{
+		payload, err := json.Marshal(pipeline.VideoChunkMessage{
 			ChunkRef:         pipeline.ChunkRef{JobID: "job-1", ChunkIndex: 0},
 			StorageURL:       test.NotFoundStorageURL(t) + "/job-1/chunk.mp4",
 			TargetResolution: "720p",
@@ -157,7 +156,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 	})
 
 	t.Run("does not write kv when chunk fetch fails", func(t *testing.T) {
-		payload, err := json.Marshal(VideoChunkMessage{
+		payload, err := json.Marshal(pipeline.VideoChunkMessage{
 			ChunkRef:         pipeline.ChunkRef{JobID: "job-abc", ChunkIndex: 2},
 			StorageURL:       "http://localhost:1/job-abc/chunk.mp4",
 			TargetResolution: "480p",

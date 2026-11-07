@@ -1,6 +1,7 @@
 package chunkworker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -32,7 +33,7 @@ func ConsumeVideoChunk(
 		AckWait:       ackWait,
 		MaxAckPending: 10,
 	}, func(msg jetstream.Msg) {
-		payload, ok := msgbus.Decode[VideoChunkMessage](msg, logger)
+		payload, ok := msgbus.Decode[pipeline.VideoChunkMessage](msg, logger)
 		if !ok {
 			return
 		}
@@ -68,7 +69,7 @@ func ConsumeVideoChunk(
 				return false
 			}
 
-			outputPath, err := processChunk(payload, logger)
+			outputPath, err := processChunk(payload)
 			if errors.Is(err, storage.ErrNotFound) {
 				if failErr := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{
 					State: pipeline.StateFailed,
@@ -85,6 +86,7 @@ func ConsumeVideoChunk(
 				return true // no retry
 			}
 			if err != nil {
+				logger.Error("error processing chunk", "err", err)
 				msgbus.NakWithErrHandling(logger, msg)
 				return false
 			}
@@ -96,7 +98,7 @@ func ConsumeVideoChunk(
 			outFileName := filepath.Base(outputPath)
 			storageURL := fmt.Sprintf("%s/%s/processed/%s", baseStorageURL, payload.JobID, outFileName)
 
-			if err := storage.UploadFile(storageURL, outputPath, storage.TempStorageTTL, uploadTimeout); err != nil {
+			if err := storage.UploadFile(context.Background(), storageURL, outputPath, storage.TempStorageTTL, uploadTimeout); err != nil {
 				logger.Error(
 					"error saving transcoded video chunk to seaweedfs storage",
 					"job_id", payload.JobID,
@@ -131,12 +133,8 @@ func ConsumeVideoChunk(
 	})
 }
 
-// cleanupTempFolders removes the unprocessed and processed temp dirs for a chunk.
-// Must run after the chunk's output file is no longer needed (i.e. after upload).
+// cleanupTempFolders removes the processed temp dirs for a chunk.
 func cleanupTempFolders(chunkName string, logger *slog.Logger) {
-	if err := removeAll(storage.TempUnprocessedDir(chunkName)); err != nil {
-		logger.Warn("error removing the temp unprocessed folder", "chunk_name", chunkName, "err", err)
-	}
 	if err := removeAll("/tmp/transcode/temp-processed-" + chunkName); err != nil {
 		logger.Warn("error removing the temp transcode processed folder", "chunk_name", chunkName, "err", err)
 	}

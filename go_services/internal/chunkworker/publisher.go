@@ -12,14 +12,16 @@ import (
 // publishes the "processed" jetstream msg, updates the KeyValue, and updates Job Progress KV
 func publishJetstreamProcessedMsg(
 	nc pipeline.Publisher, js jetstream.JetStream, processedKV jetstream.KeyValue,
-	payload VideoChunkMessage, storageUrl string, logger *slog.Logger,
+	payload pipeline.VideoChunkMessage, storageUrl string, logger *slog.Logger,
 ) error {
 	const pubSubject = "jobs.chunks.complete"
 
 	err := msgbus.Publish(js, pipeline.ChunkCompleteMessage{
-		ChunkRef:    payload.ChunkRef,
-		TotalChunks: payload.TotalChunks,
-		StorageURL:  storageUrl,
+		ChunkRef:         payload.ChunkRef,
+		TotalChunks:      payload.TotalChunks,
+		StorageURL:       storageUrl,
+		AudioURL:         payload.AudioURL,
+		AudioVideoOffset: payload.AudioVideoOffset,
 	}, pubSubject)
 	if err != nil {
 		logger.Error("failed to pub chunk complete msg", "job_id", payload.JobID, "chunk_index", payload.ChunkIndex, "err", err)
