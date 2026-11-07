@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,7 +54,8 @@ func processChunk(payload pipeline.VideoChunkMessage) (string, error) {
 	return outputPath, nil
 }
 
-var ffmpegTimeout = 2 * time.Hour // TODO: in the future scale timeout with input video size via ffprobe
+var ffmpegTimeout = 2 * time.Hour                                                     // TODO: in the future scale timeout with input video size via ffprobe
+var videoFetchTimeout = strconv.FormatInt(int64(30*time.Second/time.Microsecond), 10) // 30s download timeout
 
 // transcode by resizing the input video chunk to the specified value and output and return resulting video chunk.
 func transcodeVideo(filePath, target_resolution, chunkName string) (string, error) {
@@ -73,8 +75,8 @@ func transcodeVideo(filePath, target_resolution, chunkName string) (string, erro
 	out, err := exec.CommandContext(
 		ctx,
 		"ffmpeg",
-		"-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
-		"-protocol_whitelist", "http,tcp", "-f", "matroska", "-i", filePath,
+		"-rw_timeout", videoFetchTimeout, "-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
+		"-protocol_whitelist", "http,https,tcp,tls", "-f", "matroska", "-i", filePath,
 		"-vf", fmt.Sprintf("scale=-2:%s:flags=lanczos", height),
 		"-c:v", "libx264",
 		"-an", "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-video_track_timescale", "90000",
@@ -116,8 +118,8 @@ func denoiseVideo(filePath, denoiseQuality, chunkName string) (string, error) {
 	out, err := exec.CommandContext(
 		ctx,
 		"ffmpeg",
-		"-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
-		"-protocol_whitelist", "http,tcp", "-f", "matroska", "-i", filePath,
+		"-rw_timeout", videoFetchTimeout, "-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
+		"-protocol_whitelist", "http,https,tcp,tls", "-f", "matroska", "-i", filePath,
 		"-vf", filterStrength,
 		"-c:v", "libx264",
 		"-crf", "18",
