@@ -73,7 +73,7 @@ func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request
 var storageClient = func() *http.Client {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.ResponseHeaderTimeout = 10 * time.Second
-	return &http.Client{Transport: t}
+	return &http.Client{Transport: t, Timeout: 30 * time.Minute}
 }()
 
 // fetch a completely processed video from seedweedfs storage
