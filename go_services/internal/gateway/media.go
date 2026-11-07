@@ -140,7 +140,7 @@ func splitVideo(ctx context.Context, info videoInfo, videoPath, outDir string) (
 			filepath.Join(outDir, "chunk_%04d.mkv"))
 	} else {
 		// can't keyframe split, remux the whole video stream (stream copy) into one mkv chunk so every chunk is matroska
-		args = append(args, "-map", "0:v:0", "-c", "copy", filepath.Join(outDir, "chunk_0000.mkv"))
+		args = append(args, "-map", "0:V:0", "-c", "copy", filepath.Join(outDir, "chunk_0000.mkv"))
 	}
 
 	if info.hasAudio {
