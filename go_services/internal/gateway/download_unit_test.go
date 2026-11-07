@@ -122,7 +122,7 @@ func TestGetProcessedVideoU(t *testing.T) {
 					url = server.URL
 				}
 
-				body, err := getProcessedVideo(url, "job123", "testvideo.mp4")
+				body, err := getProcessedVideo(t.Context(), url, "job123", "testvideo.mp4")
 
 				assert.Error(t, err)
 				assert.Nil(t, body)

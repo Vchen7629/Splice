@@ -48,7 +48,7 @@ func TestGetProcessedVideoI(t *testing.T) {
 		seedResp.Body.Close()
 		require.Less(t, seedResp.StatusCode, 400)
 
-		body, err := getProcessedVideo(sharedFilerUrl, "job123", fileName)
+		body, err := getProcessedVideo(t.Context(), sharedFilerUrl, "job123", fileName)
 		require.NoError(t, err)
 		defer body.Close()
 

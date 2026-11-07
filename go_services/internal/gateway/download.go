@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,7 +46,7 @@ func (v *videoHandler) downloadVideoRoute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	body, err := getProcessedVideo(v.storageURL, payload.JobID, payload.FileName)
+	body, err := getProcessedVideo(r.Context(), v.storageURL, payload.JobID, payload.FileName)
 	if err != nil {
 		v.logger.Error("failed to fetch processed video", "err", err)
 		http.Error(w, "failed to fetch video", http.StatusInternalServerError)
@@ -77,16 +78,19 @@ var storageClient = func() *http.Client {
 }()
 
 // fetch a completely processed video from seedweedfs storage
-func getProcessedVideo(storageUrl, jobID, fileName string) (io.ReadCloser, error) {
-	resp, err := storageClient.Get(fmt.Sprintf("%s/%s/%s/processed", storageUrl, jobID, fileName))
+func getProcessedVideo(ctx context.Context, storageUrl, jobID, fileName string) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%s/%s/processed", storageUrl, jobID, fileName), nil)
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to seedweedfs, %w", err)
+		return nil, fmt.Errorf("error building storage request: %w", err)
+	}
+
+	resp, err := storageClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to seedweedfs: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		if err := resp.Body.Close(); err != nil {
-			return nil, errors.New("error closing resp body")
-		}
+		_ = resp.Body.Close()
 		switch resp.StatusCode {
 		case http.StatusNotFound:
 			return nil, errors.New("video not found")
