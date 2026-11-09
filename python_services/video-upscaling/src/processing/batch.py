@@ -3,9 +3,10 @@ from time import perf_counter
 from typing import Optional
 
 import numpy as np
-import torch
 import torch.nn.functional as F
 from realesrgan import RealESRGANer
+from torch import Tensor, autocast, cat, from_numpy, no_grad, stack
+from torch.nn import Module
 
 
 def flush_and_upscale_batch(
@@ -39,15 +40,13 @@ def flush_and_upscale_batch(
     return t1 - t0, t2 - t1, len(frames)
 
 
-def _upscale_frames(
-    model: torch.nn.Module, frames_rgb: list[np.ndarray]
-) -> torch.Tensor:
+def _upscale_frames(model: Module, frames_rgb: list[np.ndarray]) -> Tensor:
     """Runs a batch of RGB frames through the upscaling model"""
-    batch = torch.from_numpy(np.stack(frames_rgb)).cuda()  # (N, H, W, 3) uint8
+    batch = from_numpy(np.stack(frames_rgb)).cuda()  # (N, H, W, 3) uint8
     batch = batch.permute(0, 3, 1, 2).half().div_(255.0)  # (N, 3, H, W) fp16
 
-    with torch.no_grad():
-        with torch.autocast(device_type="cuda"):
+    with no_grad():
+        with autocast(device_type="cuda"):
             return model(batch)  # (N, 3, out_H, out_W)
 
 
@@ -59,7 +58,7 @@ _Y_MIN, _Y_MAX = 16, 235
 _C_MIN, _C_MAX = 16, 240
 
 
-def _rgb_to_yuv420(rgb: torch.Tensor) -> list[np.ndarray]:
+def _rgb_to_yuv420(rgb: Tensor) -> list[np.ndarray]:
     """Converts a batch of RGB tensors in [0, 1] to BT.601 limited-range YUV420p,
     averaging U and V over each 2x2 block of pixels.
     """
@@ -72,11 +71,11 @@ def _rgb_to_yuv420(rgb: torch.Tensor) -> list[np.ndarray]:
 
     # limited range: Y uses 16..235, U/V use 16..240 centered on 128
     y = _Y_MIN + (_Y_MAX - _Y_MIN) * luma
-    u, v = F.avg_pool2d(torch.stack([blue_diff, red_diff], dim=1), 2).unbind(dim=1)
+    u, v = F.avg_pool2d(stack([blue_diff, red_diff], dim=1), 2).unbind(dim=1)
     u, v = (
         ((_C_MIN + _C_MAX) // 2) + (_C_MAX - _C_MIN) * u,
         ((_C_MIN + _C_MAX) // 2) + (_C_MAX - _C_MIN) * v,
     )
 
-    planar = torch.cat([y.flatten(1), u.flatten(1), v.flatten(1)], dim=1)
+    planar = cat([y.flatten(1), u.flatten(1), v.flatten(1)], dim=1)
     return list(planar.byte().cpu().numpy())
