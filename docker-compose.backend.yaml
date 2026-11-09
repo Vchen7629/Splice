@@ -7,8 +7,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     build:
-      context: ./python_services
-      dockerfile: video-upscaling/dockerfile
+      context: ./video-upscaling
+      dockerfile: dockerfile
     environment:
       - BASE_STORAGE_URL=http://host.docker.internal:8888
       - NATS_URL=nats://host.docker.internal:4222
@@ -19,20 +19,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu, video]
-  
-  scene-detector:
-    image: scene-detector:latest
-    pull_policy: never
-    ports:
-      - "127.0.0.1:9098:9098"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    build:
-      context: ./python_services
-      dockerfile: scene-detector/dockerfile
-    environment:
-      - BASE_STORAGE_URL=http://host.docker.internal:8888
-      - NATS_URL=nats://host.docker.internal:4222
   
   gateway:
     image: gateway:latest
@@ -45,7 +31,6 @@ services:
       context: ./go_services
       dockerfile: cmd/gateway/dockerfile
     environment:
-      - SCENE_DETECTOR_URL=http://scene-detector:9098
       - CHUNK_WORKER_URL=http://chunk-worker:9095
       - RECOMBINER_URL=http://recombiner:9090
       - VIDEO_UPSCALING_URL=http://video-upscaling:9101
