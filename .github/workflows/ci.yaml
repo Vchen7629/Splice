@@ -14,7 +14,6 @@ jobs:
     outputs:
         frontend: ${{ steps.changes.outputs.frontend }}
         video_upscaling: ${{ steps.changes.outputs.video_upscaling }}
-        shared_python: ${{ steps.changes.outputs.shared_python }}
         gateway: ${{ steps.changes.outputs.gateway }}
         chunkworker: ${{ steps.changes.outputs.chunkworker }}
         converter: ${{ steps.changes.outputs.converter }}
@@ -29,9 +28,7 @@ jobs:
             frontend:
               - 'frontend/**'
             video_upscaling:
-              - 'python_services/video-upscaling/**'
-            shared_python:
-              - 'python_services/shared/**'
+              - 'video-upscaling/**'
             gateway:
               - 'go_services/cmd/gateway/**'
               - 'go_services/internal/gateway/**'
@@ -105,59 +102,21 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run Linter and Formatting
         run: |
           uv run ruff check .
           uv run ruff format --check
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run Type Checking
         run: uv run pyrefly check
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run Unit/Integration Tests
         run: make test_all
-        working-directory: ./python_services/video-upscaling
-
-  shared-python-ci:
-    needs: path-filter
-    if: ${{ github.event_name == 'pull_request' && needs.path-filter.outputs.shared_python == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.8.19"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install the project
-        run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/shared
-
-      - name: Run Linter and Formatting
-        run: |
-          uv run ruff check .
-          uv run ruff format --check
-        working-directory: ./python_services/shared
-
-      - name: Run Type Checking
-        run: uv run pyrefly check
-        working-directory: ./python_services/shared
-
-      - name: Run Unit/Integration Tests
-        run: make test_all
-        working-directory: ./python_services/shared
+        working-directory: ./video-upscaling
 
   gateway-ci:
     needs: path-filter
