@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from src.processing.batch import (
+from processing.batch import (
     _rgb_to_yuv420,
     _upscale_frames,
     flush_and_upscale_batch,
@@ -54,8 +54,8 @@ def _run_flush(
     encode_queue: Queue[Optional[bytes]] = Queue()
 
     with (
-        patch("src.processing.batch._upscale_frames"),
-        patch("src.processing.batch._rgb_to_yuv420", return_value=yuv_results),
+        patch("processing.batch._upscale_frames"),
+        patch("processing.batch._rgb_to_yuv420", return_value=yuv_results),
     ):
         timing = flush_and_upscale_batch(MagicMock(), frames, encode_queue)
 
@@ -138,8 +138,8 @@ def test_flush_and_process_batch_passes_upscaled_frames_to_yuv_conversion() -> N
     frames = [_make_rgb_frame(1, 0, 0)]
 
     with (
-        patch("src.processing.batch._upscale_frames") as mock_upscale,
-        patch("src.processing.batch._rgb_to_yuv420", return_value=[b"x"]) as mock_yuv,
+        patch("processing.batch._upscale_frames") as mock_upscale,
+        patch("processing.batch._rgb_to_yuv420", return_value=[b"x"]) as mock_yuv,
     ):
         flush_and_upscale_batch(mock_upsampler, frames, Queue())
 

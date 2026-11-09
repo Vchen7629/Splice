@@ -3,7 +3,7 @@ from threading import Event
 from typing import Optional
 from unittest.mock import MagicMock
 
-from src.processing.worker import encoder_worker
+from processing.worker import encoder_worker
 
 
 def _make_encoder(has_stdin: bool = True) -> MagicMock:

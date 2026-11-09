@@ -1,46 +1,28 @@
 import subprocess
 from pathlib import Path
 from threading import Event
-from unittest.mock import MagicMock
 
 import pytest
-import torch
-from realesrgan import RealESRGANer
 
-from src.processing.video import (
-    TEMP_ROOT,
-    _extract_video_info,
-    _load_model,
-    _video_decoder,
-    _video_encoder,
-    recombine_video_audio,
-    video_downscale,
-    video_upscale,
-)
-from tests.fixtures.processing_helpers import TEST_VIDEO
+from core import output_dir
+from processing.ffmpeg import _extract_video_info
+from processing.video import recombine_video_audio, video_downscale, video_upscale
+from tests.fixtures.processing import TEST_VIDEO, WEIGHTS_DIR, requires_cuda
 
-MOCK_CANCEL_EVENT = MagicMock(spec=Event)
-MOCK_CANCEL_EVENT.is_set.return_value = False
-WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
-
-requires_cuda = pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="CUDA not available"
-)
+# video_upscale always scales the encoder output to target_res
+UPSCALE_CASES = [
+    ("realesr-animevideov3.pth", 4, "2160p", 2160),
+    ("RealESRGANv2-animevideo-xsx2.pth", 2, "1440p", 1440),
+]
 
 
 @pytest.fixture()
 def recombined_video(one_frame_video: Path, tmp_path: Path) -> Path:
     """Place 1-frame clip at the job-scoped noaudio path, recombine with original audio."""
-    noaudio = Path(f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4")
+    noaudio = Path(f"{output_dir('job_id1')}/upscaled_noaudio.mp4")
     noaudio.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(one_frame_video),
-            str(noaudio),
-        ],
+        ["ffmpeg", "-y", "-i", str(one_frame_video), str(noaudio)],
         check=True,
         stderr=subprocess.DEVNULL,
     )
@@ -49,19 +31,10 @@ def recombined_video(one_frame_video: Path, tmp_path: Path) -> Path:
     return output
 
 
-def test_extract_video_info_returns_correct_info() -> None:
-    w, h, fps, nb_frames = _extract_video_info(str(TEST_VIDEO))
-
-    assert w == 1280
-    assert h == 720
-    assert abs(fps - 23.976) < 0.01
-    assert nb_frames == 360
-
-
 @pytest.mark.parametrize("target_res", ["480p", "360p"])
 def test_video_downscale_produces_output_file(target_res: str, tmp_path: Path) -> None:
     output = str(tmp_path / f"out_{target_res}.mp4")
-    video_downscale(MOCK_CANCEL_EVENT, str(TEST_VIDEO), target_res, output)
+    video_downscale(Event(), str(TEST_VIDEO), target_res, output)
 
     assert Path(output).exists()
     assert Path(output).stat().st_size > 0
@@ -72,53 +45,11 @@ def test_video_downscale_output_has_correct_resolution(
     target_res: str, expected_h: int, tmp_path: Path
 ) -> None:
     output = str(tmp_path / f"out_{target_res}.mp4")
-    video_downscale(MOCK_CANCEL_EVENT, str(TEST_VIDEO), target_res, output)
+    video_downscale(Event(), str(TEST_VIDEO), target_res, output)
 
     _, h, _, _ = _extract_video_info(output)
 
     assert h == expected_h
-
-
-def test__video_decoder_reads_correct_frame_size(one_frame_video: Path) -> None:
-    w, h, _, _ = _extract_video_info(str(one_frame_video))
-    frame_bytes = w * h * 3  # rgb24
-
-    decoder = _video_decoder(str(one_frame_video))
-    assert decoder.stdout is not None
-
-    raw = decoder.stdout.read(frame_bytes)
-    decoder.stdout.close()
-    decoder.wait()
-
-    assert len(raw) == frame_bytes
-
-
-def test__video_decoder_returns_non_empty_frame(one_frame_video: Path) -> None:
-    w, h, _, _ = _extract_video_info(str(one_frame_video))
-    frame_bytes = w * h * 3
-
-    decoder = _video_decoder(str(one_frame_video))
-    assert decoder.stdout is not None
-
-    raw = decoder.stdout.read(frame_bytes)
-    decoder.stdout.close()
-    decoder.wait()
-
-    assert any(b != 0 for b in raw)
-
-
-def test__video_encoder_scales_to_target_resolution(tmp_path: Path) -> None:
-    in_w, in_h = 1280, 720
-    output = tmp_path / "encoded.mp4"
-
-    encoder = _video_encoder(24.0, in_w, in_h, str(output), "480p")
-    assert encoder.stdin is not None
-    encoder.stdin.write(bytes(in_w * in_h * 3 // 2))  # one yuv420p frame
-    encoder.stdin.close()
-    assert encoder.wait() == 0
-
-    _, out_h, _, _ = _extract_video_info(str(output))
-    assert out_h == 480
 
 
 def test_recombine_video_audio_produces_output_file(recombined_video: Path) -> None:
@@ -147,21 +78,20 @@ def test_recombine_video_audio_output_has_audio_stream(recombined_video: Path) -
 
 
 @requires_cuda
-@pytest.mark.parametrize(
-    "filename,scale",
-    [
-        ("realesr-animevideov3.pth", 4),
-        ("RealESRGANv2-animevideo-xsx2.pth", 2),
-    ],
-)
+@pytest.mark.parametrize("filename,scale,target_res,expected_h", UPSCALE_CASES)
 def test_video_upscale_produces_output_file(
-    one_frame_video: Path, filename: str, scale: int
+    one_frame_video: Path, filename: str, scale: int, target_res: str, expected_h: int
 ) -> None:
-    output = Path(f"{TEMP_ROOT}/output/jobid1/upscaled_noaudio.mp4")
+    output = Path(f"{output_dir('jobid1')}/upscaled_noaudio.mp4")
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.unlink(missing_ok=True)
+
     video_upscale(
-        MOCK_CANCEL_EVENT, "jobid1", str(one_frame_video), WEIGHTS_DIR / filename, scale
+        Event(),
+        "jobid1",
+        str(one_frame_video),
+        WEIGHTS_DIR / filename,
+        scale,
+        target_res,
     )
 
     assert output.exists()
@@ -169,93 +99,21 @@ def test_video_upscale_produces_output_file(
 
 
 @requires_cuda
-@pytest.mark.parametrize(
-    "filename,scale",
-    [
-        ("realesr-animevideov3.pth", 4),
-        ("RealESRGANv2-animevideo-xsx2.pth", 2),
-    ],
-)
-def test_video_upscale_output_has_correct_resolution(
-    one_frame_video: Path, filename: str, scale: int
+@pytest.mark.parametrize("filename,scale,target_res,expected_h", UPSCALE_CASES)
+def test_video_upscale_output_has_target_resolution(
+    one_frame_video: Path, filename: str, scale: int, target_res: str, expected_h: int
 ) -> None:
-    src_w, src_h, _, _ = _extract_video_info(str(one_frame_video))
-    output = f"{TEMP_ROOT}/output/job_id1/upscaled_noaudio.mp4"
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    Path(output).unlink(missing_ok=True)
+    output = Path(f"{output_dir('job_id1')}/upscaled_noaudio.mp4")
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     video_upscale(
-        MOCK_CANCEL_EVENT,
+        Event(),
         "job_id1",
         str(one_frame_video),
         WEIGHTS_DIR / filename,
         scale,
+        target_res,
     )
 
-    out_w, out_h, _, _ = _extract_video_info(output)
-    assert out_w == src_w * scale
-    assert out_h == src_h * scale
-
-
-WEIGHTS_DIR = Path(__file__).parent.parent.parent / "src" / "weights"
-
-requires_cuda = pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="CUDA not available"
-)
-
-
-@pytest.mark.parametrize(
-    "filename,scale",
-    [
-        ("realesr-animevideov3.pth", 4),
-        ("RealESRGANv2-animevideo-xsx2.pth", 2),
-    ],
-)
-@requires_cuda
-def test_load_model_returns_realesrganer(filename: str, scale: int) -> None:
-    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
-
-    assert isinstance(result, RealESRGANer)
-
-
-@pytest.mark.parametrize(
-    "filename,scale",
-    [
-        ("realesr-animevideov3.pth", 4),
-        ("RealESRGANv2-animevideo-xsx2.pth", 2),
-    ],
-)
-@requires_cuda
-def test_load_model_scale_matches(filename: str, scale: int) -> None:
-    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
-
-    assert result.scale == scale
-
-
-@pytest.mark.parametrize(
-    "filename,scale",
-    [
-        ("realesr-animevideov3.pth", 4),
-        ("RealESRGANv2-animevideo-xsx2.pth", 2),
-    ],
-)
-@requires_cuda
-def test_load_model_is_half_precision(filename: str, scale: int) -> None:
-    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
-
-    param = next(result.model.parameters())
-    assert param.dtype == torch.float16
-
-
-@pytest.mark.parametrize(
-    "filename,scale",
-    [
-        ("realesr-animevideov3.pth", 4),
-        ("RealESRGANv2-animevideo-xsx2.pth", 2),
-    ],
-)
-@requires_cuda
-def test_load_model_tile_disabled(filename: str, scale: int) -> None:
-    result = _load_model(WEIGHTS_DIR / filename, scale=scale)
-
-    assert result.tile_size == 0
+    _, out_h, _, _ = _extract_video_info(str(output))
+    assert out_h == expected_h

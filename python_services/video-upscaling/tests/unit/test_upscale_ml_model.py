@@ -1,6 +1,38 @@
+from pathlib import Path
+from typing import Any, Generator
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from src.utils import Resolution, select_model
+from processing.upscale_ml_model import Resolution, _load_model, select_model
+
+
+@pytest.fixture
+def mock_deps() -> Generator[dict[str, Any], Any, None]:
+    mock_net = MagicMock()
+    mock_net.half.return_value = mock_net
+
+    mock_upsampler = MagicMock()
+    mock_upsampler.model = mock_net
+
+    with (
+        patch(
+            "processing.upscale_ml_model.SRVGGNetCompact", return_value=mock_net
+        ) as mock_srvgg,
+        patch(
+            "processing.upscale_ml_model.RealESRGANer", return_value=mock_upsampler
+        ) as mock_realesrgan,
+        patch(
+            "processing.upscale_ml_model.compile", return_value=MagicMock()
+        ) as mock_compile,
+    ):
+        yield {
+            "srvgg": mock_srvgg,
+            "realesrgan": mock_realesrgan,
+            "compile": mock_compile,
+            "net": mock_net,
+            "upsampler": mock_upsampler,
+        }
 
 
 @pytest.mark.parametrize(
@@ -101,3 +133,74 @@ def test_select_model_returned_path_exists(source: str, target: str) -> None:
     assert result is not None
     model_path, _ = result
     assert model_path.exists()
+
+
+@pytest.mark.parametrize("scale", [1, 3, 8])
+def test_load_model_invalid_scale_raises(mock_deps: dict[str, Any], scale: int) -> None:
+    with pytest.raises(ValueError, match="scale must be either 2 or 4"):
+        _load_model(Path("model.pth"), scale=scale)
+
+
+@pytest.mark.parametrize("scale", [2, 4])
+def test_load_model_valid_scale_does_not_raise(
+    mock_deps: dict[str, Any], scale: int
+) -> None:
+    _load_model(Path("model.pth"), scale=scale)
+
+
+@pytest.mark.parametrize("scale", [2, 4])
+def test_load_model_srvgg_constructed_with_correct_params(
+    mock_deps: dict[str, Any], scale: int
+) -> None:
+    _load_model(Path("model.pth"), scale=scale)
+
+    mock_deps["srvgg"].assert_called_once_with(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_conv=16,
+        upscale=scale,
+        act_type="prelu",
+    )
+
+
+@pytest.mark.parametrize("scale", [2, 4])
+def test_load_model_realesrganer_constructed_with_correct_params(
+    mock_deps: dict[str, Any], scale: int
+) -> None:
+    model_path = Path("/some/path/model.pth")
+    _load_model(model_path, scale=scale)
+
+    mock_deps["realesrgan"].assert_called_once_with(
+        scale=scale,
+        model_path=str(model_path),
+        model=mock_deps["net"],
+        tile=0,
+        tile_pad=10,
+        pre_pad=0,
+        device="cuda",
+    )
+
+
+def test_load_model_model_converted_to_half_precision(
+    mock_deps: dict[str, Any],
+) -> None:
+    _load_model(Path("model.pth"), scale=2)
+
+    mock_deps["net"].half.assert_called_once()
+
+
+def test_load_model_torch_compile_called_with_reduce_overhead(
+    mock_deps: dict[str, Any],
+) -> None:
+    _load_model(Path("model.pth"), scale=2)
+
+    mock_deps["compile"].assert_called_once_with(
+        mock_deps["net"], mode="reduce-overhead"
+    )
+
+
+def test_load_model_returns_upsampler(mock_deps: dict[str, Any]) -> None:
+    result = _load_model(Path("model.pth"), scale=2)
+
+    assert result is mock_deps["upsampler"]
