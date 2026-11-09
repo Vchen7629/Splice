@@ -33,10 +33,10 @@ jobs:
 
       - name: Install video-upscaling project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./video-upscaling
+        working-directory: video-upscaling
 
       - name: Run video-upscaling coverage
-        working-directory: ./video-upscaling
+        working-directory: video-upscaling
         run: make coverage
 
       - name: Install shared-python project
