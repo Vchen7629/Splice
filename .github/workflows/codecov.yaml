@@ -33,18 +33,10 @@ jobs:
 
       - name: Install video-upscaling project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run video-upscaling coverage
-        working-directory: ./python_services/video-upscaling
-        run: make coverage
-
-      - name: Install shared-python project
-        run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/shared
-
-      - name: Run shared-python coverage
-        working-directory: ./python_services/shared
+        working-directory: ./video-upscaling
         run: make coverage
 
       - uses: actions/setup-go@v6
@@ -85,8 +77,7 @@ jobs:
             ./go_services/cmd/converter/coverage.out,
             ./go_services/cmd/recombiner/coverage.out,
             ./go_services/cmd/shared/coverage.out,
-            ./python_services/video-upscaling/coverage.xml,
-            ./python_services/shared/coverage.xml,
+            ./video-upscaling/coverage.xml,
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
