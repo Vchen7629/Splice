@@ -29,7 +29,7 @@ jobs:
             frontend:
               - 'frontend/**'
             video_upscaling:
-              - 'python_services/video-upscaling/**'
+              - 'video-upscaling/**'
             shared_python:
               - 'python_services/shared/**'
             gateway:
@@ -105,21 +105,21 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run Linter and Formatting
         run: |
           uv run ruff check .
           uv run ruff format --check
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run Type Checking
         run: uv run pyrefly check
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
       - name: Run Unit/Integration Tests
         run: make test_all
-        working-directory: ./python_services/video-upscaling
+        working-directory: ./video-upscaling
 
   shared-python-ci:
     needs: path-filter
