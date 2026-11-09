@@ -1,5 +1,5 @@
-# build from python_services/:
-#   docker build -f video-upscaling/dockerfile -t video-upscaler .
+# build from video-upscaling folder:
+#   docker build -f dockerfile -t video-upscaler .
 # Running the docker container needs us to override the Base storage url
 #   docker run \
 #   -p 9101:9101 \
@@ -20,9 +20,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-COPY video-upscaling/pyproject.toml video-upscaling/uv.lock ./
-
-COPY video-upscaling/pyproject.toml video-upscaling/uv.lock ./
+COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
@@ -40,7 +38,7 @@ RUN useradd --create-home --uid 1000 app
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
-COPY video-upscaling/src ./src
+COPY src ./src
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH=/app/src \
