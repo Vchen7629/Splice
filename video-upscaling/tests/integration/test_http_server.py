@@ -5,12 +5,12 @@ from typing import Generator
 
 import pytest
 
-from health import start_health_server
+from http_server import start_http_server
 
 
 @pytest.fixture
 def live_http_server() -> Generator[str, None, None]:
-    server = start_health_server(0)
+    server = start_http_server(0)
     port = server.server_address[1]
     yield f"http://localhost:{port}"
     server.shutdown()

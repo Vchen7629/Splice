@@ -26,11 +26,11 @@ async def test_run_service_drains_nats_on_exit(service_patches: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_service_shuts_down_health_server_on_exit(
+async def test_run_service_shuts_down_http_server_on_exit(
     service_patches: Any,
 ) -> None:
     with (
-        patch("main.start_health_server") as mock_health,
+        patch("main.start_http_server") as mock_health,
         patch("main.consumer", new_callable=AsyncMock),
     ):
         mock_server = MagicMock()
@@ -41,11 +41,11 @@ async def test_run_service_shuts_down_health_server_on_exit(
 
 
 @pytest.mark.asyncio
-async def test_health_server_shutdown_called_even_if_consumer_raises(
+async def test_http_server_shutdown_called_even_if_consumer_raises(
     service_patches: Any,
 ) -> None:
     with (
-        patch("main.start_health_server") as mock_health,
+        patch("main.start_http_server") as mock_health,
         patch(
             "main.consumer", new_callable=AsyncMock, side_effect=RuntimeError("boom")
         ),
@@ -104,7 +104,7 @@ async def test_raises_on_startup_failure(
     mock_nc, mock_js = service_patches
     setup_js(mock_js)
 
-    with patch("main.start_health_server") as mock_health:
+    with patch("main.start_http_server") as mock_health:
         mock_server = MagicMock()
         mock_health.return_value = mock_server
 

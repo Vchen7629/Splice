@@ -2,10 +2,11 @@ from asyncio import to_thread
 from os import makedirs, path
 from pathlib import Path
 from threading import Event
+from time import perf_counter
 
 from structlog.stdlib import BoundLogger
 
-from core import output_dir, settings
+from core import JOB_DURATION, JOBS_TOTAL, JobCancelledError, output_dir, settings
 from msgbus import (
     JobContext,
     ProcessJobMessage,
@@ -30,20 +31,33 @@ async def job_orchestrator(
     logger: BoundLogger,
 ) -> None:
     """Fetch the source video, upscale/downscale it to target resolution, upload result and pub completion"""
-    src_path = await to_thread(fetch_video, job.storage_url)
-    logger.debug("fetched unprocessed video", job_id=job.job_id, saved_to=src_path)
+    start = perf_counter()
+    try:
+        src_path = await to_thread(fetch_video, job.storage_url)
+        logger.debug("fetched unprocessed video", job_id=job.job_id, saved_to=src_path)
 
-    makedirs(output_dir(job.job_id), exist_ok=True)
+        makedirs(output_dir(job.job_id), exist_ok=True)
 
-    model = select_model(job.source_resolution, target_res=job.target_resolution)
-    if model is None:
-        output_path = await _downscale_job(ctx, job, src_path, cancel_event, logger)
-    else:
-        output_path = await _upscale(ctx, job, src_path, model, cancel_event, logger)
+        model = select_model(job.source_resolution, target_res=job.target_resolution)
+        if model is None:
+            output_path = await _downscale_job(ctx, job, src_path, cancel_event, logger)
+        else:
+            output_path = await _upscale(
+                ctx, job, src_path, model, cancel_event, logger
+            )
 
-    storage_url = f"{settings.BASE_STORAGE_URL}/{job.job_id}/output.mp4/processed"
-    await to_thread(upload_video, storage_url, job.job_id, output_path)
-    await publisher(ctx.js, UpscaleCompleteMsg(job_id=job.job_id))
+        storage_url = f"{settings.BASE_STORAGE_URL}/{job.job_id}/output.mp4/processed"
+        await to_thread(upload_video, storage_url, job.job_id, output_path)
+        await publisher(ctx.js, UpscaleCompleteMsg(job_id=job.job_id))
+    except JobCancelledError:
+        JOBS_TOTAL.labels(status="cancelled").inc()
+        raise
+    except Exception:
+        JOBS_TOTAL.labels(status="failure").inc()
+        raise
+
+    JOB_DURATION.observe(perf_counter() - start)
+    JOBS_TOTAL.labels(status="success").inc()
 
 
 async def _upscale(

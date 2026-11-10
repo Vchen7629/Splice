@@ -14,6 +14,7 @@ dependencies = [
     "torchvision",
     "pydantic-settings>=2.13.1",
     "types-requests>=2.33.0.20260408",
+    "prometheus-client>=0.26.0",
 ]
 
 [tool.uv.sources]
