@@ -120,7 +120,7 @@ func denoiseVideo(filePath, denoiseQuality, chunkName string) (string, error) {
 		"ffmpeg",
 		"-rw_timeout", videoFetchTimeout, "-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
 		"-protocol_whitelist", "http,https,tcp,tls", "-f", "matroska", "-i", filePath,
-		"-vf", filterStrength + ",crop=trunc(iw/2)*2:trunc(ih/2)*2",
+		"-vf", filterStrength+",crop=trunc(iw/2)*2:trunc(ih/2)*2",
 		"-c:v", "libx264",
 		"-crf", "18",
 		"-an", "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-video_track_timescale", "90000",
