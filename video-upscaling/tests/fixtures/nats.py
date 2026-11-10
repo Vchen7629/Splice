@@ -78,7 +78,7 @@ def _patch_main_startup(nc: Any, js: Any) -> Generator[None, None, None]:
     """Patches main's storage health check, health server and NATS connection"""
     with (
         patch("main.check_storage_health"),
-        patch("main.start_health_server"),
+        patch("main.start_http_server"),
         patch("main.nats_connect", return_value=(nc, js)),
     ):
         yield

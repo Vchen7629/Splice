@@ -5,12 +5,13 @@ from typing import Any
 from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
+from prometheus_client.parser import text_string_to_metric_families
 
-from health import HealthEnpointHandler, start_health_server
+from http_server import HTTPHandler, start_http_server
 
 
 def make_handler(path: str) -> MagicMock:
-    handler = create_autospec(HealthEnpointHandler, instance=True)
+    handler = create_autospec(HTTPHandler, instance=True)
     handler.path = path
     handler.wfile = MagicMock()
     return handler
@@ -24,11 +25,11 @@ def make_handler(path: str) -> MagicMock:
     ],
     ids=["health", "not_found"],
 )
-def test_endpoint(
+def test_health_and_none_endpoint(
     path: str, expected_status: int, expected_body: dict[str, Any] | None
 ) -> None:
     handler = make_handler(path)
-    HealthEnpointHandler.do_GET(handler)
+    HTTPHandler.do_GET(handler)
 
     handler.send_response.assert_called_once_with(expected_status)
     handler.end_headers.assert_called_once()
@@ -39,7 +40,19 @@ def test_endpoint(
         handler.wfile.write.assert_not_called()
 
 
-def test_start_health_server() -> None:
+def test_metrics_endpoint() -> None:
+    handler = make_handler("/metrics")
+    HTTPHandler.do_GET(handler)
+
+    handler.send_response.assert_called_once_with(200)
+    handler.end_headers.assert_called_once()
+
+    body = handler.wfile.write.call_args[0][0].decode()
+    families = list(text_string_to_metric_families(body))
+    assert families  # parses as valid exposition format
+
+
+def test_start_http_server() -> None:
     mock_server = MagicMock(spec=ThreadingHTTPServer)
     real_thread_cls = threading.Thread
     created_threads: list[MagicMock] = []
@@ -52,10 +65,10 @@ def test_start_health_server() -> None:
         return t
 
     with (
-        patch("health.ThreadingHTTPServer", return_value=mock_server),
-        patch("health.threading.Thread", side_effect=capture_thread),
+        patch("http_server.ThreadingHTTPServer", return_value=mock_server),
+        patch("http_server.threading.Thread", side_effect=capture_thread),
     ):
-        result = start_health_server(9099)
+        result = start_http_server(9099)
 
     assert result is mock_server
     assert captured_kwargs[0].get("daemon") is True

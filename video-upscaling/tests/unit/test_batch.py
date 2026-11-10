@@ -49,7 +49,7 @@ def _upscale_with_passthrough_model(frames: list[np.ndarray]) -> torch.Tensor:
 
 def _run_flush(
     frames: list[np.ndarray], yuv_results: list[bytes]
-) -> tuple[tuple[float, float, int], Queue[Optional[bytes]]]:
+) -> Queue[Optional[bytes]]:
     """Run flush_and_process_batch with the model and yuv conversion mocked, returning (timing, queue)."""
     encode_queue: Queue[Optional[bytes]] = Queue()
 
@@ -57,9 +57,9 @@ def _run_flush(
         patch("processing.batch._upscale_frames"),
         patch("processing.batch._rgb_to_yuv420", return_value=yuv_results),
     ):
-        timing = flush_and_upscale_batch(MagicMock(), frames, encode_queue)
+        flush_and_upscale_batch(MagicMock(), frames, encode_queue)
 
-    return timing, encode_queue
+    return encode_queue
 
 
 def test_upscale_frames_model_input_is_nchw_fp16() -> None:
@@ -124,11 +124,10 @@ def test_rgb_to_yuv420_clamps_out_of_range_input(value: float) -> None:
     assert 16 <= v.min() and v.max() <= 240
 
 
-def test_flush_and_process_batch_enqueues_all_results_and_returns_frame_count() -> None:
+def test_flush_and_process_batch_enqueues_all_results() -> None:
     fake_results = [b"a", b"b", b"c"]
-    (_, _, count), queue = _run_flush([_make_rgb_frame(1, 0, 0)] * 3, fake_results)
+    queue = _run_flush([_make_rgb_frame(1, 0, 0)] * 3, fake_results)
 
-    assert count == 3
     assert [queue.get_nowait() for _ in range(3)] == fake_results
     assert queue.empty()
 
