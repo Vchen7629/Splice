@@ -1,5 +1,4 @@
 from queue import Queue
-from time import perf_counter
 from typing import Optional
 
 import numpy as np
@@ -13,7 +12,7 @@ def flush_and_upscale_batch(
     upsampler: RealESRGANer,
     frames: list[np.ndarray],
     encode_queue: Queue[Optional[np.ndarray]],
-) -> tuple[float, float, int]:
+) -> None:
     """
     Runs one batch of frames through GPU model and queues the results for encoding
     1. Calls infer_batch to send the batch of raw frames through the upscaler model
@@ -23,21 +22,12 @@ def flush_and_upscale_batch(
         upsampler: the upscaling model
         frames: list containing the batch of unupscaled video frames to process
         encode_queue: the queue that upscaled images are written to
-
-    Returns:
-        a tuple containing timing metrics and frame count for processing stats
     """
-    t0 = perf_counter()
     upscaled = _upscale_frames(upsampler.model, frames)
     results = _rgb_to_yuv420(upscaled)
 
-    t1 = perf_counter()
     for r in results:
         encode_queue.put(r)
-
-    t2 = perf_counter()
-
-    return t1 - t0, t2 - t1, len(frames)
 
 
 def _upscale_frames(model: Module, frames_rgb: list[np.ndarray]) -> Tensor:

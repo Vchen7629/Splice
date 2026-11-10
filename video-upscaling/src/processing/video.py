@@ -3,12 +3,10 @@ from typing import Optional, Callable
 from pathlib import Path
 from queue import Queue
 from subprocess import CalledProcessError, DEVNULL, PIPE, Popen, TimeoutExpired
-from time import perf_counter
 
 from core import settings, JobCancelledError, output_dir
 from .batch import flush_and_upscale_batch
 from .ffmpeg import kill_on_deadline, _probe_duration_s, _parse_out_time_s, _video_encoder, _video_decoder, _extract_video_info
-from .metrics import log_timing
 from .upscale_ml_model import _load_model, Resolution
 from .worker import encoder_worker
 
@@ -56,9 +54,7 @@ def video_upscale(
             raise Exception("encoder failed")
         
     frame_bytes = h * w * 3
-    t_read = t_infer = t_enq = 0.0
     n_frames = 0
-    n_batches = 0
     pending: list[np.ndarray] = []
 
     with kill_on_deadline([decoder, encoder], timeout_s, cancel_event) as timed_out:
@@ -66,13 +62,10 @@ def video_upscale(
             while True:
                 # check for cancel and stop and cleanup before running any processing
                 raise_if_interrupted()
-
-                t0 = perf_counter()
                 if not decoder.stdout:
                     break
 
                 raw = decoder.stdout.read(frame_bytes)
-                t_read += perf_counter() - t0
                 if len(raw) < frame_bytes:
                     break
 
@@ -80,11 +73,8 @@ def video_upscale(
                 pending.append(rgb)
 
                 if len(pending) == settings.BATCH_SIZE:
-                    dt_infer, dt_enq, n = flush_and_upscale_batch(upsampler, pending, encode_queue)
-                    t_infer += dt_infer
-                    t_enq += dt_enq
-                    n_frames += n
-                    n_batches += 1
+                    flush_and_upscale_batch(upsampler, pending, encode_queue)
+                    n_frames += len(pending)
 
                     if on_progress is not None:
                         pct = min(99, int(n_frames / total_frames * 100))
@@ -95,25 +85,17 @@ def video_upscale(
             raise_if_interrupted()
 
             if pending:
-                dt_infer, dt_enq, n = flush_and_upscale_batch(upsampler, pending, encode_queue)
-                t_infer += dt_infer
-                t_enq += dt_enq
-                n_frames += n
-                n_batches += 1
+                flush_and_upscale_batch(upsampler, pending, encode_queue)
+                n_frames += len(pending)
         except BaseException:
             # kill so the encoder thread's join doesn't wait on ffmpeg finalizing a partial file
             encoder.kill()
             raise
         finally:
-            t_enc_start = perf_counter()
             encode_queue.put(None)
             encoder_thread.join()
 
         raise_if_interrupted()
-            
-    t_enc = perf_counter() - t_enc_start
-
-    log_timing(t_read, t_infer, t_enq, t_enc, n_frames, n_batches)
 
 
 def video_downscale(
