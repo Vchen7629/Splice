@@ -1,9 +1,9 @@
-import asyncio
+from asyncio import run as asyncio_run
 
 from nats.js.api import ConsumerConfig
 
 from core import get_logger, settings
-from health import start_health_server
+from http_server import start_http_server
 from job import job_orchestrator
 from msgbus import (
     JobContext,
@@ -24,7 +24,7 @@ async def run_service() -> None:
     the processed kv and starts the consumer poll loop. ALso handles graceful shutdown
     """
     check_storage_health(logger)
-    health_server = start_health_server(settings.HTTP_PORT)
+    http_server = start_http_server(settings.HTTP_PORT)
 
     nc, js = await nats_connect(logger)
 
@@ -48,11 +48,11 @@ async def run_service() -> None:
 
         await consumer(ctx, sub, msg_processed_kv, logger, job_orchestrator)
     finally:
-        health_server.shutdown()
+        http_server.shutdown()
         if not nc.is_closed:
             await nc.drain()
 
 
 if __name__ == "__main__":
     logger.debug("starting service")
-    asyncio.run(run_service())
+    asyncio_run(run_service())
