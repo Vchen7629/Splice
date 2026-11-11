@@ -4,6 +4,7 @@ package chunkworker
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,8 @@ import (
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,8 +41,9 @@ func videoHeight(t *testing.T, path string) int {
 }
 
 func TestProcessChunk(t *testing.T) {
+	emptyMetrics := NewMetrics(prometheus.NewRegistry())
 	t.Run("unknown chunk operation returns error", func(t *testing.T) {
-		outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"})
+		outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"}, emptyMetrics)
 
 		require.Error(t, err)
 		assert.Empty(t, outputPath)
@@ -51,11 +55,41 @@ func TestProcessChunk(t *testing.T) {
 			JobID:      "job-404",
 			Operation:  "transcode",
 			StorageURL: test.NotFoundStorageURL(t) + "/job-404/video_chunk_0000.mkv",
-		})
+		}, emptyMetrics)
 
 		require.ErrorIs(t, err, storage.ErrNotFound)
 		assert.Empty(t, outputPath)
 	})
+
+	metricCounterTests := []struct {
+		name, operation  string
+		stubErr          error
+		success, failure float64
+	}{
+		{"transcode success", "transcode", nil, 1, 0},
+		{"transcode failure", "transcode", errors.New("boom"), 0, 1},
+		{"denoise success", "denoise", nil, 1, 0},
+		{"denoise failure", "denoise", errors.New("boom"), 0, 1},
+	}
+
+	for _, tc := range metricCounterTests {
+		t.Run(tc.name+" updates counter", func(t *testing.T) {
+			m := NewMetrics(prometheus.NewRegistry())
+			stub := func(_, _, _ string) (string, error) { return "out.mp4", tc.stubErr }
+			transcodeVideoFn, denoiseVideoFn = stub, stub
+			t.Cleanup(func() { transcodeVideoFn, denoiseVideoFn = transcodeVideo, denoiseVideo })
+			counters := map[string]*prometheus.CounterVec{"transcode": m.transcodeCount, "denoise": m.denoiseCount}
+
+			_, err := processChunk(pipeline.VideoChunkMessage{
+				Operation: tc.operation, DenoiseQuality: "light",
+				StorageURL: test.ServeTestChunks(t, 1) + "/chunk.mkv",
+			}, m)
+
+			assert.Equal(t, tc.stubErr, err)
+			assert.Equal(t, tc.success, testutil.ToFloat64(counters[tc.operation].WithLabelValues("success")))
+			assert.Equal(t, tc.failure, testutil.ToFloat64(counters[tc.operation].WithLabelValues("failure")))
+		})
+	}
 }
 
 func TestTranscodeVideo(t *testing.T) {

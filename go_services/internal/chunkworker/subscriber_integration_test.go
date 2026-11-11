@@ -21,6 +21,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
@@ -83,6 +84,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestConsumeVideoChunkI(t *testing.T) {
+	tempMetrics := NewMetrics(prometheus.NewRegistry())
 	t.Run("consumer is created with correct config", func(t *testing.T) {
 		ctx := context.Background()
 		js, nc := test.SetupNats(t)
@@ -90,7 +92,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		stream, err := js.Stream(ctx, "jobs")
@@ -111,7 +113,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		received := make(chan struct{}, 1)
@@ -147,7 +149,7 @@ func TestConsumeVideoChunkI(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
@@ -167,109 +169,110 @@ func TestConsumeVideoChunkI(t *testing.T) {
 			t.Fatal("timed out waiting for chunk complete message")
 		}
 	})
-}
 
-func TestConsumeVideoChunkPublishesProgress(t *testing.T) {
-	js, nc := test.SetupNats(t)
-	kv := test.SetupKV(t, js, "chunk-processed")
-	claimKV := test.SetupKV(t, js, "chunk-claims")
-	jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
+	t.Run("publishes progress", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-	jobID := "job-progress"
-	cleanupTestTempFolders(t, jobID+"-0")
-	cleanupTestTempFolders(t, jobID+"-1")
+		jobID := "job-progress"
+		cleanupTestTempFolders(t, jobID+"-0")
+		cleanupTestTempFolders(t, jobID+"-1")
 
-	storageURL0 := test.ServeTestChunks(t, 5) + "/chunk.mkv" // slow
-	storageURL1 := test.ServeTestChunks(t, 1) + "/chunk.mkv" // fast
+		storageURL0 := test.ServeTestChunks(t, 5) + "/chunk.mkv" // slow
+		storageURL1 := test.ServeTestChunks(t, 1) + "/chunk.mkv" // fast
 
-	// simulate 2 competing workers on same durable consumer
-	for range 2 {
-		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		// simulate 2 competing workers on same durable consumer
+		for range 2 {
+			_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
+			require.NoError(t, err)
+		}
+
+		var mu sync.Mutex
+		var percents []int
+		reached100 := make(chan struct{}, 1)
+		progressSub, err := nc.Subscribe(fmt.Sprintf("progress.%s", jobID), func(m *nats.Msg) {
+			var progress pipeline.ProgressMessage
+			if json.Unmarshal(m.Data, &progress) != nil {
+				return
+			}
+			if progress.Stage != "chunk-worker" {
+				t.Errorf("expected stage chunk-worker, got %q", progress.Stage)
+			}
+			mu.Lock()
+			percents = append(percents, progress.Progress)
+			mu.Unlock()
+			if progress.Progress == 100 {
+				reached100 <- struct{}{}
+			}
+		})
 		require.NoError(t, err)
-	}
+		t.Cleanup(func() { _ = progressSub.Unsubscribe() })
 
-	var mu sync.Mutex
-	var percents []int
-	reached100 := make(chan struct{}, 1)
-	progressSub, err := nc.Subscribe(fmt.Sprintf("progress.%s", jobID), func(m *nats.Msg) {
-		var progress pipeline.ProgressMessage
-		if json.Unmarshal(m.Data, &progress) != nil {
-			return
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 2,
+			StorageURL: storageURL0, TargetResolution: "480p", Operation: "transcode",
+		})
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 1}, TotalChunks: 2,
+			StorageURL: storageURL1, TargetResolution: "480p", Operation: "transcode",
+		})
+
+		select {
+		case <-reached100:
+		case <-time.After(30 * time.Second):
+			t.Fatalf("progress.%s never reached 100", jobID)
 		}
-		if progress.Stage != "chunk-worker" {
-			t.Errorf("expected stage chunk-worker, got %q", progress.Stage)
-		}
+
 		mu.Lock()
-		percents = append(percents, progress.Progress)
-		mu.Unlock()
-		if progress.Progress == 100 {
-			reached100 <- struct{}{}
+		defer mu.Unlock()
+		assert.True(t, sort.IntsAreSorted(percents), "progress must be monotonically non-decreasing under concurrent chunk completion, got %v", percents)
+	})
+
+	t.Run("Retry after completion doesn't regress milestone", func(t *testing.T) {
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js, "chunk-processed")
+		claimKV := test.SetupKV(t, js, "chunk-claims")
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
+
+		jobID := "job-late-chunk-after-complete"
+		cleanupTestTempFolders(t, jobID+"-0")
+
+		completeStatus, err := json.Marshal(struct {
+			State string `json:"state"`
+		}{State: "COMPLETE"})
+		require.NoError(t, err)
+		completeRevision, err := jobMilestoneKV.Put(context.Background(), jobID, completeStatus)
+		require.NoError(t, err)
+
+		// unreachable storage fails the CheckExists in processChunk, causing a nak
+		storageURL := "http://localhost:1/" + jobID + "/chunk.mkv"
+
+		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
+		require.NoError(t, err)
+
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
+		})
+
+		assertNacked(t, js, "expected message to be nacked")
+
+		entry, err := jobMilestoneKV.Get(context.Background(), jobID)
+		require.NoError(t, err)
+
+		var status struct {
+			State string `json:"state"`
 		}
+		require.NoError(t, json.Unmarshal(entry.Value(), &status))
+		assert.Equal(t, "COMPLETE", status.State, "processing a chunk after job completion must not regress the milestone")
+		assert.Equal(t, completeRevision, entry.Revision(), "AdvanceMilestone must not write at all once the milestone is terminal")
 	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = progressSub.Unsubscribe() })
-
-	publishVideoChunk(t, js, pipeline.VideoChunkMessage{
-		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 2,
-		StorageURL: storageURL0, TargetResolution: "480p", Operation: "transcode",
-	})
-	publishVideoChunk(t, js, pipeline.VideoChunkMessage{
-		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 1}, TotalChunks: 2,
-		StorageURL: storageURL1, TargetResolution: "480p", Operation: "transcode",
-	})
-
-	select {
-	case <-reached100:
-	case <-time.After(30 * time.Second):
-		t.Fatalf("progress.%s never reached 100", jobID)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	assert.True(t, sort.IntsAreSorted(percents), "progress must be monotonically non-decreasing under concurrent chunk completion, got %v", percents)
-}
-
-func TestConsumeVideoChunk_RetryAfterCompletionDoesNotRegressMilestone(t *testing.T) {
-	js, nc := test.SetupNats(t)
-	kv := test.SetupKV(t, js, "chunk-processed")
-	claimKV := test.SetupKV(t, js, "chunk-claims")
-	jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
-
-	jobID := "job-late-chunk-after-complete"
-	cleanupTestTempFolders(t, jobID+"-0")
-
-	completeStatus, err := json.Marshal(struct {
-		State string `json:"state"`
-	}{State: "COMPLETE"})
-	require.NoError(t, err)
-	completeRevision, err := jobMilestoneKV.Put(context.Background(), jobID, completeStatus)
-	require.NoError(t, err)
-
-	// unreachable storage fails the CheckExists in processChunk, causing a nak
-	storageURL := "http://localhost:1/" + jobID + "/chunk.mkv"
-
-	_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
-	require.NoError(t, err)
-
-	publishVideoChunk(t, js, pipeline.VideoChunkMessage{
-		ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-		StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
-	})
-
-	assertNacked(t, js, "expected message to be nacked")
-
-	entry, err := jobMilestoneKV.Get(context.Background(), jobID)
-	require.NoError(t, err)
-
-	var status struct {
-		State string `json:"state"`
-	}
-	require.NoError(t, json.Unmarshal(entry.Value(), &status))
-	assert.Equal(t, "COMPLETE", status.State, "processing a chunk after job completion must not regress the milestone")
-	assert.Equal(t, completeRevision, entry.Revision(), "AdvanceMilestone must not write at all once the milestone is terminal")
 }
 
 func TestConsumeVideoChunk(t *testing.T) {
+	tempMetrics := NewMetrics(prometheus.NewRegistry())
 	t.Run("save failure naks for redelivery", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
@@ -280,7 +283,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk("http://localhost:1", nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk("http://localhost:1", nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
@@ -323,7 +326,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
@@ -333,74 +336,7 @@ func TestConsumeVideoChunk(t *testing.T) {
 
 		assertNacked(t, js, "expected message to be nacked after publish failure")
 	})
-}
 
-func TestConsumeVideoChunkCleanup(t *testing.T) {
-	seedAndConsume := func(t *testing.T, jobID string) (jetstream.JetStream, <-chan struct{}) {
-		t.Helper()
-		js, nc := test.SetupNats(t)
-		kv := test.SetupKV(t, js, "chunk-processed")
-
-		storageURL := test.ServeTestChunks(t, 1) + "/chunk.mkv"
-		claimKV := test.SetupKV(t, js, "chunk-claims")
-		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
-
-		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
-		require.NoError(t, err)
-
-		received := make(chan struct{}, 1)
-		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) { received <- struct{}{} })
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sub.Unsubscribe() })
-
-		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
-			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
-			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
-		})
-
-		return js, received
-	}
-
-	tests := []struct {
-		name       string
-		jobID      string
-		failOnCall int
-	}{
-		{"removeAll error on processed dir logs warn and returns", "job-cleanup-processed-err", 1},
-		{"removeAll error on denoise processed dir logs warn and returns", "job-cleanup-denoise-err", 2},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cleanupTestTempFolders(t, tc.jobID+"-0")
-			t.Cleanup(func() { removeAll = os.RemoveAll })
-
-			calls := 0
-			removeAll = func(path string) error {
-				if !strings.Contains(path, tc.jobID) {
-					return os.RemoveAll(path)
-				}
-				calls++
-				if calls == tc.failOnCall {
-					return errors.New("remove failed")
-				}
-				return os.RemoveAll(path)
-			}
-
-			_, received := seedAndConsume(t, tc.jobID)
-
-			select {
-			case <-received:
-			case <-time.After(30 * time.Second):
-				t.Fatal("timed out waiting for chunk complete message")
-			}
-			time.Sleep(500 * time.Millisecond)
-			assert.Equal(t, 2, calls)
-		})
-	}
-}
-
-func TestConsumeVideoChunkIdempotency(t *testing.T) {
 	t.Run("already processed chunk is acked and skipped", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 		kv := test.SetupKV(t, js, "chunk-processed")
@@ -418,7 +354,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
@@ -444,7 +380,7 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		claimKV := test.SetupKV(t, js, "chunk-claims")
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
-		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
@@ -501,9 +437,9 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		const ackWait = 2 * time.Second // short ackWait so test doesnt take forever
 
 		// Two workers sharing same durable consumer to simulate two scaled out chunk-worker instances
-		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
-		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger())
+		_, err = ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, ackWait, test.SilentLogger(), tempMetrics)
 		require.NoError(t, err)
 
 		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
@@ -526,4 +462,67 @@ func TestConsumeVideoChunkIdempotency(t *testing.T) {
 		assert.Equal(t, int32(1), atomic.LoadInt32(&calls), "chunk should only be transcoded once despite redelivery")
 		assert.Len(t, received, 0, "unexpected duplicate chunk-complete publish")
 	})
+
+	seedAndConsume := func(t *testing.T, jobID string) (jetstream.JetStream, <-chan struct{}) {
+		t.Helper()
+		js, nc := test.SetupNats(t)
+		kv := test.SetupKV(t, js, "chunk-processed")
+
+		storageURL := test.ServeTestChunks(t, 1) + "/chunk.mkv"
+		claimKV := test.SetupKV(t, js, "chunk-claims")
+		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
+
+		_, err := ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, 30*time.Second, test.SilentLogger(), tempMetrics)
+		require.NoError(t, err)
+
+		received := make(chan struct{}, 1)
+		sub, err := nc.Subscribe("jobs.chunks.complete", func(_ *nats.Msg) { received <- struct{}{} })
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sub.Unsubscribe() })
+
+		publishVideoChunk(t, js, pipeline.VideoChunkMessage{
+			ChunkRef: pipeline.ChunkRef{JobID: jobID, ChunkIndex: 0}, TotalChunks: 1,
+			StorageURL: storageURL, TargetResolution: "480p", Operation: "transcode",
+		})
+
+		return js, received
+	}
+
+	tests := []struct {
+		name       string
+		jobID      string
+		failOnCall int
+	}{
+		{"removeAll error on processed dir logs warn and returns", "job-cleanup-processed-err", 1},
+		{"removeAll error on denoise processed dir logs warn and returns", "job-cleanup-denoise-err", 2},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanupTestTempFolders(t, tc.jobID+"-0")
+			t.Cleanup(func() { removeAll = os.RemoveAll })
+
+			calls := 0
+			removeAll = func(path string) error {
+				if !strings.Contains(path, tc.jobID) {
+					return os.RemoveAll(path)
+				}
+				calls++
+				if calls == tc.failOnCall {
+					return errors.New("remove failed")
+				}
+				return os.RemoveAll(path)
+			}
+
+			_, received := seedAndConsume(t, tc.jobID)
+
+			select {
+			case <-received:
+			case <-time.After(30 * time.Second):
+				t.Fatal("timed out waiting for chunk complete message")
+			}
+			time.Sleep(500 * time.Millisecond)
+			assert.Equal(t, 2, calls)
+		})
+	}
 }

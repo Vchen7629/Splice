@@ -37,8 +37,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
-
 	logger := service.StructuredLogger(cfg.ProdMode, "video-recombiner")
+	r := service.NewPrometheusRegistry()
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -53,10 +53,9 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	err = service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
+	if err := service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
 		return recombiner.RecombineVideo(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, cfg.BaseStorageURL)
-	}, quit)
-	if err != nil {
+	}, r, quit); err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
 }

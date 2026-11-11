@@ -9,7 +9,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/storage"
 )
@@ -54,14 +53,8 @@ type StartConsumer func() (jetstream.ConsumeContext, error)
 // starts the service health http server, starts the processing loop
 // and handles cleanup when quit is reached
 // used by chunk-worker and recombiner
-func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, quit <-chan os.Signal) error {
+func Run(logger *slog.Logger, httpPort string, nc ncDrainer, start StartConsumer, reg *prometheus.Registry, quit <-chan os.Signal) error {
 	logger.Debug("starting service")
-
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(
-		collectors.NewGoCollector(),
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-	)
 
 	server := StartHttpServer(reg, logger, httpPort)
 

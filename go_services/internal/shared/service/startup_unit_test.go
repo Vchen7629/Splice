@@ -14,16 +14,16 @@ import (
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConnect(t *testing.T) {
-	logger := test.SilentLogger()
 	t.Run("storage unreachable returns error", func(t *testing.T) {
 		cfg := service.BaseConfig{BaseStorageURL: "http://localhost:1", NatsURL: "nats://localhost:1"}
 
-		nc, js, err := service.Connect(logger, cfg)
+		nc, js, err := service.Connect(test.SilentLogger(), cfg)
 
 		require.Error(t, err)
 		assert.Nil(t, nc)
@@ -36,7 +36,7 @@ func TestConnect(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		nc, _, err := service.Connect(logger, service.BaseConfig{BaseStorageURL: srv.URL, NatsURL: "nats://localhost:1"})
+		nc, _, err := service.Connect(test.SilentLogger(), service.BaseConfig{BaseStorageURL: srv.URL, NatsURL: "nats://localhost:1"})
 
 		require.Error(t, err)
 		assert.Nil(t, nc)
@@ -52,11 +52,12 @@ func okStart() (service.StartConsumer, *test.MockConsumeCtx) {
 func failStart() (jetstream.ConsumeContext, error) { return nil, assert.AnError }
 
 func TestRun(t *testing.T) {
+	tempReg := prometheus.NewRegistry()
 	t.Run("consumer setup error returns error", func(t *testing.T) {
 		nc := &test.MockDrainer{}
 		quit := make(chan os.Signal, 1)
 
-		err := service.Run(test.SilentLogger(), "0", nc, failStart, quit)
+		err := service.Run(test.SilentLogger(), "0", nc, failStart, tempReg, quit)
 
 		require.ErrorIs(t, err, assert.AnError)
 		assert.False(t, nc.DrainCalled, "Drain should not be called if consumer setup fails")
@@ -68,7 +69,7 @@ func TestRun(t *testing.T) {
 		start, _ := okStart()
 
 		go func() {
-			done <- service.Run(test.SilentLogger(), "0", &test.MockDrainer{}, start, quit)
+			done <- service.Run(test.SilentLogger(), "0", &test.MockDrainer{}, start, tempReg, quit)
 		}()
 
 		select {
@@ -92,7 +93,7 @@ func TestRun(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, service.Run(test.SilentLogger(), "0", &test.MockDrainer{}, start, quit))
+		require.NoError(t, service.Run(test.SilentLogger(), "0", &test.MockDrainer{}, start, tempReg, quit))
 
 		assert.True(t, consCtx.Stopped)
 	})
@@ -103,7 +104,7 @@ func TestRun(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		require.NoError(t, service.Run(test.SilentLogger(), "0", nc, start, quit))
+		require.NoError(t, service.Run(test.SilentLogger(), "0", nc, start, tempReg, quit))
 
 		assert.True(t, nc.DrainCalled)
 	})
@@ -114,7 +115,7 @@ func TestRun(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		quit <- os.Interrupt
 
-		err := service.Run(test.SilentLogger(), "0", nc, start, quit)
+		err := service.Run(test.SilentLogger(), "0", nc, start, tempReg, quit)
 
 		assert.ErrorIs(t, err, assert.AnError)
 	})
@@ -123,7 +124,7 @@ func TestRun(t *testing.T) {
 		port := test.FreePort(t)
 		quit := make(chan os.Signal, 1)
 
-		service.Run(test.SilentLogger(), port, &test.MockDrainer{}, failStart, quit) //nolint:errcheck
+		service.Run(test.SilentLogger(), port, &test.MockDrainer{}, failStart, tempReg, quit) //nolint:errcheck
 
 		// If server was properly shut down, the port should be free to bind again.
 		ln, err := net.Listen("tcp", ":"+port)
