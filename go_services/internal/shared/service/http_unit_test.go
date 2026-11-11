@@ -43,11 +43,15 @@ func TestMetricsRoute(t *testing.T) {
 }
 
 // non-GET on /health is rejected by the method-scoped route
-func TestHealthRouteRejectsPost(t *testing.T) {
+func TestRouteRejectsPost(t *testing.T) {
 	mux := newMux(prometheus.NewRegistry(), test.SilentLogger())
 
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/health", nil))
+	for _, endpoint := range []string{"/health", "/metrics"} {
+		t.Run(endpoint, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, endpoint, nil))
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+			assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+		})
+	}
 }

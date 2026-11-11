@@ -26,7 +26,7 @@ func newMux(reg *prometheus.Registry, logger *slog.Logger) *http.ServeMux {
 			logger.Error("failed to encode health status msg", "err", err)
 		}
 	})
-	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	mux.Handle("GET /metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	return mux
 }
