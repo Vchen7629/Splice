@@ -42,19 +42,19 @@ func StartHttpServer(reg *prometheus.Registry, logger *slog.Logger, httpPort str
 		IdleTimeout:       60 * time.Second,
 	}
 
-	ListenAndServeAsync(server, logger)
+	ListenAndServeAsync(server, logger, osExit)
 
 	return server
 }
 
 // starts provided http server in goroutine, calling exit(1) if it fails to listen
-func ListenAndServeAsync(server *http.Server, logger *slog.Logger) {
+func ListenAndServeAsync(server *http.Server, logger *slog.Logger, exit func(int)) {
 	go func() {
 		fmt.Printf("server running on http://localhost%s\n", server.Addr)
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("http server error", "err", err)
-			osExit(1)
+			exit(1)
 		}
 	}()
 }
