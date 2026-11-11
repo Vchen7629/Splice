@@ -81,7 +81,7 @@ func StartHttpApi(
 		WriteTimeout:      15 * time.Minute,
 	}
 
-	service.StartHttpServer(server, logger, osExit)
+	service.ListenAndServeAsync(server, logger)
 
 	return server
 }
