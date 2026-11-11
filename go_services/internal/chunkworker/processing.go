@@ -17,6 +17,7 @@ import (
 const downloadTimeout = 30 * time.Second
 
 var transcodeVideoFn = transcodeVideo
+var denoiseVideoFn = denoiseVideo
 
 // process a video chunk from nats msg. Fetches the chunk -> transcods it. returns the outputPath and the error
 func processChunk(payload pipeline.VideoChunkMessage, m *metrics) (string, error) {
@@ -51,7 +52,7 @@ func processChunk(payload pipeline.VideoChunkMessage, m *metrics) (string, error
 	}
 
 	sd := time.Now()
-	outputPath, err := denoiseVideo(payload.StorageURL, payload.DenoiseQuality, chunkName)
+	outputPath, err := denoiseVideoFn(payload.StorageURL, payload.DenoiseQuality, chunkName)
 	if err != nil {
 		m.denoiseCount.WithLabelValues("failure").Inc()
 		return "", err
