@@ -12,8 +12,6 @@ import (
 	"splice.com/go_services/internal/shared/service"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 // so tests can patch this to decide when to terminate
@@ -29,12 +27,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(
-		collectors.NewGoCollector(),
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-	)
-
 	logger := service.StructuredLogger(cfg.ProdMode, "format-converter")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
