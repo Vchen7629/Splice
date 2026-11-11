@@ -19,6 +19,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
@@ -37,6 +38,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestRecombinerServiceI(t *testing.T) {
+	tempReg := prometheus.NewRegistry()
 	t.Run("no stream returns error", func(t *testing.T) {
 		js, nc := test.SetupNats(t)
 
@@ -46,7 +48,7 @@ func TestRecombinerServiceI(t *testing.T) {
 		quit := make(chan os.Signal, 1)
 		err = service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
 			return recombiner.RecombineVideo(js, nc, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, chunkAckWait, test.SilentLogger(), sharedFilerURL)
-		}, quit)
+		}, tempReg, quit)
 
 		assert.Error(t, err)
 	})
@@ -87,7 +89,7 @@ func TestRecombinerServiceI(t *testing.T) {
 		go func() {
 			done <- service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
 				return recombiner.RecombineVideo(js, nc, kv, jobStatusKV, claimKV, chunkAckWait, test.SilentLogger(), sharedFilerURL)
-			}, quit)
+			}, tempReg, quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)

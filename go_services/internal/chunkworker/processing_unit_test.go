@@ -16,6 +16,7 @@ import (
 	"splice.com/go_services/internal/shared/storage"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,8 +39,9 @@ func videoHeight(t *testing.T, path string) int {
 }
 
 func TestProcessChunk(t *testing.T) {
+	emptyMetrics := NewMetrics(prometheus.NewRegistry())
 	t.Run("unknown chunk operation returns error", func(t *testing.T) {
-		outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"})
+		outputPath, err := processChunk(pipeline.VideoChunkMessage{Operation: "Unknown"}, emptyMetrics)
 
 		require.Error(t, err)
 		assert.Empty(t, outputPath)
@@ -51,7 +53,7 @@ func TestProcessChunk(t *testing.T) {
 			JobID:      "job-404",
 			Operation:  "transcode",
 			StorageURL: test.NotFoundStorageURL(t) + "/job-404/video_chunk_0000.mkv",
-		})
+		}, emptyMetrics)
 
 		require.ErrorIs(t, err, storage.ErrNotFound)
 		assert.Empty(t, outputPath)

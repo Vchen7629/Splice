@@ -12,6 +12,7 @@ import (
 	"splice.com/go_services/internal/shared/test"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,7 +63,7 @@ func TestRunI(t *testing.T) {
 		done := make(chan error, 1)
 
 		go func() {
-			done <- service.Run(test.SilentLogger(), "0", nc, start, quit)
+			done <- service.Run(test.SilentLogger(), "0", nc, start, prometheus.NewRegistry(), quit)
 		}()
 
 		time.Sleep(200 * time.Millisecond)

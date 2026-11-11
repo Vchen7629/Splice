@@ -16,6 +16,7 @@ import (
 	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +34,7 @@ func validPayload(t *testing.T, jobID string) []byte {
 }
 
 func TestConsumeVideoChunkU(t *testing.T) {
-
+	tempMetrics := NewMetrics(prometheus.NewRegistry())
 	t.Run("successful chunk processing writes the processed kv key", func(t *testing.T) {
 		const jobID = "job-abc"
 		const chunkIndex = 2
@@ -81,7 +82,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 
 		_, err = ConsumeVideoChunk(
 			storageSrv.URL, &test.MockDrainer{}, js, processedKV, &test.MockKV{}, &test.MockKV{},
-			30*time.Second, test.SilentLogger(),
+			30*time.Second, test.SilentLogger(), tempMetrics,
 		)
 		require.NoError(t, err)
 
@@ -97,7 +98,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		_, err := ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.NakCalled)
@@ -119,7 +120,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 			GetValue: []byte(`{"state":"PROCESSING","stage":"chunk-worker"}`),
 		}
 
-		_, err = ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, milestoneKV, &test.MockKV{}, 30*time.Second, test.SilentLogger())
+		_, err = ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, milestoneKV, &test.MockKV{}, 30*time.Second, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)
@@ -135,7 +136,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetFound: true}
 
-		_, err := ConsumeVideoChunk("http://storage", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk("http://storage", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
@@ -149,7 +150,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		processedKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := ConsumeVideoChunk("http://storage", nil, js, processedKV, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk("http://storage", nil, js, processedKV, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.NakCalled)
@@ -169,7 +170,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{}
 
-		_, _ = ConsumeVideoChunk("http://localhost:1", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger())
+		_, _ = ConsumeVideoChunk("http://localhost:1", nil, js, kv, &test.MockKV{}, &test.MockKV{}, 30*time.Second, test.SilentLogger(), tempMetrics)
 
 		assert.Empty(t, kv.PutKey, "kv.Put should not be called when processing fails")
 	})
@@ -187,7 +188,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 		}
 		claimKV := &test.MockKV{}
 
-		_, err := ConsumeVideoChunk("http://storage", nil, js, processedKV, jobMilestoneKV, claimKV, 15*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk("http://storage", nil, js, processedKV, jobMilestoneKV, claimKV, 15*time.Second, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)
@@ -206,7 +207,7 @@ func TestConsumeVideoChunkU(t *testing.T) {
 			GetValue: []byte(`{"state":"CANCELLED","stage":"chunk-worker"}`),
 		}
 
-		_, err := ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, 15*time.Second, test.SilentLogger())
+		_, err := ConsumeVideoChunk("http://storage", nil, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, 15*time.Second, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)

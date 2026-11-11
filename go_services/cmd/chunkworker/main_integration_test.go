@@ -19,6 +19,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	natstc "github.com/testcontainers/testcontainers-go/modules/nats"
@@ -37,6 +38,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestChunkWorkerServiceI(t *testing.T) {
+	tempReg := prometheus.NewRegistry()
+	tempMetrics := chunkworker.NewMetrics(tempReg)
 	t.Run("full flow receives transcode message and publishes downstream", func(t *testing.T) {
 		if _, err := exec.LookPath("ffmpeg"); err != nil {
 			t.Skip("ffmpeg not available")
@@ -66,8 +69,8 @@ func TestChunkWorkerServiceI(t *testing.T) {
 
 		go func() {
 			done <- service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
-				return chunkworker.ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, chunkAckWait, test.SilentLogger())
-			}, quit)
+				return chunkworker.ConsumeVideoChunk(sharedFilerURL, nc, js, kv, jobMilestoneKV, claimKV, chunkAckWait, test.SilentLogger(), tempMetrics)
+			}, tempReg, quit)
 		}()
 
 		time.Sleep(500 * time.Millisecond)
@@ -126,8 +129,8 @@ func TestChunkWorkerServiceI(t *testing.T) {
 		jobMilestoneKV := test.SetupJobMilestoneKV(t, js)
 
 		err = service.Run(test.SilentLogger(), "0", nc, func() (jetstream.ConsumeContext, error) {
-			return chunkworker.ConsumeVideoChunk(sharedFilerURL, nc, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, chunkAckWait, test.SilentLogger())
-		}, quit)
+			return chunkworker.ConsumeVideoChunk(sharedFilerURL, nc, js, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, chunkAckWait, test.SilentLogger(), tempMetrics)
+		}, tempReg, quit)
 
 		assert.Error(t, err)
 	})
