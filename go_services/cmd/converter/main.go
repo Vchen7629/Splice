@@ -27,7 +27,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
-
 	logger := service.StructuredLogger(cfg.ProdMode, "format-converter")
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
