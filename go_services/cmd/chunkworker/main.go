@@ -38,8 +38,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config values: %v", err)
 	}
-
 	logger := service.StructuredLogger(cfg.ProdMode, "chunk-worker")
+	r := service.NewPrometheusRegistry()
+	m := chunkworker.NewMetrics(r)
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -55,8 +56,8 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	err = service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
-		return chunkworker.ConsumeVideoChunk(cfg.BaseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger)
-	}, quit)
+		return chunkworker.ConsumeVideoChunk(cfg.BaseStorageURL, nc, js, processedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, m)
+	}, r, quit)
 	if err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}
