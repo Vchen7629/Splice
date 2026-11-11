@@ -25,7 +25,7 @@ var removeAll = os.RemoveAll
 func ConsumeVideoChunk(
 	baseStorageURL string, nc pipeline.Publisher,
 	js jetstream.JetStream, processedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
-	ackWait time.Duration, logger *slog.Logger,
+	ackWait time.Duration, logger *slog.Logger, m *metrics,
 ) (jetstream.ConsumeContext, error) {
 	return msgbus.ConsumeDurable(js, msgbus.ConsumerConfig{
 		Subject:       subSubject,
@@ -69,7 +69,7 @@ func ConsumeVideoChunk(
 				return false
 			}
 
-			outputPath, err := processChunk(payload)
+			outputPath, err := processChunk(payload, m)
 			if errors.Is(err, storage.ErrNotFound) {
 				if failErr := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{
 					State: pipeline.StateFailed,

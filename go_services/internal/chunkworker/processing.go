@@ -19,7 +19,7 @@ const downloadTimeout = 30 * time.Second
 var transcodeVideoFn = transcodeVideo
 
 // process a video chunk from nats msg. Fetches the chunk -> transcods it. returns the outputPath and the error
-func processChunk(payload pipeline.VideoChunkMessage) (string, error) {
+func processChunk(payload pipeline.VideoChunkMessage, m *metrics) (string, error) {
 	chunkName := fmt.Sprintf("%s-%d", payload.JobID, payload.ChunkIndex)
 
 	switch payload.Operation {
@@ -39,17 +39,25 @@ func processChunk(payload pipeline.VideoChunkMessage) (string, error) {
 	}
 
 	if payload.Operation == "transcode" {
+		st := time.Now()
 		outputPath, err := transcodeVideoFn(payload.StorageURL, payload.TargetResolution, chunkName)
 		if err != nil {
+			m.transcodeCount.WithLabelValues("failure").Inc()
 			return "", err
 		}
+		m.transcodeLatency.Observe(time.Since(st).Seconds())
+		m.transcodeCount.WithLabelValues("success").Inc()
 		return outputPath, nil
 	}
 
+	sd := time.Now()
 	outputPath, err := denoiseVideo(payload.StorageURL, payload.DenoiseQuality, chunkName)
 	if err != nil {
+		m.denoiseCount.WithLabelValues("failure").Inc()
 		return "", err
 	}
+	m.denoiseLatency.Observe(time.Since(sd).Seconds())
+	m.denoiseCount.WithLabelValues("success").Inc()
 
 	return outputPath, nil
 }
