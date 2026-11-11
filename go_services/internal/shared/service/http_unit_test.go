@@ -1,48 +1,53 @@
 //go:build unit
 
-package service_test
+package service
 
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 
-	"splice.com/go_services/internal/shared/service"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // health endpoint returns healthy status
-func TestStartHealthHttpServer(t *testing.T) {
-	port := test.FreePort(t)
-	server := service.StartHealthHttpServer(test.SilentLogger(), port)
-	t.Cleanup(func() { service.ShutdownHttpServer(server, test.SilentLogger()) })
+func TestHealthRoute(t *testing.T) {
+	mux := newMux(prometheus.NewRegistry(), test.SilentLogger())
 
-	time.Sleep(50 * time.Millisecond)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 
-	resp, err := http.Get("http://localhost:" + port + "/health")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var body map[string]string
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
 	assert.Equal(t, "Healthy", body["status"])
 }
 
-// server stops accepting connections after shutdown
-func TestShutdownHttpServer(t *testing.T) {
-	t.Skip()
-	port := test.FreePort(t)
-	server := service.StartHealthHttpServer(test.SilentLogger(), port)
-	time.Sleep(50 * time.Millisecond)
+func TestMetricsRoute(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector())
+	mux := newMux(reg, test.SilentLogger())
 
-	service.ShutdownHttpServer(server, test.SilentLogger())
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 
-	_, err := http.Get("http://localhost:" + port + "/health")
-	assert.Error(t, err, "server should no longer accept connections after shutdown")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "go_goroutines")
+}
+
+// non-GET on /health is rejected by the method-scoped route
+func TestHealthRouteRejectsPost(t *testing.T) {
+	mux := newMux(prometheus.NewRegistry(), test.SilentLogger())
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/health", nil))
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 }
