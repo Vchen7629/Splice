@@ -28,6 +28,7 @@ func main() {
 		log.Fatalf("failed to load config values: %v", err)
 	}
 	logger := service.StructuredLogger(cfg.ProdMode, "format-converter")
+	r := service.NewPrometheusRegistry()
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -43,7 +44,7 @@ func main() {
 
 	if err := service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
 		return converter.ConsumeAndProcessVideo(cfg.BaseStorageURL, js, processedKV, jobMilestoneKV, logger)
-	}, quit); err != nil {
+	}, r, quit); err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 		osExit(1)
 	}
