@@ -39,6 +39,7 @@ func main() {
 	}
 	logger := service.StructuredLogger(cfg.ProdMode, "video-recombiner")
 	r := service.NewPrometheusRegistry()
+	m := recombiner.NewMetrics(r)
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -54,7 +55,7 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	if err := service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
-		return recombiner.RecombineVideo(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, cfg.BaseStorageURL)
+		return recombiner.RecombineVideo(js, nc, msgRecievedKV, jobMilestoneKV, claimKV, chunkAckWait, logger, m, cfg.BaseStorageURL)
 	}, r, quit); err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 	}

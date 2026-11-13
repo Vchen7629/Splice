@@ -12,6 +12,7 @@ import (
 	"splice.com/go_services/internal/shared/pipeline"
 	"splice.com/go_services/internal/shared/test"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,6 +33,7 @@ func validPayload(t *testing.T, jobID string) []byte {
 func TestRecombineVideo(t *testing.T) {
 	streamNameErr := errors.New("no stream")
 	streamErr := errors.New("stream error")
+	tempMetrics := recombiner.NewMetrics(prometheus.NewRegistry())
 
 	returnErrorTests := []struct {
 		name    string
@@ -52,7 +54,7 @@ func TestRecombineVideo(t *testing.T) {
 
 	for _, tc := range returnErrorTests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := recombiner.RecombineVideo(tc.js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+			_, err := recombiner.RecombineVideo(tc.js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, "http://storage")
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.wantErr)
@@ -66,7 +68,7 @@ func TestRecombineVideo(t *testing.T) {
 		consumer := &test.MockConsumerWithMsg{Msg: msg}
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 
-		consCtx, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		consCtx, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -88,7 +90,7 @@ func TestRecombineVideo(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{}
 
-		consCtx, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		consCtx, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, t.TempDir())
 
 		require.NoError(t, err)
 		assert.NotNil(t, consCtx)
@@ -106,7 +108,7 @@ func TestRecombineVideo(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		jobMilestoneKV := &test.MockKV{}
 
-		_, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		_, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, t.TempDir())
 
 		require.NoError(t, err)
 		assert.Empty(t, jobMilestoneKV.CreateKey, "milestone should not be written until triggering chunk arrives")
@@ -125,7 +127,7 @@ func TestRecombineVideo(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		jobMilestoneKV := &test.MockKV{}
 
-		_, err = recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		_, err = recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, t.TempDir())
 
 		require.NoError(t, err)
 		assert.Equal(t, "job-1", jobMilestoneKV.CreateKey)
@@ -146,7 +148,7 @@ func TestRecombineVideo(t *testing.T) {
 			GetValue: []byte(`{"state":"PROCESSING","stage":"video-recombiner"}`),
 		}
 
-		_, err = recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), t.TempDir())
+		_, err = recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, t.TempDir())
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)
@@ -162,7 +164,7 @@ func TestRecombineVideo(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		kv := &test.MockKV{GetFound: true}
 
-		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, kv, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, "http://storage")
 
 		require.NoError(t, err)
 		assert.True(t, msg.AckCalled)
@@ -176,7 +178,7 @@ func TestRecombineVideo(t *testing.T) {
 		js := &test.MockJS{JStream: &test.MockStream{Cons: consumer}}
 		processedKV := &test.MockKV{GetErr: errors.New("kv unavailable")}
 
-		_, err := recombiner.RecombineVideo(js, nil, processedKV, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, processedKV, &test.MockKV{}, &test.MockKV{}, ackWaitU, test.SilentLogger(), tempMetrics, "http://storage")
 
 		require.NoError(t, err)
 		assert.True(t, msg.NakCalled)
@@ -195,7 +197,7 @@ func TestRecombineVideo(t *testing.T) {
 		}
 		claimKV := &test.MockKV{}
 
-		_, err := recombiner.RecombineVideo(js, nil, processedKV, jobMilestoneKV, claimKV, 15*time.Second, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, processedKV, jobMilestoneKV, claimKV, 15*time.Second, test.SilentLogger(), tempMetrics, "http://storage")
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)
@@ -214,7 +216,7 @@ func TestRecombineVideo(t *testing.T) {
 			GetValue: []byte(`{"state":"CANCELLED","stage":"recombiner"}`),
 		}
 
-		_, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, 15*time.Second, test.SilentLogger(), "http://storage")
+		_, err := recombiner.RecombineVideo(js, nil, &test.MockKV{}, jobMilestoneKV, &test.MockKV{}, 15*time.Second, test.SilentLogger(), tempMetrics, "http://storage")
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)

@@ -7,11 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"splice.com/go_services/internal/recombiner"
 	"strconv"
 	"strings"
 	"testing"
 
+	"splice.com/go_services/internal/recombiner"
+
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,6 +53,7 @@ func videoDuration(t *testing.T, path string) float64 {
 
 func TestCombineChunks(t *testing.T) {
 	var AudioVideoOffset float64 = 100.10
+	tempMetrics := recombiner.NewMetrics(prometheus.NewRegistry())
 	t.Run("produces output file", func(t *testing.T) {
 		chunkDir := t.TempDir()
 		t.Cleanup(func() { os.RemoveAll("/tmp/jobs/job-full") })
@@ -60,7 +63,7 @@ func TestCombineChunks(t *testing.T) {
 		makeVideoChunk(t, chunk0, 1)
 		makeVideoChunk(t, chunk1, 1)
 
-		outputPath, err := recombiner.CombineChunks("job-full", "", AudioVideoOffset, map[int]string{0: chunk0, 1: chunk1}, nil)
+		outputPath, err := recombiner.CombineChunks("job-full", "", AudioVideoOffset, map[int]string{0: chunk0, 1: chunk1}, nil, tempMetrics)
 
 		require.NoError(t, err)
 		info, statErr := os.Stat(outputPath)
@@ -75,7 +78,7 @@ func TestCombineChunks(t *testing.T) {
 		chunk0 := filepath.Join(chunkDir, "chunk-0.mp4")
 		makeVideoChunk(t, chunk0, 1)
 
-		outputPath, err := recombiner.CombineChunks("my-job", "", AudioVideoOffset, map[int]string{0: chunk0}, nil)
+		outputPath, err := recombiner.CombineChunks("my-job", "", AudioVideoOffset, map[int]string{0: chunk0}, nil, tempMetrics)
 
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/jobs/my-job/output.mp4", outputPath)
@@ -88,7 +91,7 @@ func TestCombineChunks(t *testing.T) {
 		chunk0 := filepath.Join(chunkDir, "only-chunk.mp4")
 		makeVideoChunk(t, chunk0, 1)
 
-		outputPath, err := recombiner.CombineChunks("job-single", "", AudioVideoOffset, map[int]string{0: chunk0}, nil)
+		outputPath, err := recombiner.CombineChunks("job-single", "", AudioVideoOffset, map[int]string{0: chunk0}, nil, tempMetrics)
 
 		require.NoError(t, err)
 		_, statErr := os.Stat(outputPath)
@@ -110,7 +113,7 @@ func TestCombineChunks(t *testing.T) {
 			totalSeconds += float64(d)
 		}
 
-		outputPath, err := recombiner.CombineChunks("job-order", "", AudioVideoOffset, chunks, nil)
+		outputPath, err := recombiner.CombineChunks("job-order", "", AudioVideoOffset, chunks, nil, tempMetrics)
 
 		require.NoError(t, err)
 		got := videoDuration(t, outputPath)
@@ -131,7 +134,7 @@ func TestCombineChunks(t *testing.T) {
 			totalSeconds += float64(d)
 		}
 
-		outputPath, err := recombiner.CombineChunks("job-gaps", "", AudioVideoOffset, chunks, nil)
+		outputPath, err := recombiner.CombineChunks("job-gaps", "", AudioVideoOffset, chunks, nil, tempMetrics)
 
 		require.NoError(t, err)
 		got := videoDuration(t, outputPath)
@@ -152,7 +155,7 @@ func TestCombineChunks(t *testing.T) {
 			totalSeconds += float64(d)
 		}
 
-		outputPath, err := recombiner.CombineChunks("job-nonzero", "", AudioVideoOffset, chunks, nil)
+		outputPath, err := recombiner.CombineChunks("job-nonzero", "", AudioVideoOffset, chunks, nil, tempMetrics)
 
 		require.NoError(t, err)
 		got := videoDuration(t, outputPath)

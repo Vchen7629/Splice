@@ -22,7 +22,7 @@ const uploadTimeout, downloadTimeout = 30 * time.Second, 30 * time.Second
 func RecombineVideo(
 	js jetstream.JetStream, nc pipeline.Publisher,
 	msgRecievedKV, jobMilestoneKV, claimKV jetstream.KeyValue,
-	ackWait time.Duration, logger *slog.Logger, baseStorageURL string,
+	ackWait time.Duration, logger *slog.Logger, m *metrics, baseStorageURL string,
 ) (jetstream.ConsumeContext, error) {
 	return msgbus.ConsumeDurable(js, msgbus.ConsumerConfig{
 		Subject:       subSubject,
@@ -68,7 +68,7 @@ func RecombineVideo(
 				return true
 			}
 
-			outputPath, err := recombineVideoChunks(nc, jobMilestoneKV, payload, chunks, logger)
+			outputPath, err := recombineVideoChunks(nc, jobMilestoneKV, payload, chunks, logger, m)
 			if errors.Is(err, storage.ErrNotFound) {
 				if failErr := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{
 					State: pipeline.StateFailed,
@@ -145,7 +145,7 @@ func recordVideoChunkArrival(msgRecievedKV jetstream.KeyValue, payload pipeline.
 // only runs once every video chunk has been recieved and recombines it into one full video
 // returns the outputPath string and error
 func recombineVideoChunks(
-	nc pipeline.Publisher, jobMilestoneKV jetstream.KeyValue, payload pipeline.ChunkCompleteMessage, chunks map[int]string, logger *slog.Logger,
+	nc pipeline.Publisher, jobMilestoneKV jetstream.KeyValue, payload pipeline.ChunkCompleteMessage, chunks map[int]string, logger *slog.Logger, m *metrics,
 ) (string, error) {
 	if err := pipeline.AdvanceMilestone(jobMilestoneKV, payload.JobID, pipeline.JobStatus{State: "PROCESSING", Stage: "video-recombiner"}); err != nil {
 		logger.Error("failed to update job-milestones stage", "job_id", payload.JobID, "err", err)
@@ -172,7 +172,7 @@ func recombineVideoChunks(
 	}
 
 	onProgress := pipeline.NewProgressReporter(nc, payload.JobID, "video-recombiner", logger)
-	outputPath, err := CombineChunks(payload.JobID, payload.AudioURL, payload.AudioVideoOffset, localChunks, onProgress)
+	outputPath, err := CombineChunks(payload.JobID, payload.AudioURL, payload.AudioVideoOffset, localChunks, onProgress, m)
 	if err != nil {
 		logger.Error("failed to combine chunks", "job_id", payload.JobID, "err", err)
 		CleanUpTempFolders(payload.JobID, logger)
