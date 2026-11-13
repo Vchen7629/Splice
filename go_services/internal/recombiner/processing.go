@@ -108,7 +108,6 @@ func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[
 		return "", wrapFfmpegErr(err)
 	}
 	m.recombineLatency.Observe(time.Since(s).Seconds())
-	m.recombineCount.WithLabelValues("success").Inc()
 
 	if onProgress != nil {
 		onProgress(100)
