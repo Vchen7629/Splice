@@ -21,10 +21,18 @@ var (
 
 // stitches transcoded/denoise video chunks for a job into a single output video file
 // chunks is a map of chunk index -> output path, sorted by index
-func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[int]string, onProgress func(pct int), m *metrics) (string, error) {
+func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[int]string, onProgress func(pct int), m *metrics) (outputPath string, err error) {
+	defer func() {
+		status := "success"
+		if err != nil {
+			status = "failure"
+		}
+		m.recombineCount.WithLabelValues(status).Inc()
+	}()
+
 	outDir := filepath.Join("/tmp/jobs", jobID)
 
-	err := os.MkdirAll(outDir, 0755)
+	err = os.MkdirAll(outDir, 0755)
 	if err != nil {
 		return "", fmt.Errorf("create output dir error: %w", err)
 	}
@@ -60,7 +68,7 @@ func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[
 	ctx, cancel := context.WithTimeout(context.Background(), recombineChunkTimeout)
 	defer cancel()
 
-	outputPath := filepath.Join(outDir, "output.mp4")
+	outputPath = filepath.Join(outDir, "output.mp4")
 
 	videoOffset, audioOffset := max(0, -audioVideoOffset), max(0, audioVideoOffset)
 	args := []string{"-itsoffset", strconv.FormatFloat(videoOffset, 'f', 6, 64), // to handle mismatched video and audio start time
@@ -83,7 +91,6 @@ func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[
 	cmd.Stderr = &stderr
 
 	wrapFfmpegErr := func(err error) error {
-		m.recombineCount.WithLabelValues("failure").Inc()
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("ffmpeg concat timed out after %s: %w", recombineChunkTimeout, ctxErr)
 		}
