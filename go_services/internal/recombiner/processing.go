@@ -21,7 +21,7 @@ var (
 
 // stitches transcoded/denoise video chunks for a job into a single output video file
 // chunks is a map of chunk index -> output path, sorted by index
-func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[int]string, onProgress func(pct int)) (string, error) {
+func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[int]string, onProgress func(pct int), m *metrics) (string, error) {
 	outDir := filepath.Join("/tmp/jobs", jobID)
 
 	err := os.MkdirAll(outDir, 0755)
@@ -83,23 +83,25 @@ func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[
 	cmd.Stderr = &stderr
 
 	wrapFfmpegErr := func(err error) error {
+		m.recombineCount.WithLabelValues("failure").Inc()
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("ffmpeg concat timed out after %s: %w", recombineChunkTimeout, ctxErr)
 		}
 		return fmt.Errorf("ffmpeg concat error: %w\n%s", err, stderr.String())
 	}
 
-	err = cmd.Start()
-	if err != nil {
+	if err := cmd.Start(); err != nil {
 		return "", wrapFfmpegErr(err)
 	}
+	s := time.Now()
 
 	parseProgress(bufio.NewScanner(stdout), totalDurationSeconds, onProgress)
 
-	err = cmd.Wait()
-	if err != nil {
+	if err := cmd.Wait(); err != nil {
 		return "", wrapFfmpegErr(err)
 	}
+	m.recombineLatency.Observe(time.Since(s).Seconds())
+	m.recombineCount.WithLabelValues("success").Inc()
 
 	if onProgress != nil {
 		onProgress(100)
