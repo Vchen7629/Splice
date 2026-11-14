@@ -17,6 +17,7 @@ import (
 var (
 	recombineChunkTimeout = 15 * time.Minute // TODO: in the future update this to scale with video size via ffprobe
 	probeDurationTimeout  = 15 * time.Second
+	videoFetchTimeout = strconv.FormatInt(int64(30*time.Second/time.Microsecond), 10) // 30s download timeout
 )
 
 // stitches transcoded/denoise video chunks for a job into a single output video file
@@ -71,10 +72,11 @@ func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[
 	outputPath = filepath.Join(outDir, "output.mp4")
 
 	videoOffset, audioOffset := max(0, -audioVideoOffset), max(0, audioVideoOffset)
-	args := []string{"-itsoffset", strconv.FormatFloat(videoOffset, 'f', 6, 64), // to handle mismatched video and audio start time
+	args := []string{"-xerror", "-itsoffset", strconv.FormatFloat(videoOffset, 'f', 6, 64), // to handle mismatched video and audio start time
 		"-f", "concat", "-safe", "0", "-protocol_whitelist", "file,pipe", "-i", manifestPath}
 	if audioURL != "" {
-		args = append(args, "-itsoffset", strconv.FormatFloat(audioOffset, 'f', 6, 64), // to handle mismatched video and audio start time
+		args = append(args, "-rw_timeout", videoFetchTimeout, "-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
+			"-itsoffset", strconv.FormatFloat(audioOffset, 'f', 6, 64), // to handle mismatched video and audio start time
 			"-protocol_whitelist", "http,https,tcp,tls", "-i", audioURL, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac")
 	} else {
 		args = append(args, "-c", "copy")
