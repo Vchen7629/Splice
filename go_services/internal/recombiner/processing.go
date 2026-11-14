@@ -72,7 +72,7 @@ func CombineChunks(jobID, audioURL string, audioVideoOffset float64, chunks map[
 	outputPath = filepath.Join(outDir, "output.mp4")
 
 	videoOffset, audioOffset := max(0, -audioVideoOffset), max(0, audioVideoOffset)
-	args := []string{"-itsoffset", strconv.FormatFloat(videoOffset, 'f', 6, 64), // to handle mismatched video and audio start time
+	args := []string{"-xerror", "-itsoffset", strconv.FormatFloat(videoOffset, 'f', 6, 64), // to handle mismatched video and audio start time
 		"-f", "concat", "-safe", "0", "-protocol_whitelist", "file,pipe", "-i", manifestPath}
 	if audioURL != "" {
 		args = append(args, "-rw_timeout", videoFetchTimeout, "-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_on_http_error", "5xx", "-reconnect_delay_max", "10",
