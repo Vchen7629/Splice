@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"splice.com/go_services/internal/converter"
@@ -16,6 +17,7 @@ import (
 )
 
 func TestConsumeAndProcessVideo(t *testing.T) {
+	tempMetrics := converter.NewMetrics(prometheus.NewRegistry())
 	validPayload, err := json.Marshal(pipeline.VideoJobMessage{
 		JobID: "job-1", StorageURL: "http://localhost:1/job-1/clip.mp4", TargetFormat: "mp4",
 	})
@@ -42,7 +44,7 @@ func TestConsumeAndProcessVideo(t *testing.T) {
 			js := &test.MockJS{JStream: &test.MockStream{Cons: &test.MockConsumerWithMsg{Msg: msg}}}
 
 			_, err := converter.ConsumeAndProcessVideo(
-				"http://localhost:1", js, cmp.Or(tc.processedKV, &test.MockKV{}), cmp.Or(tc.milestoneKV, &test.MockKV{}), test.SilentLogger(),
+				"http://localhost:1", js, cmp.Or(tc.processedKV, &test.MockKV{}), cmp.Or(tc.milestoneKV, &test.MockKV{}), test.SilentLogger(), tempMetrics,
 			)
 
 			require.NoError(t, err)
@@ -65,7 +67,7 @@ func TestConsumeAndProcessVideo(t *testing.T) {
 			GetValue: []byte(`{"state":"PROCESSING","stage":"format-converter"}`),
 		}
 
-		_, err = converter.ConsumeAndProcessVideo("http://localhost:1", js, &test.MockKV{}, milestoneKV, test.SilentLogger())
+		_, err = converter.ConsumeAndProcessVideo("http://localhost:1", js, &test.MockKV{}, milestoneKV, test.SilentLogger(), tempMetrics)
 
 		require.NoError(t, err)
 		assert.True(t, msg.TermCalled)
