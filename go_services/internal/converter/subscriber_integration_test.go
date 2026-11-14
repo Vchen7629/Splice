@@ -17,6 +17,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,7 @@ func startConsumer(t *testing.T, baseStorageURL string) (jetstream.JetStream, *n
 	t.Helper()
 	js, nc := test.SetupNats(t)
 	cc, err := ConsumeAndProcessVideo(
-		baseStorageURL, js, test.SetupKV(t, js, "converter-job-processed"), test.SetupJobMilestoneKV(t, js), test.SilentLogger(),
+		baseStorageURL, js, test.SetupKV(t, js, "converter-job-processed"), test.SetupJobMilestoneKV(t, js), test.SilentLogger(), NewMetrics(prometheus.NewRegistry()),
 	)
 	require.NoError(t, err)
 	t.Cleanup(cc.Stop)

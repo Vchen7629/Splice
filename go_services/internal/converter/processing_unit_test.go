@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"splice.com/go_services/internal/shared/pipeline"
@@ -27,6 +29,7 @@ func probeStreams(t *testing.T, path string) []string {
 }
 
 func TestConvertVideo(t *testing.T) {
+	tempMetrics := NewMetrics(prometheus.NewRegistry())
 	audioTestVid := makeTestClip(t, true)
 	noAudioTestVid := makeTestClip(t, false)
 
@@ -46,7 +49,7 @@ func TestConvertVideo(t *testing.T) {
 			jobID := "job-format-" + tc.format
 			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-			outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: tc.format})
+			outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: tc.format}, tempMetrics)
 
 			require.NoError(t, err)
 			assert.Equal(t, "/tmp/convert/"+jobID+"/output."+tc.format, outputPath)
@@ -58,7 +61,7 @@ func TestConvertVideo(t *testing.T) {
 		jobID := "job-no-audio"
 		t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-		outputPath, err := convertVideo(noAudioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+		outputPath, err := convertVideo(noAudioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"}, tempMetrics)
 
 		require.NoError(t, err)
 		assert.Equal(t, []string{"h264,video"}, probeStreams(t, outputPath))
@@ -69,7 +72,7 @@ func TestConvertVideo(t *testing.T) {
 			jobID := "job-unsupported"
 			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-			outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: format})
+			outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: format}, tempMetrics)
 
 			require.ErrorContains(t, err, "unsupported target format")
 			assert.Empty(t, outputPath)
@@ -85,7 +88,7 @@ func TestConvertVideo(t *testing.T) {
 		out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=d=1:s=321x241", "-c:v", "ffv1", "-y", src).CombinedOutput()
 		require.NoError(t, err, "failed to generate odd-sized clip: %s", out)
 
-		_, err = convertVideo(src, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+		_, err = convertVideo(src, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"}, tempMetrics)
 
 		require.NoError(t, err)
 	})
@@ -96,7 +99,7 @@ func TestConvertVideo(t *testing.T) {
 		require.NoError(t, os.WriteFile("/tmp/convert/"+jobID, []byte("blocker"), 0644))
 		t.Cleanup(func() { os.Remove("/tmp/convert/" + jobID) })
 
-		outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+		outputPath, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"}, tempMetrics)
 
 		require.ErrorContains(t, err, "create output convert dir error")
 		assert.Empty(t, outputPath)
@@ -110,7 +113,7 @@ func TestConvertVideo(t *testing.T) {
 			os.RemoveAll("/tmp/convert/job-timeout")
 		})
 
-		_, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: "job-timeout", TargetFormat: "mp4"})
+		_, err := convertVideo(audioTestVid, pipeline.VideoJobMessage{JobID: "job-timeout", TargetFormat: "mp4"}, tempMetrics)
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Contains(t, err.Error(), "timed out")
@@ -132,9 +135,31 @@ func TestConvertVideo(t *testing.T) {
 			jobID := "job-ffmpeg-error"
 			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + jobID) })
 
-			_, err := convertVideo(tc.src, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"})
+			_, err := convertVideo(tc.src, pipeline.VideoJobMessage{JobID: jobID, TargetFormat: "mp4"}, tempMetrics)
 
 			require.ErrorContains(t, err, "ffmpeg error")
+		})
+	}
+
+	metricCounterTests := []struct {
+		name, audioFile, jobID string
+		wantErr                bool
+		success, failure       float64
+	}{
+		{"convert success", audioTestVid, "job-metrics-ok", false, 1, 0},
+		{"convert failure", notVideo, "job-metrics-fail", true, 0, 1},
+	}
+
+	for _, tc := range metricCounterTests {
+		t.Run("", func(t *testing.T) {
+			m := NewMetrics(prometheus.NewRegistry())
+			t.Cleanup(func() { os.RemoveAll("/tmp/convert/" + tc.jobID) })
+
+			_, err := convertVideo(tc.audioFile, pipeline.VideoJobMessage{JobID: tc.jobID, TargetFormat: "mp4"}, m)
+
+			assert.Equal(t, tc.wantErr, err != nil)
+			assert.Equal(t, tc.success, testutil.ToFloat64(m.convertCount.WithLabelValues("success")))
+			assert.Equal(t, tc.failure, testutil.ToFloat64(m.convertCount.WithLabelValues("failure")))
 		})
 	}
 }
