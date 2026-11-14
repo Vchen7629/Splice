@@ -29,6 +29,7 @@ func main() {
 	}
 	logger := service.StructuredLogger(cfg.ProdMode, "format-converter")
 	r := service.NewPrometheusRegistry()
+	m := converter.NewMetrics(r)
 
 	nc, js, err := service.Connect(logger, cfg.BaseConfig)
 	if err != nil {
@@ -43,7 +44,7 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	if err := service.Run(logger, cfg.HTTPPort, nc, func() (jetstream.ConsumeContext, error) {
-		return converter.ConsumeAndProcessVideo(cfg.BaseStorageURL, js, processedKV, jobMilestoneKV, logger)
+		return converter.ConsumeAndProcessVideo(cfg.BaseStorageURL, js, processedKV, jobMilestoneKV, logger, m)
 	}, r, quit); err != nil {
 		logger.Error("error flushing remaining msgs", "err", err)
 		osExit(1)

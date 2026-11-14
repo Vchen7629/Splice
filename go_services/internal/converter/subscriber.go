@@ -19,7 +19,7 @@ import (
 const subSubject = "jobs.video.convert"
 
 func ConsumeAndProcessVideo(
-	baseStorageURL string, js jetstream.JetStream, processedKV, jobMilestoneKV jetstream.KeyValue, logger *slog.Logger,
+	baseStorageURL string, js jetstream.JetStream, processedKV, jobMilestoneKV jetstream.KeyValue, logger *slog.Logger, m *metrics,
 ) (jetstream.ConsumeContext, error) {
 	return msgbus.ConsumeDurable(js, msgbus.ConsumerConfig{
 		Subject:       subSubject,
@@ -78,7 +78,7 @@ func ConsumeAndProcessVideo(
 			return
 		}
 
-		outputPath, err := convertVideo(filePath, payload)
+		outputPath, err := convertVideo(filePath, payload, m)
 		if err != nil {
 			logger.Error("failed to convert video to target format", "job_id", payload.JobID, "target_format", payload.TargetFormat, "err", err)
 			msgbus.NakWithErrHandling(logger, msg)

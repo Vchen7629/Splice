@@ -15,9 +15,16 @@ var ffmpegTimeout = 30 * time.Minute // TODO: in the future scale timeout with i
 
 // convert the source video to target format (mp4/mov/mkv/webm/gif) using ffmpeg and return the converted video
 // local filepath so it can be uploaded to seaweedfs storage so the user can download it later
-func convertVideo(filePath string, payload pipeline.VideoJobMessage) (string, error) {
+func convertVideo(filePath string, payload pipeline.VideoJobMessage, m *metrics) (outputPath string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ffmpegTimeout)
 	defer cancel()
+	defer func() {
+		status := "success"
+		if err != nil {
+			status = "failure"
+		}
+		m.convertCount.WithLabelValues(status).Inc()
+	}()
 
 	baseArgs := []string{"-protocol_whitelist", "file,pipe", "-i", filePath, "-map", "0:v:0"}
 
@@ -34,16 +41,16 @@ func convertVideo(filePath string, payload pipeline.VideoJobMessage) (string, er
 	}
 
 	outDir := "/tmp/convert/" + payload.JobID
-	err := os.MkdirAll(outDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return "", fmt.Errorf("create output convert dir error: %w", err)
 	}
 
-	outputPath := filepath.Join(outDir, "output."+payload.TargetFormat)
+	outputPath = filepath.Join(outDir, "output."+payload.TargetFormat)
 
 	convertArgs := append(baseArgs, formatArgs...)
 	convertArgs = append(convertArgs, "-y", outputPath)
 
+	s := time.Now()
 	out, err := exec.CommandContext(ctx, "ffmpeg", convertArgs...).CombinedOutput()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -51,6 +58,7 @@ func convertVideo(filePath string, payload pipeline.VideoJobMessage) (string, er
 		}
 		return "", fmt.Errorf("ffmpeg error: %w\n%s", err, out)
 	}
+	m.convertLatency.Observe(time.Since(s).Seconds())
 
 	return outputPath, nil
 }
