@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Optional
 
 from spandrel import ModelLoader
-from torch import compile
 from torch.nn import Module
 
 _BASE = Path(__file__).parent.parent
