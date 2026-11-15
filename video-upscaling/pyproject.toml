@@ -7,14 +7,12 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "structlog",
     "requests",
-    "opencv-python-headless",
     "nats-py",
-    "realesrgan>=0.3.0",
     "torch",
     "torchvision",
     "pydantic-settings>=2.13.1",
-    "types-requests>=2.33.0.20260408",
     "prometheus-client>=0.26.0",
+    "spandrel>=0.4.2",
 ]
 
 [tool.uv.sources]
