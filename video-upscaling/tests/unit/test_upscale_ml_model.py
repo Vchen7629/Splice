@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Any, Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -10,29 +10,13 @@ from processing.upscale_ml_model import Resolution, _load_model, select_model
 @pytest.fixture
 def mock_deps() -> Generator[dict[str, Any], Any, None]:
     mock_net = MagicMock()
+    mock_net.cuda.return_value = mock_net
     mock_net.half.return_value = mock_net
+    mock_net.eval.return_value = mock_net
 
-    mock_upsampler = MagicMock()
-    mock_upsampler.model = mock_net
-
-    with (
-        patch(
-            "processing.upscale_ml_model.SRVGGNetCompact", return_value=mock_net
-        ) as mock_srvgg,
-        patch(
-            "processing.upscale_ml_model.RealESRGANer", return_value=mock_upsampler
-        ) as mock_realesrgan,
-        patch(
-            "processing.upscale_ml_model.compile", return_value=MagicMock()
-        ) as mock_compile,
-    ):
-        yield {
-            "srvgg": mock_srvgg,
-            "realesrgan": mock_realesrgan,
-            "compile": mock_compile,
-            "net": mock_net,
-            "upsampler": mock_upsampler,
-        }
+    with patch("processing.upscale_ml_model.ModelLoader") as mock_loader:
+        mock_loader.return_value.load_from_file.return_value.model = mock_net
+        yield {"loader": mock_loader, "net": mock_net}
 
 
 @pytest.mark.parametrize(
@@ -148,59 +132,27 @@ def test_load_model_valid_scale_does_not_raise(
     _load_model(Path("model.pth"), scale=scale)
 
 
-@pytest.mark.parametrize("scale", [2, 4])
-def test_load_model_srvgg_constructed_with_correct_params(
-    mock_deps: dict[str, Any], scale: int
-) -> None:
-    _load_model(Path("model.pth"), scale=scale)
-
-    mock_deps["srvgg"].assert_called_once_with(
-        num_in_ch=3,
-        num_out_ch=3,
-        num_feat=64,
-        num_conv=16,
-        upscale=scale,
-        act_type="prelu",
-    )
-
-
-@pytest.mark.parametrize("scale", [2, 4])
-def test_load_model_realesrganer_constructed_with_correct_params(
-    mock_deps: dict[str, Any], scale: int
-) -> None:
+def test_load_model_loads_weights_from_given_path(mock_deps: dict[str, Any]) -> None:
     model_path = Path("/some/path/model.pth")
-    _load_model(model_path, scale=scale)
+    _load_model(model_path, scale=2)
 
-    mock_deps["realesrgan"].assert_called_once_with(
-        scale=scale,
-        model_path=str(model_path),
-        model=mock_deps["net"],
-        tile=0,
-        tile_pad=10,
-        pre_pad=0,
-        device="cuda",
-    )
+    mock_deps["loader"].return_value.load_from_file.assert_called_once_with(model_path)
 
 
-def test_load_model_model_converted_to_half_precision(
+def test_load_model_moves_to_cuda_fp16_eval_then_compiles(
     mock_deps: dict[str, Any],
 ) -> None:
     _load_model(Path("model.pth"), scale=2)
 
-    mock_deps["net"].half.assert_called_once()
+    assert mock_deps["net"].method_calls == [
+        call.cuda(),
+        call.half(),
+        call.eval(),
+        call.compile(mode="reduce-overhead"),
+    ]
 
 
-def test_load_model_torch_compile_called_with_reduce_overhead(
-    mock_deps: dict[str, Any],
-) -> None:
-    _load_model(Path("model.pth"), scale=2)
-
-    mock_deps["compile"].assert_called_once_with(
-        mock_deps["net"], mode="reduce-overhead"
-    )
-
-
-def test_load_model_returns_upsampler(mock_deps: dict[str, Any]) -> None:
+def test_load_model_returns_compiled_model(mock_deps: dict[str, Any]) -> None:
     result = _load_model(Path("model.pth"), scale=2)
 
-    assert result is mock_deps["upsampler"]
+    assert result is mock_deps["net"]

@@ -3,18 +3,16 @@ name = "video-upscaling"
 version = "0.1.0"
 description = "Processing service for doing video upscaling (and sometimes downscaling) for Splice"
 license = "MIT"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "structlog",
     "requests",
-    "opencv-python-headless",
     "nats-py",
-    "realesrgan>=0.3.0",
     "torch",
     "torchvision",
     "pydantic-settings>=2.13.1",
-    "types-requests>=2.33.0.20260408",
     "prometheus-client>=0.26.0",
+    "spandrel>=0.4.2",
 ]
 
 [tool.uv.sources]

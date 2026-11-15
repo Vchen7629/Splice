@@ -62,9 +62,7 @@ def video_upscale_patches() -> Generator[dict[str, Any], Any, None]:
         patch("processing.video._load_model", return_value=MagicMock()) as mock_load,
         patch("processing.video._video_decoder") as mock_decoder,
         patch("processing.video._video_encoder", return_value=MagicMock()) as mock_enc,
-        patch(
-            "processing.video.flush_and_upscale_batch", return_value=(0.0, 0.0, 0)
-        ) as mock_flush,
+        patch("processing.video.flush_and_upscale_batch") as mock_flush,
         patch("processing.video.encoder_worker"),
         patch("processing.video.threading.Thread", return_value=MagicMock()),
         patch("processing.video.settings") as mock_settings,

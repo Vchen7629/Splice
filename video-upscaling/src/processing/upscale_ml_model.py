@@ -2,9 +2,8 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Optional
 
-from realesrgan import RealESRGANer
-from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-from torch import compile
+from spandrel import ModelLoader
+from torch.nn import Module
 
 _BASE = Path(__file__).parent.parent
 
@@ -49,17 +48,16 @@ def select_model(source_res: str, target_res: str) -> Optional[tuple[Path, int]]
         return model_path, resolution_scale
 
 
-def _load_model(model_path: Path, scale: int) -> RealESRGANer:
+def _load_model(model_path: Path, scale: int) -> Module:
     """
-    Loads a RealESRGAN upscaler model onto CUDA with fp16 and torch.compile optimization.
-    Tiling is disabled so full-frame inference only.
+    Loads a Spandrel upscaler model onto CUDA with fp16 and torch.compile optimization..
 
     Args:
         model_path: the path to the model weights
         scale: the upscaling ratio for the model to use
 
     Returns:
-        The loaded RealESRGANer model
+        The loaded Spandrel upscaler model
 
     Raises:
         ValueError if the scale isnt 2 or 4 since we only support x2 and x4 upscaling
@@ -67,24 +65,9 @@ def _load_model(model_path: Path, scale: int) -> RealESRGANer:
     if scale not in (2, 4):
         raise ValueError("scale must be either 2 or 4")
 
-    model = SRVGGNetCompact(
-        num_in_ch=3,
-        num_out_ch=3,
-        num_feat=64,
-        num_conv=16,
-        upscale=scale,
-        act_type="prelu",
-    )
+    descripter = ModelLoader().load_from_file(model_path)
 
-    upsampler = RealESRGANer(
-        scale=scale,
-        model_path=str(model_path),
-        model=model,
-        tile=0,
-        tile_pad=10,
-        pre_pad=0,
-        device="cuda",
-    )
-    upsampler.model = upsampler.model.half()
-    upsampler.model = compile(upsampler.model, mode="reduce-overhead")
-    return upsampler
+    model = descripter.model.cuda().half().eval()
+    model.compile(mode="reduce-overhead")
+
+    return model

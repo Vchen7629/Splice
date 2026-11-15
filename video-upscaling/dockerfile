@@ -8,7 +8,7 @@
 #   -e NATS_URL=nats://host.docker.internal:4222 \
 #   video-upscaler:latest
 # or just use the docker-compose.backend.yaml to run all services
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 # install UV
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -24,7 +24,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
