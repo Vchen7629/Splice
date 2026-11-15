@@ -43,14 +43,14 @@ def _split_planes(
 
 def _upscale_with_passthrough_model(frames: list[np.ndarray]) -> torch.Tensor:
     """Run _upscale_frames on CPU with a model that returns its input, and return that input."""
-    with patch("torch.Tensor.cuda", lambda self: self), patch("torch.autocast"):
+    with patch("torch.Tensor.cuda", lambda self: self):
         return _upscale_frames(lambda batch: batch, frames)  # type: ignore[arg-type]
 
 
 def _run_flush(
     frames: list[np.ndarray], yuv_results: list[bytes]
 ) -> Queue[Optional[bytes]]:
-    """Run flush_and_process_batch with the model and yuv conversion mocked, returning (timing, queue)."""
+    """Run flush_and_upscale_batch with the model and yuv conversion mocked, returning the queue."""
     encode_queue: Queue[Optional[bytes]] = Queue()
 
     with (
@@ -142,5 +142,5 @@ def test_flush_and_process_batch_passes_upscaled_frames_to_yuv_conversion() -> N
     ):
         flush_and_upscale_batch(mock_upsampler, frames, Queue())
 
-    mock_upscale.assert_called_once_with(mock_upsampler.model, frames)
+    mock_upscale.assert_called_once_with(mock_upsampler, frames)
     mock_yuv.assert_called_once_with(mock_upscale.return_value)
