@@ -3,7 +3,7 @@ from typing import Optional
 
 import numpy as np
 import torch.nn.functional as F
-from torch import Tensor, cat, from_numpy, stack, inference_mode
+from torch import Tensor, cat, from_numpy, inference_mode, stack
 from torch.nn import Module
 
 
