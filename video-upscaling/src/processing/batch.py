@@ -3,13 +3,12 @@ from typing import Optional
 
 import numpy as np
 import torch.nn.functional as F
-from realesrgan import RealESRGANer
-from torch import Tensor, autocast, cat, from_numpy, no_grad, stack
+from torch import Tensor, cat, from_numpy, stack, inference_mode
 from torch.nn import Module
 
 
 def flush_and_upscale_batch(
-    upsampler: RealESRGANer,
+    upsampler: Module,
     frames: list[np.ndarray],
     encode_queue: Queue[Optional[np.ndarray]],
 ) -> None:
@@ -23,7 +22,7 @@ def flush_and_upscale_batch(
         frames: list containing the batch of unupscaled video frames to process
         encode_queue: the queue that upscaled images are written to
     """
-    upscaled = _upscale_frames(upsampler.model, frames)
+    upscaled = _upscale_frames(upsampler, frames)
     results = _rgb_to_yuv420(upscaled)
 
     for r in results:
@@ -35,9 +34,8 @@ def _upscale_frames(model: Module, frames_rgb: list[np.ndarray]) -> Tensor:
     batch = from_numpy(np.stack(frames_rgb)).cuda()  # (N, H, W, 3) uint8
     batch = batch.permute(0, 3, 1, 2).half().div_(255.0)  # (N, 3, H, W) fp16
 
-    with no_grad():
-        with autocast(device_type="cuda"):
-            return model(batch)  # (N, 3, out_H, out_W)
+    with inference_mode():
+        return model(batch)  # (N, 3, out_H, out_W)
 
 
 _LUMA_WEIGHT_R, _LUMA_WEIGHT_B = 0.299, 0.114
